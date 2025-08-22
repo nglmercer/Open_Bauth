@@ -337,10 +337,7 @@ async function createRole(args: string[]): Promise<void> {
   if (!result.success || !result) {
     console.error('❌ Error creando rol:', result.error);
     return;
-  }
-  
-  console.log(`✅ Rol creado: ${name} (ID: ${result.id})`);
-  
+  }  
   // Asignar permisos si se especificaron
   if (permissions.length > 0) {
     for (const permissionName of permissions) {
@@ -452,7 +449,6 @@ async function createPermission(args: string[]): Promise<void> {
     return;
   }
   
-  console.log(`✅ Permiso creado: ${name} (ID: ${result.id})`);
 }
 
 /**

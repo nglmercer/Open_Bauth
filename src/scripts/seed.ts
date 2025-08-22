@@ -178,7 +178,6 @@ export async function seedDatabase(): Promise<void> {
         const result = await permissionService.createPermission(permission);
         if (result) {
           createdPermissions.set(permission.name, result.id);
-          console.log(`  ✅ Permiso creado: ${permission.name}`);
         }
       } catch (error:any) {
         console.log(`  ⚠️  Permiso ya existe: ${permission.name}`);
@@ -198,7 +197,6 @@ export async function seedDatabase(): Promise<void> {
         
         if (result && result) {
           createdRoles.set(role.name, result.id);
-          console.log(`  ✅ Rol creado: ${role.name}`);
           
           // Asignar permisos al rol
           for (const permissionName of role.permissionIds || []) {
@@ -267,11 +265,9 @@ export async function seedDatabase(): Promise<void> {
  */
 export async function cleanDatabase(): Promise<void> {
   try {
-    console.log('🧹 Limpiando base de datos...');
     
     // Verificar si la base de datos está inicializada
     if (!isDatabaseInitialized()) {
-      console.log('⚠️ Base de datos no inicializada, inicializando...');
       initDatabase('./test.db');
     }
     
@@ -303,7 +299,6 @@ export async function cleanDatabase(): Promise<void> {
     for (const table of tables) {
       try {
         db.exec(`DELETE FROM ${table}`);
-        console.log(`  ✅ Tabla ${table} limpiada`);
       } catch (error:any) {
         console.log(`  ⚠️  Error limpiando tabla ${table}:`, error);
       }
@@ -312,7 +307,6 @@ export async function cleanDatabase(): Promise<void> {
     // Rehabilitar foreign keys
     db.exec('PRAGMA foreign_keys = ON');
     
-    console.log('✨ Base de datos limpiada exitosamente!');
     
   } catch (error:any) {
     console.error('❌ Error durante la limpieza:', error);

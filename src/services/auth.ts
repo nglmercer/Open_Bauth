@@ -278,6 +278,44 @@ export class AuthService {
   }
 
   /**
+   * Asigna un rol específico a un usuario
+   * @param userId ID del usuario
+   * @param roleName Nombre del rol a asignar
+   */
+  async assignRole(userId: string, roleName: string): Promise<void> {
+    try {
+      const db = getDatabase();
+
+      // Buscar el rol por nombre
+      const findRoleQuery = db.query("SELECT id FROM roles WHERE name = ?");
+      const roleResult = findRoleQuery.get(roleName) as { id: string } | null;
+
+      if (!roleResult) {
+        throw new Error(`Role '${roleName}' not found`);
+      }
+
+      // Verificar si el usuario ya tiene este rol
+      const existingQuery = db.query(
+        "SELECT id FROM user_roles WHERE user_id = ? AND role_id = ?"
+      );
+      const existing = existingQuery.get(userId, roleResult.id);
+
+      if (existing) {
+        return; // El usuario ya tiene este rol
+      }
+
+      // Asignar rol al usuario
+      const assignRoleQuery = db.query(
+        "INSERT INTO user_roles (id, user_id, role_id, created_at) VALUES (?, ?, ?, datetime('now'))"
+      );
+      assignRoleQuery.run(crypto.randomUUID(), userId, roleResult.id);
+    } catch (error: any) {
+      console.error('Error assigning role:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Asigna el rol por defecto a un usuario
    * @param userId ID del usuario
    */

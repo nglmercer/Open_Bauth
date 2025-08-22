@@ -54,9 +54,9 @@ export class PermissionService {
       // Crear permiso
       const permissionId = crypto.randomUUID();
       const query = db.query(
-        "INSERT INTO permissions (id, name, description, resource, action, created_at, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))"
+        "INSERT INTO permissions (id, name, resource, action, created_at) VALUES (?, ?, ?, ?, datetime('now'))"
       );
-      query.run(permissionId, data.name, data.description || '', data.resource, data.action);
+      query.run(permissionId, data.name, data.resource, data.action);
 
       // Obtener el permiso creado
       const permission = await this.findPermissionById(permissionId);
@@ -70,7 +70,6 @@ export class PermissionService {
         };
       }
 
-      console.log(`✅ Permiso creado: ${permission.name}`);
       return {
         success: true,
         permission
@@ -123,9 +122,9 @@ export class PermissionService {
       // Crear rol
       const roleId = crypto.randomUUID();
       const query = db.query(
-        "INSERT INTO roles (id, name, description, created_at, updated_at) VALUES (?, ?, ?, datetime('now'), datetime('now'))"
+        "INSERT INTO roles (id, name, created_at) VALUES (?, ?, datetime('now'))"
       );
-      query.run(roleId, data.name, data.description || '');
+      query.run(roleId, data.name);
 
       // Asignar permisos si se proporcionan
       if (data.permissionIds && data.permissionIds.length > 0) {
@@ -147,7 +146,6 @@ export class PermissionService {
         };
       }
 
-      console.log(`✅ Rol creado: ${role.name}`);
       return {
         success: true,
         role
@@ -398,11 +396,12 @@ export class PermissionService {
       }
 
       const query = db.query(
-        "UPDATE permissions SET name = ?, description = ?, updated_at = datetime('now') WHERE id = ?"
+        "UPDATE permissions SET name = ?, resource = ?, action = ? WHERE id = ?"
       );
       query.run(
         data.name || existingPermission.name,
-        data.description || existingPermission.description,
+        data.resource || existingPermission.resource,
+        data.action || existingPermission.action,
         id
       );
 
@@ -507,11 +506,10 @@ export class PermissionService {
       }
 
       const query = db.query(
-        "UPDATE roles SET name = ?, description = ?, updated_at = datetime('now') WHERE id = ?"
+        "UPDATE roles SET name = ?, created_at = datetime('now') WHERE id = ?"
       );
       query.run(
         data.name || existingRole.name,
-        data.description || existingRole.description,
         id
       );
 

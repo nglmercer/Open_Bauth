@@ -235,10 +235,7 @@ export const testUtils = {
   validateRoleStructure(role: any) {
     expect(role).toHaveProperty('id');
     expect(role).toHaveProperty('name');
-    expect(role).toHaveProperty('description');
-    expect(role).toHaveProperty('isActive');
-    expect(role).toHaveProperty('createdAt');
-    expect(role).toHaveProperty('updatedAt');
+    expect(role).toHaveProperty('created_at');
   },
 
   /**
@@ -247,11 +244,9 @@ export const testUtils = {
   validatePermissionStructure(permission: any) {
     expect(permission).toHaveProperty('id');
     expect(permission).toHaveProperty('name');
-    expect(permission).toHaveProperty('description');
     expect(permission).toHaveProperty('resource');
     expect(permission).toHaveProperty('action');
-    expect(permission).toHaveProperty('createdAt');
-    expect(permission).toHaveProperty('updatedAt');
+    expect(permission).toHaveProperty('created_at');
   }
 };
 
