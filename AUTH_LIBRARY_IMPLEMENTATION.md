@@ -46,11 +46,6 @@ src/
 
 ### 1. Dependencias
 
-```bash
-bun add jsonwebtoken bcryptjs
-bun add -d @types/jsonwebtoken @types/bcryptjs
-```
-
 ### 2. Variables de Entorno
 
 ```env
@@ -197,7 +192,6 @@ export async function runMigrations() {
 
 ```typescript
 // src/auth/core/jwt-service.ts
-import jwt from "jsonwebtoken";
 import type { User } from "../../types/auth";
 
 export class JWTService {
@@ -234,7 +228,6 @@ export class JWTService {
 
 ```typescript
 // src/auth/core/auth-service.ts
-import bcrypt from "bcryptjs";
 import { getDatabase } from "../../db/connection";
 import { JWTService } from "./jwt-service";
 import type { User, AuthConfig } from "../../types/auth";
@@ -258,7 +251,7 @@ export class AuthService {
     }
 
     // Hash de la contraseña
-    const passwordHash = await bcrypt.hash(password, 12);
+    const passwordHash = await Bun.password.hash(password, 12);
     const userId = crypto.randomUUID();
 
     // Crear usuario
@@ -287,7 +280,7 @@ export class AuthService {
     const userData = users[0];
 
     // Verificar contraseña
-    const isValidPassword = await bcrypt.compare(password, userData.password_hash);
+    const isValidPassword = await Bun.password.verify(password, userData.password_hash);
     if (!isValidPassword) {
       throw new Error("Credenciales inválidas");
     }
@@ -892,7 +885,7 @@ describe("Auth Service", () => {
 2. **TypeScript Nativo**: Completamente tipado
 3. **Ligero**: Pocas dependencias, usando Bun SQL nativo
 4. **Escalable**: Arquitectura modular y extensible
-5. **Seguro**: JWT + bcrypt + validaciones
+5. **Seguro**: JWT + Bun.password + validaciones
 6. **Flexible**: Sistema de roles y permisos granular
 7. **Testeable**: Fácil de testear con Bun test
 8. **Performante**: SQLite + Bun para máximo rendimiento

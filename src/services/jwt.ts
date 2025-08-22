@@ -3,7 +3,8 @@ import type { JWTPayload, User } from '../types/auth';
 
 /**
  * Servicio para manejar operaciones JWT
- * Utiliza las APIs nativas de Bun para JWT
+ * Utiliza Web Crypto API nativo para firmas HMAC
+ * Nota: Bun.password.hash es para hashing de contraseñas, no para JWT
  */
 export class JWTService {
   private secret: string;
@@ -35,13 +36,7 @@ export class JWTService {
         exp: now + expirationTime
       };
 
-      // Usar la API nativa de Bun para JWT
-      const token = await Bun.password.hash(JSON.stringify(payload), {
-        algorithm: 'bcrypt',
-        cost: 10
-      });
-
-      // Como Bun no tiene JWT nativo aún, implementamos una versión simple
+      // Implementar JWT usando Web Crypto API nativo
       const header = {
         alg: 'HS256',
         typ: 'JWT'

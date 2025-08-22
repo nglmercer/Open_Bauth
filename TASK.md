@@ -136,11 +136,6 @@ src/
 
 ## Dependencias Requeridas
 
-```bash
-bun add jsonwebtoken bcryptjs
-bun add -d @types/jsonwebtoken @types/bcryptjs
-```
-
 ## Variables de Entorno
 
 ```env

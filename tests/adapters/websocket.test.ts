@@ -180,11 +180,22 @@ describe('WebSocket Adapter', () => {
           email: 'test@example.com',
           password_hash: 'hashed_password',
           firstName: 'Test',
-            lastName: 'User',
+          lastName: 'User',
           is_active: true,
           created_at: new Date(),
           updated_at: new Date(),
-          roles: []
+          roles: [{
+            id: 'role1',
+            name: 'user',
+            permissions: [{
+              id: 'perm1',
+              name: 'chat:send',
+              resource: 'chat',
+              action: 'send',
+              created_at: new Date()
+            }],
+            created_at: new Date()
+          }]
         },
         isAuthenticated: true,
         permissions: ['chat:send'],
@@ -208,11 +219,16 @@ describe('WebSocket Adapter', () => {
           email: 'test@example.com',
           password_hash: 'hashed_password',
           firstName: 'Test',
-            lastName: 'User',
+          lastName: 'User',
           is_active: true,
           created_at: new Date(),
           updated_at: new Date(),
-          roles: []
+          roles: [{
+            id: 'role1',
+            name: 'user',
+            permissions: [],
+            created_at: new Date()
+          }]
         },
         isAuthenticated: true,
         permissions: [],
@@ -234,7 +250,7 @@ describe('WebSocket Adapter', () => {
         email: 'test@example.com',
         password_hash: 'hashed_password',
         firstName: 'Test',
-         lastName: 'User',
+        lastName: 'User',
         is_active: true,
         created_at: new Date(),
         updated_at: new Date(),

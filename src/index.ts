@@ -455,7 +455,7 @@ export const AUTH_LIBRARY_INFO = {
     'Framework-agnostic',
     'TypeScript nativo',
     'SQLite con Bun',
-    'JWT + bcrypt',
+    'JWT + Bun.password',
     'RBAC (Role-Based Access Control)',
     'Middlewares reutilizables',
     'Migraciones automáticas',
