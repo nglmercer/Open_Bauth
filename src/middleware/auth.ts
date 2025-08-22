@@ -20,6 +20,11 @@ export interface AuthMiddlewareConfig {
   permissionOptions?: PermissionOptions; // Opciones de verificación de permisos
   skipPaths?: string[]; // Rutas que se saltan la autenticación
   tokenHeader?: string; // Header del token (default: 'authorization')
+  jwtSecret?: string; // JWT secret for testing
+  authService?: any; // Auth service instance for testing
+  jwtService?: any; // JWT service instance for testing
+  permissionService?: any; // Permission service instance for testing
+  onError?: (error: Error, req: any, res: any) => void; // Custom error handler
 }
 
 /**
@@ -30,10 +35,9 @@ export async function authenticateRequest(
   request: AuthRequest,
   config: AuthMiddlewareConfig = {}
 ): Promise<{ success: boolean; context?: AuthContext; error?: string; statusCode?: number }> {
-  try {
-    const {
-      required = true,
-      permissions = [],
+  const {
+    required = true,
+    permissions = [],
       permissionOptions = {},
       tokenHeader = 'authorization'
     } = config;
@@ -43,7 +47,7 @@ export async function authenticateRequest(
     
     if (!authHeader) {
       if (!required) {
-        return { success: true, context: { permissions: [] } };
+        return { success: true, context: { permissions: [], isAuthenticated: false } };
       }
       return {
         success: false,
@@ -52,7 +56,7 @@ export async function authenticateRequest(
       };
     }
 
-    const jwtService = getJWTService();
+    const jwtService = config.jwtService || getJWTService();
     const token = jwtService.extractTokenFromHeader(authHeader);
     
     if (!token) {
@@ -64,19 +68,22 @@ export async function authenticateRequest(
     }
 
     // Verificar token
-    let payload;
-    try {
-      payload = await jwtService.verifyToken(token);
-    } catch (error:any) {
+    const result = await jwtService.verifyToken(token)
+      .then((payload) => ({ success: true, payload }))
+      .catch((error: any) => ({ success: false, error: error.message }));
+    
+    if (!result.success) {
       return {
         success: false,
         error: 'Invalid or expired token',
         statusCode: 401
       };
     }
+    
+    const payload = result.payload;
 
     // Obtener usuario completo
-    const authService = getAuthService();
+    const authService = config.authService || getAuthService();
     const user = await authService.findUserById(payload.userId, {
       includeRoles: true,
       includePermissions: true,
@@ -92,7 +99,7 @@ export async function authenticateRequest(
     }
 
     // Obtener permisos del usuario
-    const permissionService = getPermissionService();
+    const permissionService = config.permissionService || getPermissionService();
     const userPermissions = await permissionService.getUserPermissions(user.id);
     const permissionNames = userPermissions.map(p => p.name);
 
@@ -100,7 +107,8 @@ export async function authenticateRequest(
     const authContext: AuthContext = {
       user,
       token,
-      permissions: permissionNames
+      permissions: permissionNames,
+      isAuthenticated: true
     };
 
     // Verificar permisos si se requieren
@@ -121,14 +129,6 @@ export async function authenticateRequest(
     }
 
     return { success: true, context: authContext };
-  } catch (error:any) {
-    console.error('Authentication middleware error:', error);
-    return {
-      success: false,
-      error: 'Internal authentication error',
-      statusCode: 500
-    };
-  }
 }
 
 /**
@@ -203,10 +203,23 @@ export function getCurrentUser(authContext?: AuthContext) {
  * Función helper para verificar si el usuario tiene un rol específico
  */
 export function userHasRole(authContext: AuthContext, roleName: string): boolean {
-  if (!authContext.user) {
-    return false;
+  // Check roles in authContext.roles (Role objects or string array)
+  if (authContext.roles) {
+    // Handle both Role objects and string arrays
+    const hasRole = authContext.roles.some(role => 
+      typeof role === 'string' ? role === roleName : role.name === roleName
+    );
+    if (hasRole) {
+      return true;
+    }
   }
-  return authContext.user.roles.some(role => role.name === roleName);
+  
+  // Check roles in authContext.user.roles (Role objects)
+  if (authContext.user && authContext.user.roles) {
+    return authContext.user.roles.some(role => role.name === roleName);
+  }
+  
+  return false;
 }
 
 /**
@@ -290,7 +303,8 @@ export function isModerator(authContext: AuthContext): boolean {
  */
 export function createEmptyAuthContext(): AuthContext {
   return {
-    permissions: []
+    permissions: [],
+    isAuthenticated: false
   };
 }
 
@@ -434,6 +448,10 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig = {}) {
       const result = await authenticateRequest(authRequest, config);
       
       if (!result.success) {
+        if (config.onError) {
+          const error = new Error(result.error || 'Authentication failed');
+          return config.onError(error, req, res);
+        }
         return res.status(result.statusCode || 401).json({
           success: false,
           error: result.error
@@ -442,8 +460,11 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig = {}) {
 
       // Agregar contexto de autenticación al request
       req.authContext = result.context;
+      req.user = result.context?.user;
       next();
     } catch (error: any) {
+      // Only catch unexpected errors, not authentication errors
+      console.error('Unexpected error in auth middleware:', error);
       res.status(500).json({
         success: false,
         error: 'Internal server error'
@@ -462,7 +483,7 @@ export function createOptionalAuthMiddleware(config: AuthMiddlewareConfig = {}) 
 /**
  * Crea un middleware de verificación de permisos
  */
-export function createPermissionMiddleware(permissions: string[], options: PermissionOptions = {}) {
+export function createPermissionMiddleware(config: { permissions: string[], permissionService?: any, options?: PermissionOptions }) {
   return async (req: any, res: any, next: any) => {
     try {
       const authContext = req.authContext;
@@ -473,7 +494,7 @@ export function createPermissionMiddleware(permissions: string[], options: Permi
         });
       }
 
-      const result = await authorizeRequest(authContext, permissions, options);
+      const result = await authorizeRequest(authContext, config.permissions, config.options || {});
       
       if (!result.success) {
         return res.status(result.statusCode || 403).json({
@@ -495,7 +516,7 @@ export function createPermissionMiddleware(permissions: string[], options: Permi
 /**
  * Crea un middleware de verificación de roles
  */
-export function createRoleMiddleware(roles: string[]) {
+export function createRoleMiddleware(config: { roles: string[], requireAll?: boolean, permissionService?: any }) {
   return async (req: any, res: any, next: any) => {
     try {
       const authContext = req.authContext;
@@ -506,7 +527,15 @@ export function createRoleMiddleware(roles: string[]) {
         });
       }
 
-      const hasRole = roles.some(role => userHasRole(authContext, role));
+      const { roles, requireAll = false } = config;
+      let hasRole: boolean;
+      
+      if (requireAll) {
+        hasRole = roles.every(role => userHasRole(authContext, role));
+      } else {
+        hasRole = roles.some(role => userHasRole(authContext, role));
+      }
+      
       if (!hasRole) {
         return res.status(403).json({
           success: false,
@@ -527,7 +556,11 @@ export function createRoleMiddleware(roles: string[]) {
 /**
  * Crea un middleware de verificación de propiedad de recursos
  */
-export function createOwnershipMiddleware(resourceIdParam: string = 'id') {
+export function createOwnershipMiddleware(config: {
+  getResourceOwnerId: (req: any) => number | string | Promise<number | string>;
+  allowAdmin?: boolean;
+  adminRoles?: string[];
+}) {
   return async (req: any, res: any, next: any) => {
     try {
       const authContext = req.authContext;
@@ -538,15 +571,20 @@ export function createOwnershipMiddleware(resourceIdParam: string = 'id') {
         });
       }
 
-      const resourceId = req.params[resourceIdParam];
-      if (!resourceId) {
-        return res.status(400).json({
-          success: false,
-          error: 'Resource ID required'
-        });
+      // Get the resource owner ID using the provided function
+      const resourceOwnerId = await config.getResourceOwnerId(req);
+      
+      // Check if user is the resource owner
+      const isOwner = authContext.user && authContext.user.id.toString() === resourceOwnerId.toString();
+      
+      // Check if user is admin (if admin access is allowed)
+      let isAdminUser = false;
+      if (config.allowAdmin) {
+        const adminRoles = config.adminRoles || ['admin'];
+        isAdminUser = adminRoles.some(role => userHasRole(authContext, role));
       }
-
-      if (!isResourceOwner(authContext, resourceId) && !isAdmin(authContext)) {
+      
+      if (!isOwner && !isAdminUser) {
         return res.status(403).json({
           success: false,
           error: 'Access denied'
@@ -566,15 +604,20 @@ export function createOwnershipMiddleware(resourceIdParam: string = 'id') {
 /**
  * Crea un middleware de rate limiting (implementación básica)
  */
-export function createRateLimitMiddleware(maxRequests: number = 100, windowMs: number = 60000) {
+export function createRateLimitMiddleware(config: {
+  windowMs: number;
+  maxRequests: number;
+  keyGenerator?: (req: any) => string;
+}) {
+  const { windowMs, maxRequests, keyGenerator } = config;
   const requests = new Map<string, { count: number; resetTime: number }>();
 
   return async (req: any, res: any, next: any) => {
     try {
-      const clientIP = extractClientIP(req.headers);
+      const key = keyGenerator ? keyGenerator(req) : extractClientIP(req.headers);
       const now = Date.now();
       
-      const clientData = requests.get(clientIP) || { count: 0, resetTime: now + windowMs };
+      const clientData = requests.get(key) || { count: 0, resetTime: now + windowMs };
       
       if (now > clientData.resetTime) {
         clientData.count = 0;
@@ -582,7 +625,7 @@ export function createRateLimitMiddleware(maxRequests: number = 100, windowMs: n
       }
       
       clientData.count++;
-      requests.set(clientIP, clientData);
+      requests.set(key, clientData);
       
       if (clientData.count > maxRequests) {
         return res.status(429).json({

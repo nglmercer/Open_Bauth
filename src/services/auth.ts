@@ -293,7 +293,7 @@ export class AuthService {
       const db = getDatabase();
 
       const rolesQuery = db.query(`
-        SELECT r.id, r.name, r.created_at
+        SELECT r.id, r.name, r.created_at, r.is_active
         FROM roles r
         INNER JOIN user_roles ur ON r.id = ur.role_id
         WHERE ur.user_id = ?
@@ -307,6 +307,7 @@ export class AuthService {
           id: roleData.id,
           name: roleData.name,
           created_at: new Date(roleData.created_at),
+          isActive: Boolean(roleData.is_active),
           permissions: []
         };
 

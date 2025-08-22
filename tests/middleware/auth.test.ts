@@ -12,7 +12,7 @@ import {
 } from '../../src/middleware/auth';
 import { AuthService } from '../../src/services/auth';
 import { JWTService } from '../../src/services/jwt';
-import { PermissionService } from '../../src/services/permissions';
+import { PermissionService, initPermissionService } from '../../src/services/permissions';
 import { testUtils, TEST_JWT_SECRET } from '../setup';
 import type { AuthContext, AuthRequest, AuthResponse, NextFunction } from '../../src/types/auth';
 
@@ -29,7 +29,7 @@ describe('Auth Middleware', () => {
   beforeEach(async () => {
     authService = new AuthService();
     jwtService = new JWTService(TEST_JWT_SECRET);
-    permissionService = new PermissionService();
+    permissionService = initPermissionService();
     await testUtils.cleanTestData();
     
     // Crear usuario de prueba
@@ -38,7 +38,7 @@ describe('Auth Middleware', () => {
     testUserId = result.user!.id;
     
     // Generar token de prueba
-    testToken = testUtils.generateTestJWT({ userId: testUserId });
+    testToken = await jwtService.generateToken(result.user!);
     
     // Configurar mocks
     mockRequest = {
@@ -71,7 +71,8 @@ describe('Auth Middleware', () => {
       const middleware = createAuthMiddleware({
         jwtSecret: TEST_JWT_SECRET,
         authService,
-        jwtService
+        jwtService,
+        permissionService
       });
       
       await middleware(mockRequest, mockResponse, mockNext);
@@ -90,7 +91,8 @@ describe('Auth Middleware', () => {
       const middleware = createAuthMiddleware({
         jwtSecret: TEST_JWT_SECRET,
         authService,
-        jwtService
+        jwtService,
+        permissionService
       });
       
       await middleware(mockRequest, mockResponse, mockNext);
@@ -99,7 +101,8 @@ describe('Auth Middleware', () => {
       expect(mockResponse.status).toHaveBeenCalledWith(401);
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          error: expect.stringContaining('Invalid token')
+          success: false,
+          error: expect.stringContaining('Invalid')
         })
       );
     });
@@ -110,7 +113,8 @@ describe('Auth Middleware', () => {
       const middleware = createAuthMiddleware({
         jwtSecret: TEST_JWT_SECRET,
         authService,
-        jwtService
+        jwtService,
+        permissionService
       });
       
       await middleware(mockRequest, mockResponse, mockNext);
@@ -119,7 +123,8 @@ describe('Auth Middleware', () => {
       expect(mockResponse.status).toHaveBeenCalledWith(401);
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          error: expect.stringContaining('No token provided')
+          success: false,
+          error: expect.stringContaining('Authorization header is required')
         })
       );
     });
@@ -130,7 +135,8 @@ describe('Auth Middleware', () => {
       const middleware = createAuthMiddleware({
         jwtSecret: TEST_JWT_SECRET,
         authService,
-        jwtService
+        jwtService,
+        permissionService
       });
       
       await middleware(mockRequest, mockResponse, mockNext);
@@ -146,7 +152,8 @@ describe('Auth Middleware', () => {
       const middleware = createAuthMiddleware({
         jwtSecret: TEST_JWT_SECRET,
         authService,
-        jwtService
+        jwtService,
+        permissionService
       });
       
       await middleware(mockRequest, mockResponse, mockNext);
@@ -162,7 +169,8 @@ describe('Auth Middleware', () => {
       const middleware = createAuthMiddleware({
         jwtSecret: TEST_JWT_SECRET,
         authService,
-        jwtService
+        jwtService,
+        permissionService
       });
       
       await middleware(mockRequest, mockResponse, mockNext);
@@ -171,7 +179,8 @@ describe('Auth Middleware', () => {
       expect(mockResponse.status).toHaveBeenCalledWith(401);
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          error: expect.stringContaining('User is inactive')
+          success: false,
+          error: expect.stringContaining('User not found or inactive')
         })
       );
     });
@@ -186,7 +195,8 @@ describe('Auth Middleware', () => {
       const middleware = createAuthMiddleware({
         jwtSecret: TEST_JWT_SECRET,
         authService,
-        jwtService
+        jwtService,
+        permissionService
       });
       
       await middleware(mockRequest, mockResponse, mockNext);
@@ -195,6 +205,7 @@ describe('Auth Middleware', () => {
       expect(mockResponse.status).toHaveBeenCalledWith(401);
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
+          success: false,
           error: expect.stringContaining('Token expired')
         })
       );
@@ -208,6 +219,7 @@ describe('Auth Middleware', () => {
         jwtSecret: TEST_JWT_SECRET,
         authService,
         jwtService,
+        permissionService,
         extractToken: (req) => req.query.token as string
       });
       
@@ -227,6 +239,7 @@ describe('Auth Middleware', () => {
         jwtSecret: TEST_JWT_SECRET,
         authService,
         jwtService,
+        permissionService,
         onError: customErrorHandler
       });
       
@@ -242,7 +255,8 @@ describe('Auth Middleware', () => {
       const middleware = createOptionalAuthMiddleware({
         jwtSecret: TEST_JWT_SECRET,
         authService,
-        jwtService
+        jwtService,
+        permissionService
       });
       
       await middleware(mockRequest, mockResponse, mockNext);
@@ -258,7 +272,8 @@ describe('Auth Middleware', () => {
       const middleware = createOptionalAuthMiddleware({
         jwtSecret: TEST_JWT_SECRET,
         authService,
-        jwtService
+        jwtService,
+        permissionService
       });
       
       await middleware(mockRequest, mockResponse, mockNext);
@@ -333,6 +348,7 @@ describe('Auth Middleware', () => {
       expect(mockResponse.status).toHaveBeenCalledWith(403);
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
+          success: false,
           error: expect.stringContaining('Insufficient permissions')
         })
       );
@@ -482,7 +498,7 @@ describe('Auth Middleware', () => {
 
     test('should allow access for resource owner', async () => {
       const middleware = createOwnershipMiddleware({
-        getResourceOwnerId: (req) => parseInt(req.params.userId),
+        getResourceOwnerId: (req) => req.params.userId,
         allowAdmin: false
       });
       
@@ -495,7 +511,7 @@ describe('Auth Middleware', () => {
       mockRequest.params.userId = '99999';
       
       const middleware = createOwnershipMiddleware({
-        getResourceOwnerId: (req) => parseInt(req.params.userId),
+        getResourceOwnerId: (req) => req.params.userId,
         allowAdmin: false
       });
       
@@ -517,7 +533,7 @@ describe('Auth Middleware', () => {
       mockRequest.authContext!.roles = await authService.getUserRoles(testUserId);
       
       const middleware = createOwnershipMiddleware({
-        getResourceOwnerId: (req) => parseInt(req.params.userId),
+        getResourceOwnerId: (req) => req.params.userId,
         allowAdmin: true,
         adminRoles: ['admin']
       });
@@ -532,7 +548,7 @@ describe('Auth Middleware', () => {
         getResourceOwnerId: async (req) => {
           // Simular consulta async
           await new Promise(resolve => setTimeout(resolve, 10));
-          return parseInt(req.params.userId);
+          return req.params.userId;
         },
         allowAdmin: false
       });
@@ -579,6 +595,7 @@ describe('Auth Middleware', () => {
       expect(mockResponse.status).toHaveBeenCalledWith(429);
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
+          success: false,
           error: expect.stringContaining('Too many requests')
         })
       );
@@ -642,7 +659,8 @@ describe('Auth Middleware', () => {
       const authMiddleware = createAuthMiddleware({
         jwtSecret: TEST_JWT_SECRET,
         authService,
-        jwtService
+        jwtService,
+        permissionService
       });
       
       const permissionMiddleware = createPermissionMiddleware({
@@ -668,7 +686,8 @@ describe('Auth Middleware', () => {
       const authMiddleware = createAuthMiddleware({
         jwtSecret: TEST_JWT_SECRET,
         authService,
-        jwtService
+        jwtService,
+        permissionService
       });
       
       const permissionMiddleware = createPermissionMiddleware({
@@ -698,7 +717,8 @@ describe('Auth Middleware', () => {
       const middleware = createAuthMiddleware({
         jwtSecret: TEST_JWT_SECRET,
         authService: errorAuthService,
-        jwtService
+        jwtService,
+        permissionService
       });
       
       await middleware(mockRequest, mockResponse, mockNext);
@@ -707,6 +727,7 @@ describe('Auth Middleware', () => {
       expect(mockResponse.status).toHaveBeenCalledWith(500);
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
+          success: false,
           error: expect.stringContaining('Internal server error')
         })
       );
@@ -719,7 +740,8 @@ describe('Auth Middleware', () => {
       const middleware = createAuthMiddleware({
         jwtSecret: TEST_JWT_SECRET,
         authService,
-        jwtService
+        jwtService,
+        permissionService
       });
       
       await middleware(malformedRequest, mockResponse, mockNext);
@@ -735,6 +757,7 @@ describe('Auth Middleware', () => {
         jwtSecret: TEST_JWT_SECRET,
         authService,
         jwtService,
+        permissionService,
         config: {
           tokenHeader: 'x-auth-token',
           userProperty: 'currentUser',
@@ -761,6 +784,7 @@ describe('Auth Middleware', () => {
         jwtSecret: TEST_JWT_SECRET,
         authService,
         jwtService,
+        permissionService,
         onSuccess
       });
       

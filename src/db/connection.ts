@@ -16,6 +16,14 @@ export function initDatabase(dbPath: string = "./auth.db"): Database {
     try {
       // Crear conexión a SQLite usando Bun Database
       db = new Database(dbPath);
+      
+      // Configure SQLite for better concurrency and performance
+      db.exec("PRAGMA journal_mode = WAL;");
+      db.exec("PRAGMA synchronous = NORMAL;");
+      db.exec("PRAGMA cache_size = 1000;");
+      db.exec("PRAGMA temp_store = memory;");
+      db.exec("PRAGMA busy_timeout = 5000;");
+      
       console.log(`✅ Base de datos SQLite inicializada: ${dbPath}`);
     } catch (error:any) {
       console.error(`❌ Error al inicializar la base de datos: ${error}`);

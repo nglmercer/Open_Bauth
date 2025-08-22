@@ -51,6 +51,8 @@ export interface AuthContext {
   user?: User;
   token?: string;
   permissions: string[];
+  roles?: Role[] | string[];
+  isAuthenticated: boolean;
 }
 
 /**

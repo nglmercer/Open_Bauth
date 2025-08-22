@@ -66,7 +66,7 @@ export class JWTService {
    * @throws Error si el token es inválido
    */
   async verifyToken(token: string): Promise<JWTPayload> {
-    try {
+    return Promise.resolve().then(async () => {
       if (!token) {
         throw new Error('Token is required');
       }
@@ -94,10 +94,10 @@ export class JWTService {
       }
 
       return payload;
-    } catch (error:any) {
+    }).catch((error: any) => {
       console.error('Error verifying JWT token:', error);
       throw new Error(`Invalid token: ${error.message}`);
-    }
+    });
   }
 
   /**
