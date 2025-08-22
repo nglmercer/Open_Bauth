@@ -54,9 +54,9 @@ export class PermissionService {
       // Crear permiso
       const permissionId = crypto.randomUUID();
       const query = db.query(
-        "INSERT INTO permissions (id, name, resource, action, created_at) VALUES (?, ?, ?, ?, datetime('now'))"
+        "INSERT INTO permissions (id, name, resource, action, description, created_at) VALUES (?, ?, ?, ?, ?, datetime('now'))"
       );
-      query.run(permissionId, data.name, data.resource, data.action);
+      query.run(permissionId, data.name, data.resource, data.action, data.description || null);
 
       // Obtener el permiso creado
       const permission = await this.findPermissionById(permissionId);

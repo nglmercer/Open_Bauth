@@ -283,7 +283,7 @@ export class JWTService {
    * @param userId ID del usuario
    * @returns Token de refresh
    */
-  async generateRefreshToken(userId: string): Promise<string> {
+  async generateRefreshToken(userId: number): Promise<string> {
     const payload = {
       userId,
       type: 'refresh',
@@ -302,7 +302,7 @@ export class JWTService {
    * @param refreshToken Token de refresh
    * @returns User ID si es válido
    */
-  async verifyRefreshToken(refreshToken: string): Promise<string> {
+  async verifyRefreshToken(refreshToken: string): Promise<number> {
     try {
       const parts = refreshToken.split('.');
       if (parts.length !== 2) {

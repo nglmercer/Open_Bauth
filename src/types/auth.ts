@@ -12,6 +12,8 @@ export interface User {
   roles: Role[];
   created_at: Date;
   updated_at: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
   is_active: boolean;
   isActive?: boolean;
   lastLoginAt?: Date;
@@ -90,6 +92,7 @@ export interface RegisterData {
   password: string;
   firstName?: string;
   lastName?: string;
+  isActive?: boolean;
 }
 
 /**
@@ -180,6 +183,8 @@ export interface UpdateUserData {
   isActive?: boolean;
   password?: string;
   lastLoginAt?: Date;
+  firstName?: string;
+  lastName?: string;
 }
 
 /**
@@ -234,6 +239,7 @@ export interface UserQueryOptions {
   includeRoles?: boolean;
   includePermissions?: boolean;
   activeOnly?: boolean;
+  isActive?: boolean;
   search?: string;
   sortBy?: 'email' | 'created_at' | 'name';
   sortOrder?: 'asc' | 'desc';

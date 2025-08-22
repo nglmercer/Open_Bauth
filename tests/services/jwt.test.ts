@@ -113,8 +113,8 @@ describe('JWTService', () => {
       try {
         await jwtService.verifyToken(expiredToken);
         expect(true).toBe(false); // Should not reach here
-      } catch (error:any) {
-        expect(error:any).toBeDefined();
+      } catch (error) {
+        expect(error).toBeDefined();
       }
     }, TEST_TIMEOUTS.SHORT);
 
@@ -137,8 +137,8 @@ describe('JWTService', () => {
       try {
         await jwtService.verifyToken(malformedToken);
         expect(true).toBe(false); // Should not reach here
-      } catch (error:any) {
-        expect(error:any).toBeDefined();
+      } catch (error) {
+        expect(error).toBeDefined();
       }
     });
   });
@@ -184,8 +184,8 @@ describe('JWTService', () => {
       try {
         await jwtService.verifyRefreshToken('invalid-token');
         expect(true).toBe(false); // Should not reach here
-      } catch (error:any) {
-        expect(error:any).toBeDefined();
+      } catch (error) {
+        expect(error).toBeDefined();
       }
     });
 
@@ -195,8 +195,8 @@ describe('JWTService', () => {
       try {
         await jwtService.verifyRefreshToken(accessToken);
         expect(true).toBe(false); // Should not reach here
-      } catch (error:any) {
-        expect(error:any).toBeDefined();
+      } catch (error) {
+        expect(error).toBeDefined();
       }
     });
 
@@ -211,8 +211,8 @@ describe('JWTService', () => {
       try {
         await jwtService.verifyRefreshToken('invalid.token');
         expect(true).toBe(false); // Should not reach here
-      } catch (error:any) {
-        expect(error:any).toBeDefined();
+      } catch (error) {
+        expect(error).toBeDefined();
       }
     }, TEST_TIMEOUTS.SHORT);
   });

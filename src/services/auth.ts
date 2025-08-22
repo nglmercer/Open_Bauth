@@ -28,7 +28,17 @@ export class AuthService {
       const jwtService = getJWTService();
 
       // Validar datos de entrada
-      this.validateRegisterData(data);
+      try {
+        this.validateRegisterData(data);
+      } catch (validationError: any) {
+        return {
+          success: false,
+          error: {
+            type: validationError.type || 'VALIDATION_ERROR' as AuthErrorType,
+            message: validationError.message
+          }
+        };
+      }
 
       // Verificar si el usuario ya existe
       const existingUser = await this.findUserByEmail(data.email);
@@ -50,11 +60,12 @@ export class AuthService {
 
       // Crear usuario en la base de datos
       const userId = crypto.randomUUID();
+      const isActive = data.isActive !== undefined ? data.isActive : true;
       const insertQuery = db.query(`
         INSERT INTO users (id, email, password_hash, first_name, last_name, created_at, updated_at, is_active)
-        VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'), 1)
+        VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'), ?)
       `);
-      insertQuery.run(userId, data.email.toLowerCase(), passwordHash, data.firstName || null, data.lastName || null);
+      insertQuery.run(userId, data.email.toLowerCase(), passwordHash, data.firstName || null, data.lastName || null, isActive ? 1 : 0);
 
       // Asignar rol por defecto (user)
       await this.assignDefaultRole(userId);
@@ -214,19 +225,7 @@ export class AuthService {
       }
 
       const userData = userResult[0];
-      const user: User = {
-        id: userData.id,
-        email: userData.email,
-        password_hash: userData.password_hash,
-        lastLoginAt: userData.last_login_at ? new Date(userData.last_login_at) : undefined,
-        firstName: userData.first_name,
-        lastName: userData.last_name,
-        created_at: new Date(userData.created_at),
-        updated_at: new Date(userData.updated_at),
-        is_active: Boolean(userData.is_active),
-        isActive: Boolean(userData.is_active),
-        roles: []
-      };
+      const user = this.mapDatabaseUserToUser(userData);
 
       // Incluir roles si se solicita
       if (options.includeRoles) {
@@ -269,19 +268,7 @@ export class AuthService {
       }
 
       const userData = userResult[0];
-      const user: User = {
-        id: userData.id,
-        email: userData.email,
-        password_hash: userData.password_hash,
-        lastLoginAt: userData.last_login_at ? new Date(userData.last_login_at) : undefined,
-        firstName: userData.first_name,
-        lastName: userData.last_name,
-        created_at: new Date(userData.created_at),
-        updated_at: new Date(userData.updated_at),
-        is_active: Boolean(userData.is_active),
-        isActive: Boolean(userData.is_active),
-        roles: []
-      };
+      const user = this.mapDatabaseUserToUser(userData);
 
       // Incluir roles si se solicita
       if (options.includeRoles) {
@@ -594,6 +581,14 @@ export class AuthService {
         updateFields.push('email = ?');
         updateValues.push(data.email);
       }
+      if (data.firstName !== undefined) {
+        updateFields.push('first_name = ?');
+        updateValues.push(data.firstName);
+      }
+      if (data.lastName !== undefined) {
+        updateFields.push('last_name = ?');
+        updateValues.push(data.lastName);
+      }
       if (data.is_active !== undefined || data.isActive !== undefined) {
         updateFields.push('is_active = ?');
         const activeValue = data.is_active !== undefined ? data.is_active : data.isActive;
@@ -845,6 +840,11 @@ export class AuthService {
         queryParams.push(1);
       }
       
+      if (options.isActive !== undefined) {
+        whereConditions.push('is_active = ?');
+        queryParams.push(options.isActive ? 1 : 0);
+      }
+      
       if (options.search) {
         whereConditions.push('(email LIKE ? OR first_name LIKE ? OR last_name LIKE ?)');
         const searchTerm = `%${options.search}%`;
@@ -874,8 +874,8 @@ export class AuthService {
 
       // Contar total de usuarios
       const countQuery = db.query(`SELECT COUNT(*) as total FROM users ${whereClause}`);
-      const countResult = countQuery.get(...queryParams);
-      const total = countResult.total;
+      const countResult = countQuery.get(...queryParams) as any;
+      const total = countResult?.total || countResult?.['COUNT(*)'] || 0;
 
       // Obtener usuarios con paginación
       const usersQuery = db.query(
@@ -885,19 +885,7 @@ export class AuthService {
 
       const users = [];
       for (const userData of usersResult) {
-        const user: User = {
-          id: userData.id,
-          email: userData.email,
-          password_hash: userData.password_hash,
-          firstName: userData.first_name,
-          lastName: userData.last_name,
-          created_at: new Date(userData.created_at),
-          updated_at: new Date(userData.updated_at),
-          is_active: Boolean(userData.is_active),
-          isActive: Boolean(userData.is_active),
-          lastLoginAt: userData.last_login_at ? new Date(userData.last_login_at) : undefined,
-          roles: []
-        };
+        const user = this.mapDatabaseUserToUser(userData);
 
         // Incluir roles si se solicita
         if (options.includeRoles) {
@@ -912,6 +900,32 @@ export class AuthService {
       console.error('Error getting users:', error);
       throw new Error(`Failed to get users: ${error.message}`);
     }
+  }
+
+  /**
+   * Maps database user object to User interface with proper camelCase properties
+   * @param userData Raw user data from database
+   * @returns User object with proper property names
+   */
+  private mapDatabaseUserToUser(userData: any): User {
+    const createdAt = new Date(userData.created_at);
+    const updatedAt = new Date(userData.updated_at);
+    
+    return {
+      id: userData.id,
+      email: userData.email,
+      password_hash: userData.password_hash,
+      firstName: userData.first_name,
+      lastName: userData.last_name,
+      created_at: createdAt,
+      updated_at: updatedAt,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      is_active: Boolean(userData.is_active),
+      isActive: Boolean(userData.is_active),
+      lastLoginAt: userData.last_login_at ? new Date(userData.last_login_at) : undefined,
+      roles: []
+    };
   }
 }
 

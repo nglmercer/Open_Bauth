@@ -322,6 +322,55 @@ const migrations: Migration[] = [
       
       console.log('✅ Campo last_login_at removido de users');
     }
+  },
+
+  {
+    version: 11,
+    name: 'restore_description_fields',
+    up: async (db: Database) => {
+      // Agregar columna description a permissions
+      db.exec(`
+        ALTER TABLE permissions ADD COLUMN description TEXT;
+      `);
+      
+      // Agregar columna description a roles
+      db.exec(`
+        ALTER TABLE roles ADD COLUMN description TEXT;
+      `);
+      
+      console.log('✅ Campos description restaurados en roles y permissions');
+    },
+    down: async (db: Database) => {
+      // Recrear tabla permissions sin description
+      db.exec(`
+        CREATE TABLE permissions_backup AS SELECT id, name, resource, action, created_at FROM permissions;
+        DROP TABLE permissions;
+        CREATE TABLE permissions (
+          id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+          name TEXT UNIQUE NOT NULL,
+          resource TEXT NOT NULL,
+          action TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO permissions SELECT * FROM permissions_backup;
+        DROP TABLE permissions_backup;
+      `);
+      
+      // Recrear tabla roles sin description
+      db.exec(`
+        CREATE TABLE roles_backup AS SELECT id, name, created_at FROM roles;
+        DROP TABLE roles;
+        CREATE TABLE roles (
+          id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+          name TEXT UNIQUE NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO roles SELECT * FROM roles_backup;
+        DROP TABLE roles_backup;
+      `);
+      
+      console.log('✅ Campos description removidos de roles y permissions');
+    }
   }
 ];
 
