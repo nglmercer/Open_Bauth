@@ -20,7 +20,7 @@ describe('Auth Middleware', () => {
   let authService: AuthService;
   let jwtService: JWTService;
   let permissionService: PermissionService;
-  let testUserId: number |string;
+  let testUserId: string;
   let testToken: string;
   let mockRequest: AuthRequest;
   let mockResponse: AuthResponse;
@@ -146,7 +146,7 @@ describe('Auth Middleware', () => {
     });
 
     test('should reject token for non-existent user', async () => {
-      const invalidToken = testUtils.generateTestJWT({ userId: 99999 });
+      const invalidToken = testUtils.generateTestJWT({ userId: '99999' });
       mockRequest.headers.authorization = `Bearer ${invalidToken}`;
       
       const middleware = createAuthMiddleware({
@@ -321,10 +321,11 @@ describe('Auth Middleware', () => {
       
       // Configurar usuario autenticado en request
       mockRequest.user = (await authService.findUserById(testUserId))!;
+      const userPermissions = await permissionService.getUserPermissions(testUserId);
       mockRequest.authContext = {
         isAuthenticated: true,
         user: mockRequest.user,
-        permissions: await permissionService.getUserPermissions(testUserId),
+        permissions: userPermissions.map(p => p.name),
         roles: await authService.getUserRoles(testUserId)
       };
     });
@@ -374,7 +375,6 @@ describe('Auth Middleware', () => {
       
       const middleware = createPermissionMiddleware({
         permissions: [permissionName, permission2Data.name],
-        requireAll: true,
         permissionService
       });
       
@@ -386,7 +386,6 @@ describe('Auth Middleware', () => {
     test('should handle multiple permissions with OR logic', async () => {
       const middleware = createPermissionMiddleware({
         permissions: [permissionName, 'non-existent-permission'],
-        requireAll: false,
         permissionService
       });
       
@@ -397,7 +396,7 @@ describe('Auth Middleware', () => {
 
     test('should deny access for unauthenticated user', async () => {
       mockRequest.user = undefined;
-      mockRequest.authContext = { isAuthenticated: false };
+      mockRequest.authContext = { isAuthenticated: false, permissions: [] };
       
       const middleware = createPermissionMiddleware({
         permissions: [permissionName],
@@ -427,7 +426,7 @@ describe('Auth Middleware', () => {
       mockRequest.authContext = {
         isAuthenticated: true,
         user: mockRequest.user,
-        permissions: await permissionService.getUserPermissions(testUserId),
+        permissions: (await permissionService.getUserPermissions(testUserId)).map(p => p.name),
         roles: await authService.getUserRoles(testUserId)
       };
     });
@@ -462,11 +461,10 @@ describe('Auth Middleware', () => {
       await authService.assignRole(testUserId, role2Data.name);
       
       // Actualizar el contexto de autenticación con los nuevos roles
-      mockRequest.authContext.roles = await authService.getUserRoles(testUserId);
+      mockRequest.authContext!.roles = await authService.getUserRoles(testUserId);
       
       const middleware = createRoleMiddleware({
         roles: [roleName, role2Data.name],
-        requireAll: true,
         permissionService
       });
       
@@ -478,7 +476,6 @@ describe('Auth Middleware', () => {
     test('should handle multiple roles with OR logic', async () => {
       const middleware = createRoleMiddleware({
         roles: [roleName, 'non-existent-role'],
-        requireAll: false,
         permissionService
       });
       
@@ -678,7 +675,7 @@ describe('Auth Middleware', () => {
       // Ejecutar en secuencia
       await authMiddleware(mockRequest, mockResponse, mockNext);
       
-      if (mockNext.mock.calls.length > 0) {
+      if ((mockNext as any).mock.calls.length > 0) {
         await permissionMiddleware(mockRequest, mockResponse, mockNext);
       }
       

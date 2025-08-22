@@ -36,7 +36,7 @@ interface MockWebSocket extends Partial<AuthenticatedWebSocket> {
   pong: ReturnType<typeof mock>;
   terminate: ReturnType<typeof mock>;
   on: ReturnType<typeof mock>;
-  readyState: number;
+  readyState: 0 | 1 | 2 | 3;
   url?: string;
   protocol?: string;
   extensions?: string;
@@ -74,7 +74,7 @@ describe('WebSocket Adapter', () => {
   let authService: AuthService;
   let jwtService: JWTService;
   let permissionService: PermissionService;
-  let testUserId: number;
+  let testUserId: string;
   let testToken: string;
   let mockWs: MockWebSocket;
 
@@ -178,11 +178,13 @@ describe('WebSocket Adapter', () => {
         user: {
           id: testUserId,
           email: 'test@example.com',
-          permissions: [{ name: 'chat:send', resource: 'chat', action: 'send' }],
-          roles: [{
-            name: 'user',
-            permissions: [{ name: 'chat:send', resource: 'chat', action: 'send' }]
-          }]
+          password_hash: 'hashed_password',
+          firstName: 'Test',
+            lastName: 'User',
+          is_active: true,
+          created_at: new Date(),
+          updated_at: new Date(),
+          roles: []
         },
         isAuthenticated: true,
         permissions: ['chat:send'],
@@ -204,8 +206,13 @@ describe('WebSocket Adapter', () => {
         user: {
           id: testUserId,
           email: 'test@example.com',
-          permissions: [],
-          roles: [{ name: 'user', description: 'Regular user' }]
+          password_hash: 'hashed_password',
+          firstName: 'Test',
+            lastName: 'User',
+          is_active: true,
+          created_at: new Date(),
+          updated_at: new Date(),
+          roles: []
         },
         isAuthenticated: true,
         permissions: [],
@@ -222,7 +229,17 @@ describe('WebSocket Adapter', () => {
 
   describe('utility functions', () => {
     test('getWebSocketCurrentUser should return current user', () => {
-      const user = { id: testUserId, email: 'test@example.com', permissions: [], roles: [] };
+      const user = {
+        id: testUserId,
+        email: 'test@example.com',
+        password_hash: 'hashed_password',
+        firstName: 'Test',
+         lastName: 'User',
+        is_active: true,
+        created_at: new Date(),
+        updated_at: new Date(),
+        roles: []
+      };
       mockWs.auth = { user, isAuthenticated: true, permissions: [], roles: [] };
       
       const currentUser = getWebSocketCurrentUser(mockWs as any);
@@ -230,7 +247,22 @@ describe('WebSocket Adapter', () => {
     });
 
     test('isWebSocketAuthenticated should check authentication status', () => {
-      mockWs.auth = { user: { id: testUserId }, isAuthenticated: true, permissions: [], roles: [] };
+      mockWs.auth = { 
+        user: { 
+          id: testUserId, 
+          email: 'test@example.com',
+          password_hash: 'hashed_password',
+          firstName: 'Test',
+          lastName: 'User',
+          is_active: true,
+          created_at: new Date(),
+          updated_at: new Date(),
+          roles: []
+        }, 
+        isAuthenticated: true, 
+        permissions: [], 
+        roles: [] 
+      };
       expect(isWebSocketAuthenticated(mockWs as any)).toBe(true);
       
       mockWs.auth = undefined;
@@ -238,7 +270,22 @@ describe('WebSocket Adapter', () => {
     });
 
     test('getWebSocketAuthContext should return auth context', () => {
-      const authContext = { user: { id: testUserId }, isAuthenticated: true, permissions: [], roles: [] };
+      const authContext = { 
+        user: { 
+          id: testUserId, 
+          email: 'test@example.com',
+          password_hash: 'hashed_password',
+          firstName: 'Test',
+          lastName: 'User',
+          is_active: true,
+          created_at: new Date(),
+          updated_at: new Date(),
+          roles: []
+        }, 
+        isAuthenticated: true, 
+        permissions: [], 
+        roles: [] 
+      };
       mockWs.auth = authContext;
       
       const context = getWebSocketAuthContext(mockWs as any);

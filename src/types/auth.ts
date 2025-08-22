@@ -111,6 +111,9 @@ export interface AuthRequest {
   method?: string;
   query?: any;
   auth?: AuthContext;
+  user?: User;
+  authContext?: AuthContext;
+  params?: any;
 }
 
 /**

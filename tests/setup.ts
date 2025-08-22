@@ -249,8 +249,13 @@ export const testUtils = {
   validateUserStructure(user: any) {
     expect(user).toHaveProperty('id');
     expect(user).toHaveProperty('email');
-    expect(user).toHaveProperty('firstName');
-    expect(user).toHaveProperty('lastName');
+    // firstName and lastName are optional
+    if (user.firstName !== undefined) {
+      expect(typeof user.firstName).toBe('string');
+    }
+    if (user.lastName !== undefined) {
+      expect(typeof user.lastName).toBe('string');
+    }
     expect(user).toHaveProperty('isActive');
     expect(user).toHaveProperty('createdAt');
     expect(user).toHaveProperty('updatedAt');

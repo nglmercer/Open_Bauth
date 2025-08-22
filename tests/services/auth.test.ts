@@ -28,8 +28,8 @@ describe('AuthService', () => {
       expect(result.success).toBe(true);
       expect(result.user).toBeDefined();
       expect(result.user?.email).toBe(userData.email);
-      expect(result.user?.firstName).toBe(userData.firstName);
-      expect(result.user?.lastName).toBe(userData.lastName);
+      expect(result.user?.firstName).toBe(userData.firstName!);
+      expect(result.user?.lastName).toBe(userData.lastName!);
       expect(result.user?.isActive).toBe(true);
       expect(result.user).not.toHaveProperty('password');
       expect(result.token).toBeDefined();
