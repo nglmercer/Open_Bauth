@@ -198,7 +198,7 @@ function runCommand(config: TestConfig, args: string[] = [], options: { verbose?
       resolve(code || 0);
     });
     
-    child.on('error', (error) => {
+    child.on('error', (error:any) => {
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
@@ -284,7 +284,7 @@ process.on('unhandledRejection', (reason, promise) => {
   process.exit(1);
 });
 
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', (error:any) => {
   colorLog(`\n💥 Uncaught Exception: ${error.message}`, 'red');
   process.exit(1);
 });
@@ -302,7 +302,7 @@ process.on('SIGTERM', () => {
 
 // Ejecutar función principal
 if (import.meta.main) {
-  main().catch((error) => {
+  main().catch((error:any) => {
     colorLog(`\n💥 Error fatal: ${error.message}`, 'red');
     process.exit(1);
   });

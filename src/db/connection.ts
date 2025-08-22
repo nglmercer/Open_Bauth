@@ -17,7 +17,7 @@ export function initDatabase(dbPath: string = "./auth.db"): Database {
       // Crear conexión a SQLite usando Bun Database
       db = new Database(dbPath);
       console.log(`✅ Base de datos SQLite inicializada: ${dbPath}`);
-    } catch (error) {
+    } catch (error:any) {
       console.error(`❌ Error al inicializar la base de datos: ${error}`);
       throw new Error(`Failed to initialize database: ${error}`);
     }
@@ -56,7 +56,7 @@ export async function closeDatabase(): Promise<void> {
       db.close();
       db = null as any;
       console.log("✅ Conexión a la base de datos cerrada");
-    } catch (error) {
+    } catch (error:any) {
       console.error(`❌ Error al cerrar la base de datos: ${error}`);
       throw error;
     }
@@ -81,7 +81,7 @@ export async function testConnection(): Promise<boolean> {
     db.query("SELECT 1 as test").get();
     console.log("✅ Conexión a la base de datos verificada");
     return true;
-  } catch (error) {
+  } catch (error:any) {
     console.error(`❌ Error en la conexión a la base de datos: ${error}`);
     return false;
   }
@@ -96,7 +96,7 @@ export async function enableForeignKeys(): Promise<void> {
     const db = getDatabase();
     db.exec("PRAGMA foreign_keys = ON");
     console.log("✅ Claves foráneas habilitadas");
-  } catch (error) {
+  } catch (error:any) {
     console.error(`❌ Error al habilitar claves foráneas: ${error}`);
     throw error;
   }
@@ -117,7 +117,7 @@ export async function optimizeDatabase(): Promise<void> {
     db.exec("PRAGMA mmap_size = 268435456"); // 256MB de memory-mapped I/O
     
     console.log("✅ Optimizaciones de base de datos aplicadas");
-  } catch (error) {
+  } catch (error:any) {
     console.error(`❌ Error al aplicar optimizaciones: ${error}`);
     throw error;
   }
@@ -147,7 +147,7 @@ export async function getDatabaseInfo(): Promise<{
       encoding: encodingResult?.encoding || 'unknown',
       journalMode: journalModeResult?.journal_mode || 'unknown'
     };
-  } catch (error) {
+  } catch (error:any) {
     console.error(`❌ Error al obtener información de la base de datos: ${error}`);
     throw error;
   }
@@ -161,7 +161,7 @@ export async function vacuumDatabase(): Promise<void> {
     const db = getDatabase();
     db.exec("VACUUM");
     console.log("✅ VACUUM ejecutado exitosamente");
-  } catch (error) {
+  } catch (error:any) {
     console.error(`❌ Error al ejecutar VACUUM: ${error}`);
     throw error;
   }
@@ -184,7 +184,7 @@ export async function checkIntegrity(): Promise<boolean> {
     }
     
     return isOk;
-  } catch (error) {
+  } catch (error:any) {
     console.error(`❌ Error al verificar integridad: ${error}`);
     return false;
   }

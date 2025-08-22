@@ -20,6 +20,7 @@ export interface Role {
   id: string;
   name: string;
   permissions: Permission[];
+  description?: string;
   created_at: Date;
 }
 
@@ -32,6 +33,7 @@ export interface Permission {
   resource: string;
   action: string;
   created_at: Date;
+  description?: string;
 }
 
 /**
@@ -117,6 +119,7 @@ export interface PermissionOptions {
  */
 export interface CreatePermissionData {
   name: string;
+  description?: string;
   resource: string;
   action: string;
 }
@@ -137,6 +140,43 @@ export interface CreateRoleData {
 export interface AssignRoleData {
   userId: string;
   roleId: string;
+}
+
+/**
+ * Tipos de datos para actualizar un permiso
+ */
+export interface UpdatePermissionData {
+  description?: string;
+  resource?: string;
+  action?: string;
+  name?: string;
+}
+
+/**
+ * Response genérico para operaciones de permisos
+ */
+export interface PermissionResult<T = any> {
+  success: boolean;
+  data?: T;
+  permission?: Permission;
+  role?: Role;
+  error?: {
+    type: AuthErrorType;
+    message: string;
+  };
+}
+
+/**
+ * Response para operaciones de roles
+ */
+export interface RoleResult<T = any> {
+  success: boolean;
+  data?: T;
+  role?: Role;
+  error?: {
+    type: AuthErrorType;
+    message: string;
+  };
 }
 
 /**

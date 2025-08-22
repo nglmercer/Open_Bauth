@@ -209,7 +209,7 @@ async function getCurrentVersion(): Promise<number> {
       "SELECT MAX(version) as version FROM migration_history"
     ).get() as { version: number } | undefined;
     return result?.version || 0;
-  } catch (error) {
+  } catch (error:any) {
     // Si la tabla no existe, estamos en versión 0
     return 0;
   }
@@ -277,7 +277,7 @@ export async function runMigrations(): Promise<void> {
     db.exec("COMMIT");
     console.log('🎉 Todas las migraciones completadas exitosamente');
     
-  } catch (error) {
+  } catch (error:any) {
     db.exec("ROLLBACK");
     console.error('❌ Error durante las migraciones:', error);
     throw error;
@@ -320,7 +320,7 @@ export async function rollbackMigrations(targetVersion: number): Promise<void> {
     db.exec("COMMIT");
     console.log('🎉 Rollback completado exitosamente');
     
-  } catch (error) {
+  } catch (error:any) {
     db.exec("ROLLBACK");
     console.error('❌ Error durante el rollback:', error);
     throw error;
@@ -365,7 +365,7 @@ export async function resetDatabase(): Promise<void> {
     for (const migration of allMigrations) {
       try {
         await migration.down(db);
-      } catch (error) {
+      } catch (error:any) {
         // Ignorar errores si la tabla no existe
         console.warn(`⚠️ Error al revertir ${migration.name}:`, error);
       }
@@ -380,7 +380,7 @@ export async function resetDatabase(): Promise<void> {
     // Ejecutar migraciones nuevamente
     await runMigrations();
     
-  } catch (error) {
+  } catch (error:any) {
     db.exec("ROLLBACK");
     console.error('❌ Error al resetear la base de datos:', error);
     throw error;

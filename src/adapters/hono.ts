@@ -76,7 +76,7 @@ export function honoAuthMiddleware(config: AuthMiddlewareConfig = {}) {
       }
 
       await next();
-    } catch (error) {
+    } catch (error:any) {
       console.error('Hono auth middleware error:', error);
       return c.json(
         {

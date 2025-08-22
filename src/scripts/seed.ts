@@ -180,7 +180,7 @@ export async function seedDatabase(): Promise<void> {
           createdPermissions.set(permission.name, result.id);
           console.log(`  ✅ Permiso creado: ${permission.name}`);
         }
-      } catch (error) {
+      } catch (error:any) {
         console.log(`  ⚠️  Permiso ya existe: ${permission.name}`);
       }
     }
@@ -209,7 +209,7 @@ export async function seedDatabase(): Promise<void> {
           }
           console.log(`    📋 Permisos asignados al rol ${role.name}`);
         }
-      } catch (error) {
+      } catch (error:any) {
         console.log(`  ⚠️  Rol ya existe: ${role.name}`);
       }
     }
@@ -239,7 +239,7 @@ export async function seedDatabase(): Promise<void> {
           }
           console.log(`    🎭 Roles asignados al usuario ${user.email}`);
         }
-      } catch (error) {
+      } catch (error:any) {
         console.log(`  ⚠️  Usuario ya existe: ${user.email}`);
       }
     }
@@ -256,7 +256,7 @@ export async function seedDatabase(): Promise<void> {
     console.log('  Author: author@example.com / Author123!');
     console.log('  User: user@example.com / User123!');
     
-  } catch (error) {
+  } catch (error:any) {
     console.error('❌ Error durante el seeding:', error);
     throw error;
   }
@@ -280,7 +280,7 @@ export async function cleanDatabase(): Promise<void> {
     // Deshabilitar foreign keys temporalmente
     try {
         db.exec('PRAGMA foreign_keys = OFF');
-    } catch (error) {
+    } catch (error:any) {
         if (error instanceof Error && (error.message.includes('Database has closed') || error.message.includes('Cannot use a closed database'))) {
             console.log('🔄 Database was closed during operation, force reinitializing...');
             db = forceReinitDatabase();
@@ -304,7 +304,7 @@ export async function cleanDatabase(): Promise<void> {
       try {
         db.exec(`DELETE FROM ${table}`);
         console.log(`  ✅ Tabla ${table} limpiada`);
-      } catch (error) {
+      } catch (error:any) {
         console.log(`  ⚠️  Error limpiando tabla ${table}:`, error);
       }
     }
@@ -314,7 +314,7 @@ export async function cleanDatabase(): Promise<void> {
     
     console.log('✨ Base de datos limpiada exitosamente!');
     
-  } catch (error) {
+  } catch (error:any) {
     console.error('❌ Error durante la limpieza:', error);
     throw error;
   }
@@ -332,7 +332,7 @@ export async function resetDatabase(): Promise<void> {
     
     console.log('✨ Base de datos reseteada exitosamente!');
     
-  } catch (error) {
+  } catch (error:any) {
     console.error('❌ Error durante el reseteo:', error);
     throw error;
   }
@@ -355,7 +355,7 @@ export async function checkDatabaseStatus(): Promise<void> {
       try {
         const result = db.query(`SELECT COUNT(*) as count FROM ${table}`).get() as { count: number };
         console.log(`  ${table}: ${result.count} registros`);
-      } catch (error) {
+      } catch (error:any) {
         console.log(`  ${table}: Tabla no existe`);
       }
     }
@@ -377,11 +377,11 @@ export async function checkDatabaseStatus(): Promise<void> {
           console.log(`  ${user.email}: ${user.roles || 'Sin roles'}`);
         });
       }
-    } catch (error) {
+    } catch (error:any) {
       console.log('  ⚠️  No se pudieron obtener usuarios con roles');
     }
     
-  } catch (error) {
+  } catch (error:any) {
     console.error('❌ Error verificando estado:', error);
     throw error;
   }

@@ -64,7 +64,7 @@ export class AuthService {
       console.log(`✅ Usuario registrado: ${user.email}`);
 
       return { user, token };
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error registering user:', error);
       throw new Error(`Registration failed: ${error.message}`);
     }
@@ -105,11 +105,10 @@ export class AuthService {
       }
 
       // Actualizar última actividad
-      await db`
-        UPDATE users 
-        SET updated_at = datetime('now')
-        WHERE id = ${user.id}
-      `;
+      const updateQuery = db.query(
+        "UPDATE users SET updated_at = datetime('now') WHERE id = ?"
+      );
+      updateQuery.run(user.id);
 
       // Generar token JWT
       const token = await jwtService.generateToken(user);
@@ -117,7 +116,7 @@ export class AuthService {
       console.log(`✅ Usuario autenticado: ${user.email}`);
 
       return { user, token };
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error during login:', error);
       throw new Error(`Login failed: ${error.message}`);
     }
@@ -163,7 +162,7 @@ export class AuthService {
       }
 
       return user;
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error finding user by ID:', error);
       throw new Error(`Failed to find user: ${error.message}`);
     }
@@ -214,7 +213,7 @@ export class AuthService {
       }
 
       return user;
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error finding user by email:', error);
       throw new Error(`Failed to find user: ${error.message}`);
     }
@@ -272,7 +271,7 @@ export class AuthService {
       }
 
       return roles;
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error getting user roles:', error);
       throw new Error(`Failed to get user roles: ${error.message}`);
     }
@@ -287,26 +286,25 @@ export class AuthService {
       const db = getDatabase();
 
       // Buscar o crear el rol 'user'
-      let userRole = await db`
-        SELECT id FROM roles WHERE name = 'user'
-      `;
+      const findRoleQuery = db.query("SELECT id FROM roles WHERE name = 'user'");
+      let userRole = findRoleQuery.all() as { id: string }[];
 
       if (userRole.length === 0) {
         // Crear rol 'user' si no existe
         const roleId = crypto.randomUUID();
-        await db`
-          INSERT INTO roles (id, name, created_at)
-          VALUES (${roleId}, 'user', datetime('now'))
-        `;
+        const createRoleQuery = db.query(
+          "INSERT INTO roles (id, name, created_at) VALUES (?, ?, datetime('now'))"
+        );
+        createRoleQuery.run(roleId, 'user');
         userRole = [{ id: roleId }];
       }
 
       // Asignar rol al usuario
-      await db`
-        INSERT INTO user_roles (id, user_id, role_id, created_at)
-        VALUES (${crypto.randomUUID()}, ${userId}, ${userRole[0].id}, datetime('now'))
-      `;
-    } catch (error) {
+      const assignRoleQuery = db.query(
+        "INSERT INTO user_roles (id, user_id, role_id, created_at) VALUES (?, ?, ?, datetime('now'))"
+      );
+      assignRoleQuery.run(crypto.randomUUID(), userId, userRole[0].id);
+    } catch (error:any) {
       console.error('Error assigning default role:', error);
       throw error;
     }
@@ -373,14 +371,13 @@ export class AuthService {
       });
 
       // Actualizar en la base de datos
-      await db`
-        UPDATE users 
-        SET password_hash = ${passwordHash}, updated_at = datetime('now')
-        WHERE id = ${userId}
-      `;
+      const updatePasswordQuery = db.query(
+        "UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?"
+      );
+      updatePasswordQuery.run(passwordHash, userId);
 
       console.log(`✅ Contraseña actualizada para usuario: ${userId}`);
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error updating password:', error);
       throw new Error(`Failed to update password: ${error.message}`);
     }
@@ -394,14 +391,13 @@ export class AuthService {
     try {
       const db = getDatabase();
 
-      await db`
-        UPDATE users 
-        SET is_active = 0, updated_at = datetime('now')
-        WHERE id = ${userId}
-      `;
+      const deactivateQuery = db.query(
+        "UPDATE users SET is_active = 0, updated_at = datetime('now') WHERE id = ?"
+      );
+      deactivateQuery.run(userId);
 
       console.log(`✅ Usuario desactivado: ${userId}`);
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error deactivating user:', error);
       throw new Error(`Failed to deactivate user: ${error.message}`);
     }
@@ -415,14 +411,13 @@ export class AuthService {
     try {
       const db = getDatabase();
 
-      await db`
-        UPDATE users 
-        SET is_active = 1, updated_at = datetime('now')
-        WHERE id = ${userId}
-      `;
+      const activateQuery = db.query(
+        "UPDATE users SET is_active = 1, updated_at = datetime('now') WHERE id = ?"
+      );
+      activateQuery.run(userId);
 
       console.log(`✅ Usuario activado: ${userId}`);
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error activating user:', error);
       throw new Error(`Failed to activate user: ${error.message}`);
     }
@@ -445,21 +440,28 @@ export class AuthService {
       const offset = (page - 1) * limit;
 
       // Contar total de usuarios
-      const countResult = await db`
-        SELECT COUNT(*) as total
-        FROM users
-        ${options.activeOnly ? db`WHERE is_active = 1` : db``}
-      `;
-      const total = countResult[0].total;
+      let countQuery;
+      if (options.activeOnly) {
+        countQuery = db.query("SELECT COUNT(*) as total FROM users WHERE is_active = 1");
+      } else {
+        countQuery = db.query("SELECT COUNT(*) as total FROM users");
+      }
+      const countResult = countQuery.get();
+      const total = countResult.total;
 
       // Obtener usuarios con paginación
-      const usersResult = await db`
-        SELECT id, email, password_hash, created_at, updated_at, is_active
-        FROM users
-        ${options.activeOnly ? db`WHERE is_active = 1` : db``}
-        ORDER BY created_at DESC
-        LIMIT ${limit} OFFSET ${offset}
-      `;
+      let usersResult;
+      if (options.activeOnly) {
+        const usersQuery = db.query(
+          "SELECT id, email, password_hash, created_at, updated_at, is_active FROM users WHERE is_active = 1 ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        );
+        usersResult = usersQuery.all(limit, offset);
+      } else {
+        const usersQuery = db.query(
+          "SELECT id, email, password_hash, created_at, updated_at, is_active FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        );
+        usersResult = usersQuery.all(limit, offset);
+      }
 
       const users = [];
       for (const userData of usersResult) {
@@ -482,7 +484,7 @@ export class AuthService {
       }
 
       return { users, total };
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error getting users:', error);
       throw new Error(`Failed to get users: ${error.message}`);
     }

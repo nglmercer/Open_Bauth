@@ -53,7 +53,7 @@ export class JWTService {
       const signature = await this.createSignature(`${encodedHeader}.${encodedPayload}`);
       
       return `${encodedHeader}.${encodedPayload}.${signature}`;
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error generating JWT token:', error);
       throw new Error('Failed to generate token');
     }
@@ -94,7 +94,7 @@ export class JWTService {
       }
 
       return payload;
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error verifying JWT token:', error);
       throw new Error(`Invalid token: ${error.message}`);
     }
@@ -134,7 +134,7 @@ export class JWTService {
       const now = Math.floor(Date.now() / 1000);
       
       return payload.exp ? payload.exp < now : false;
-    } catch (error) {
+    } catch (error:any) {
       return true;
     }
   }
@@ -160,7 +160,7 @@ export class JWTService {
 
       const remaining = payload.exp - now;
       return Math.max(0, remaining);
-    } catch (error) {
+    } catch (error:any) {
       return 0;
     }
   }
@@ -330,7 +330,7 @@ export class JWTService {
       }
 
       return payload.userId;
-    } catch (error) {
+    } catch (error:any) {
       throw new Error(`Invalid refresh token: ${error.message}`);
     }
   }

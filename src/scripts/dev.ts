@@ -165,7 +165,7 @@ export async function runDevCommand(command: string, ...args: string[]): Promise
         break;
     }
     
-  } catch (error) {
+  } catch (error:any) {
     console.error(`❌ Error ejecutando comando ${command}:`, error);
     process.exit(1);
   }
@@ -208,7 +208,7 @@ async function createUser(args: string[]): Promise<void> {
           await permissionService.assignRoleToUser(result.user.id, roleResult.id);
           console.log(`  🎭 Rol asignado: ${roleName}`);
         }
-      } catch (error) {
+      } catch (error:any) {
         console.log(`  ⚠️  No se pudo asignar rol: ${roleName}`);
       }
     }
@@ -284,7 +284,7 @@ async function assignUserRoles(args: string[]): Promise<void> {
       } else {
         console.log(`  ❌ Rol no encontrado: ${roleName}`);
       }
-    } catch (error) {
+    } catch (error:any) {
       console.log(`  ⚠️  Error asignando rol ${roleName}:`, error);
     }
   }
@@ -350,7 +350,7 @@ async function createRole(args: string[]): Promise<void> {
           await permissionService.assignPermissionToRole(result.id, permResult.id);
           console.log(`  📋 Permiso asignado: ${permissionName}`);
         }
-      } catch (error) {
+      } catch (error:any) {
         console.log(`  ⚠️  No se pudo asignar permiso: ${permissionName}`);
       }
     }
@@ -392,7 +392,7 @@ async function getRoleByName(args: string[]): Promise<void> {
       console.log('  🔐 Permisos: Sin permisos asignados');
     }
     
-  } catch (error) {
+  } catch (error:any) {
     console.error(`❌ Error obteniendo rol: ${error}`);
   }
 }
@@ -532,7 +532,7 @@ async function verifyJWT(token: string): Promise<void> {
     const payload = jwtService.verifyToken(token);
     console.log('✅ Token válido');
     console.log(`Payload: ${JSON.stringify(payload, null, 2)}`);
-  } catch (error) {
+  } catch (error:any) {
     console.error('❌ Token inválido:', error);
   }
 }

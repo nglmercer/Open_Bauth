@@ -34,7 +34,7 @@ beforeAll(async () => {
     initJWTService(TEST_JWT_SECRET);
     
     console.log('✅ Entorno de tests configurado correctamente');
-  } catch (error) {
+  } catch (error:any) {
     console.error('❌ Error configurando entorno de tests:', error);
     throw error;
   }
@@ -50,7 +50,7 @@ afterAll(async () => {
     // No cerrar la base de datos aquí para evitar errores en tests posteriores
     // closeDatabase();
     console.log('✅ Entorno de tests limpiado correctamente');
-  } catch (error) {
+  } catch (error:any) {
     console.error('❌ Error limpiando entorno de tests:', error);
   }
 });
@@ -178,7 +178,7 @@ export const testUtils = {
       };
       
       return await jwtService.generateToken(defaultUser);
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error generating test JWT:', error);
       // Return a simple mock token for tests that don't need real JWT
       return 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsImVtYWlsIjoidGVzdEBleGFtcGxlLmNvbSIsInJvbGVzIjpbInVzZXIiXSwiaWF0IjoxNjQwOTk1MjAwLCJleHAiOjE2NDA5OTg4MDB9.mock-signature';

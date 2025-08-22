@@ -105,7 +105,7 @@ jobs:
               // Aquí podrías parsear los archivos XML de JUnit para obtener estadísticas
               testSummary += '✅ All tests passed!\n';
               testSummary += '📊 Coverage report available in artifacts\n';
-            } catch (error) {
+            } catch (error:any) {
               testSummary += '❌ Some tests failed. Check the workflow logs for details.\n';
             }
             

@@ -702,7 +702,7 @@ describe('Express Adapter', () => {
       
       try {
         await middleware(req, res, errorNext);
-      } catch (error) {
+      } catch (error:any) {
         // Error esperado
       }
       

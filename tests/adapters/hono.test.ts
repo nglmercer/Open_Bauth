@@ -675,7 +675,7 @@ describe('Hono Adapter', () => {
       
       try {
         await middleware(c, errorNext);
-      } catch (error) {
+      } catch (error:any) {
         // Error esperado
       }
       

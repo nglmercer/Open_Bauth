@@ -117,7 +117,7 @@ export async function authenticateWebSocket(
     }
 
     return true;
-  } catch (error) {
+  } catch (error:any) {
     console.error('WebSocket authentication error:', error);
     ws.close(1011, 'Internal authentication error');
     return false;

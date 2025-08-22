@@ -74,7 +74,7 @@ export function expressAuthMiddleware(config: AuthMiddlewareConfig = {}) {
       }
 
       next();
-    } catch (error) {
+    } catch (error:any) {
       console.error('Express auth middleware error:', error);
       return res.status(500).json({
         error: 'Internal authentication error',
@@ -411,7 +411,7 @@ export function expressJsonValidator() {
         if (req.body && typeof req.body === 'string') {
           req.body = JSON.parse(req.body);
         }
-      } catch (error) {
+      } catch (error:any) {
         return res.status(400).json({
           error: 'Invalid JSON format',
           timestamp: new Date().toISOString()

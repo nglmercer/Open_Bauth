@@ -7,7 +7,7 @@ function initDatabase2(dbPath = "./auth.db") {
     try {
       db = new Database(dbPath);
       console.log(`\u2705 Base de datos SQLite inicializada: ${dbPath}`);
-    } catch (error) {
+    } catch (error:any) {
       console.error(`\u274C Error al inicializar la base de datos: ${error}`);
       throw new Error(`Failed to initialize database: ${error}`);
     }
@@ -33,7 +33,7 @@ async function closeDatabase2() {
       db.close();
       db = null;
       console.log("\u2705 Conexi\xF3n a la base de datos cerrada");
-    } catch (error) {
+    } catch (error:any) {
       console.error(`\u274C Error al cerrar la base de datos: ${error}`);
       throw error;
     }
@@ -48,7 +48,7 @@ async function testConnection() {
     db2.query("SELECT 1 as test").get();
     console.log("\u2705 Conexi\xF3n a la base de datos verificada");
     return true;
-  } catch (error) {
+  } catch (error:any) {
     console.error(`\u274C Error en la conexi\xF3n a la base de datos: ${error}`);
     return false;
   }
@@ -66,7 +66,7 @@ async function getDatabaseInfo() {
       encoding: encodingResult?.encoding || "unknown",
       journalMode: journalModeResult?.journal_mode || "unknown"
     };
-  } catch (error) {
+  } catch (error:any) {
     console.error(`\u274C Error al obtener informaci\xF3n de la base de datos: ${error}`);
     throw error;
   }
@@ -106,7 +106,7 @@ class JWTService2 {
       const encodedPayload = this.base64UrlEncode(JSON.stringify(payload));
       const signature = await this.createSignature(`${encodedHeader}.${encodedPayload}`);
       return `${encodedHeader}.${encodedPayload}.${signature}`;
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error generating JWT token:", error);
       throw new Error("Failed to generate token");
     }
@@ -131,7 +131,7 @@ class JWTService2 {
         throw new Error("Token has expired");
       }
       return payload;
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error verifying JWT token:", error);
       throw new Error(`Invalid token: ${error.message}`);
     }
@@ -155,7 +155,7 @@ class JWTService2 {
       const payload = JSON.parse(this.base64UrlDecode(parts[1]));
       const now = Math.floor(Date.now() / 1000);
       return payload.exp ? payload.exp < now : false;
-    } catch (error) {
+    } catch (error:any) {
       return true;
     }
   }
@@ -172,7 +172,7 @@ class JWTService2 {
       }
       const remaining = payload.exp - now;
       return Math.max(0, remaining);
-    } catch (error) {
+    } catch (error:any) {
       return 0;
     }
   }
@@ -255,7 +255,7 @@ class JWTService2 {
         throw new Error("Refresh token has expired");
       }
       return payload.userId;
-    } catch (error) {
+    } catch (error:any) {
       throw new Error(`Invalid refresh token: ${error.message}`);
     }
   }
@@ -296,7 +296,7 @@ class AuthService2 {
       const token = await jwtService.generateToken(user);
       console.log(`\u2705 Usuario registrado: ${user.email}`);
       return { user, token };
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error registering user:", error);
       throw new Error(`Registration failed: ${error.message}`);
     }
@@ -328,7 +328,7 @@ class AuthService2 {
       const token = await jwtService.generateToken(user);
       console.log(`\u2705 Usuario autenticado: ${user.email}`);
       return { user, token };
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error during login:", error);
       throw new Error(`Login failed: ${error.message}`);
     }
@@ -359,7 +359,7 @@ class AuthService2 {
         user.roles = await this.getUserRoles(id, options.includePermissions);
       }
       return user;
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error finding user by ID:", error);
       throw new Error(`Failed to find user: ${error.message}`);
     }
@@ -390,7 +390,7 @@ class AuthService2 {
         user.roles = await this.getUserRoles(userData.id, options.includePermissions);
       }
       return user;
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error finding user by email:", error);
       throw new Error(`Failed to find user: ${error.message}`);
     }
@@ -432,7 +432,7 @@ class AuthService2 {
         roles.push(role);
       }
       return roles;
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error getting user roles:", error);
       throw new Error(`Failed to get user roles: ${error.message}`);
     }
@@ -455,7 +455,7 @@ class AuthService2 {
         INSERT INTO user_roles (id, user_id, role_id, created_at)
         VALUES (${crypto.randomUUID()}, ${userId}, ${userRole[0].id}, datetime('now'))
       `;
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error assigning default role:", error);
       throw error;
     }
@@ -500,7 +500,7 @@ class AuthService2 {
         WHERE id = ${userId}
       `;
       console.log(`\u2705 Contrase\xF1a actualizada para usuario: ${userId}`);
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error updating password:", error);
       throw new Error(`Failed to update password: ${error.message}`);
     }
@@ -514,7 +514,7 @@ class AuthService2 {
         WHERE id = ${userId}
       `;
       console.log(`\u2705 Usuario desactivado: ${userId}`);
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error deactivating user:", error);
       throw new Error(`Failed to deactivate user: ${error.message}`);
     }
@@ -528,7 +528,7 @@ class AuthService2 {
         WHERE id = ${userId}
       `;
       console.log(`\u2705 Usuario activado: ${userId}`);
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error activating user:", error);
       throw new Error(`Failed to activate user: ${error.message}`);
     }
@@ -567,7 +567,7 @@ class AuthService2 {
         users.push(user);
       }
       return { users, total };
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error getting users:", error);
       throw new Error(`Failed to get users: ${error.message}`);
     }
@@ -598,7 +598,7 @@ class PermissionService2 {
       }
       console.log(`\u2705 Permiso creado: ${permission.name}`);
       return permission;
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error creating permission:", error);
       throw new Error(`Failed to create permission: ${error.message}`);
     }
@@ -622,7 +622,7 @@ class PermissionService2 {
       }
       console.log(`\u2705 Rol creado: ${role.name}`);
       return role;
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error creating role:", error);
       throw new Error(`Failed to create role: ${error.message}`);
     }
@@ -650,7 +650,7 @@ class PermissionService2 {
         VALUES (${crypto.randomUUID()}, ${data.userId}, ${data.roleId}, datetime('now'))
       `;
       console.log(`\u2705 Rol asignado al usuario: ${data.userId} -> ${data.roleId}`);
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error assigning role to user:", error);
       throw new Error(`Failed to assign role: ${error.message}`);
     }
@@ -663,7 +663,7 @@ class PermissionService2 {
         WHERE user_id = ${userId} AND role_id = ${roleId}
       `;
       console.log(`\u2705 Rol removido del usuario: ${userId} -> ${roleId}`);
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error removing role from user:", error);
       throw new Error(`Failed to remove role: ${error.message}`);
     }
@@ -684,14 +684,14 @@ class PermissionService2 {
       for (const permissionId of permissionIds) {
         try {
           db2.query("INSERT INTO role_permissions (id, role_id, permission_id, created_at) VALUES (?, ?, ?, datetime('now'))").run(crypto.randomUUID(), roleId, permissionId);
-        } catch (error) {
+        } catch (error:any) {
           if (!error.message.includes("UNIQUE constraint")) {
             throw error;
           }
         }
       }
       console.log(`\u2705 Permisos asignados al rol: ${roleId}`);
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error assigning permissions to role:", error);
       throw new Error(`Failed to assign permissions: ${error.message}`);
     }
@@ -706,7 +706,7 @@ class PermissionService2 {
         `;
       }
       console.log(`\u2705 Permisos removidos del rol: ${roleId}`);
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error removing permissions from role:", error);
       throw new Error(`Failed to remove permissions: ${error.message}`);
     }
@@ -722,7 +722,7 @@ class PermissionService2 {
         WHERE ur.user_id = ${userId} AND p.name = ${permissionName}
       `;
       return result[0].count > 0;
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error checking user permission:", error);
       return false;
     }
@@ -737,7 +737,7 @@ class PermissionService2 {
         return results.every((result) => result);
       }
       return results.some((result) => result);
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error checking user permissions:", error);
       return false;
     }
@@ -760,7 +760,7 @@ class PermissionService2 {
         action: row.action,
         created_at: new Date(row.created_at)
       }));
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error getting user permissions:", error);
       throw new Error(`Failed to get user permissions: ${error.message}`);
     }
@@ -780,7 +780,7 @@ class PermissionService2 {
         action: row.action,
         created_at: new Date(row.created_at)
       };
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error finding permission by ID:", error);
       return null;
     }
@@ -800,7 +800,7 @@ class PermissionService2 {
         action: row.action,
         created_at: new Date(row.created_at)
       };
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error finding permission by name:", error);
       return null;
     }
@@ -823,7 +823,7 @@ class PermissionService2 {
         role.permissions = await this.getRolePermissions(id);
       }
       return role;
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error finding role by ID:", error);
       return null;
     }
@@ -846,7 +846,7 @@ class PermissionService2 {
         role.permissions = await this.getRolePermissions(row.id);
       }
       return role;
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error finding role by name:", error);
       return null;
     }
@@ -868,7 +868,7 @@ class PermissionService2 {
         action: row.action,
         created_at: new Date(row.created_at)
       }));
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error getting role permissions:", error);
       return [];
     }
@@ -895,7 +895,7 @@ class PermissionService2 {
         roles.push(role);
       }
       return roles;
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error getting all roles:", error);
       throw new Error(`Failed to get roles: ${error.message}`);
     }
@@ -915,7 +915,7 @@ class PermissionService2 {
         action: row.action,
         created_at: new Date(row.created_at)
       }));
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error getting all permissions:", error);
       throw new Error(`Failed to get permissions: ${error.message}`);
     }
@@ -941,7 +941,7 @@ class PermissionService2 {
       const db2 = getDatabase();
       const result = await db2`SELECT id FROM users WHERE id = ${userId}`;
       return result.length > 0;
-    } catch (error) {
+    } catch (error:any) {
       return false;
     }
   }
@@ -950,7 +950,7 @@ class PermissionService2 {
       const db2 = getDatabase();
       const result = db2.query("SELECT id FROM roles WHERE id = ?").all(roleId);
       return result.length > 0;
-    } catch (error) {
+    } catch (error:any) {
       return false;
     }
   }
@@ -959,7 +959,7 @@ class PermissionService2 {
       const db2 = getDatabase();
       const result = db2.query("SELECT id FROM permissions WHERE id = ?").all(permissionId);
       return result.length > 0;
-    } catch (error) {
+    } catch (error:any) {
       return false;
     }
   }
@@ -1003,7 +1003,7 @@ async function authenticateRequest(request, config = {}) {
     let payload;
     try {
       payload = await jwtService.verifyToken(token);
-    } catch (error) {
+    } catch (error:any) {
       return {
         success: false,
         error: "Invalid or expired token",
@@ -1042,7 +1042,7 @@ async function authenticateRequest(request, config = {}) {
       }
     }
     return { success: true, context: authContext };
-  } catch (error) {
+  } catch (error:any) {
     console.error("Authentication middleware error:", error);
     return {
       success: false,
@@ -1073,7 +1073,7 @@ async function authorizeRequest(authContext, requiredPermissions, options = {}) 
       };
     }
     return { success: true };
-  } catch (error) {
+  } catch (error:any) {
     console.error("Authorization error:", error);
     return {
       success: false,
@@ -1141,7 +1141,7 @@ function honoAuthMiddleware2(config = {}) {
         });
       }
       await next();
-    } catch (error) {
+    } catch (error:any) {
       console.error("Hono auth middleware error:", error);
       return c.json({
         error: "Internal authentication error",
@@ -1342,7 +1342,7 @@ function expressAuthMiddleware2(config = {}) {
         });
       }
       next();
-    } catch (error) {
+    } catch (error:any) {
       console.error("Express auth middleware error:", error);
       return res.status(500).json({
         error: "Internal authentication error",
@@ -1542,7 +1542,7 @@ function expressJsonValidator2() {
         if (req.body && typeof req.body === "string") {
           req.body = JSON.parse(req.body);
         }
-      } catch (error) {
+      } catch (error:any) {
         return res.status(400).json({
           error: "Invalid JSON format",
           timestamp: new Date().toISOString()
@@ -1630,7 +1630,7 @@ async function authenticateWebSocket2(ws, request, config = {}) {
       setupSessionTimeout(ws, config.sessionTimeout);
     }
     return true;
-  } catch (error) {
+  } catch (error:any) {
     console.error("WebSocket authentication error:", error);
     ws.close(1011, "Internal authentication error");
     return false;
@@ -2010,7 +2010,7 @@ async function getCurrentVersion() {
     const db2 = getDatabase();
     const result = db2.query("SELECT MAX(version) as version FROM migration_history").get();
     return result?.version || 0;
-  } catch (error) {
+  } catch (error:any) {
     return 0;
   }
 }
@@ -2049,7 +2049,7 @@ async function runMigrations2() {
     }
     db2.exec("COMMIT");
     console.log("\uD83C\uDF89 Todas las migraciones completadas exitosamente");
-  } catch (error) {
+  } catch (error:any) {
     db2.exec("ROLLBACK");
     console.error("\u274C Error durante las migraciones:", error);
     throw error;
@@ -2075,7 +2075,7 @@ async function rollbackMigrations(targetVersion) {
     }
     db2.exec("COMMIT");
     console.log("\uD83C\uDF89 Rollback completado exitosamente");
-  } catch (error) {
+  } catch (error:any) {
     db2.exec("ROLLBACK");
     console.error("\u274C Error durante el rollback:", error);
     throw error;
@@ -2102,7 +2102,7 @@ async function resetDatabase2() {
     for (const migration of allMigrations) {
       try {
         await migration.down(db2);
-      } catch (error) {
+      } catch (error:any) {
         console.warn(`\u26A0\uFE0F Error al revertir ${migration.name}:`, error);
       }
     }
@@ -2110,7 +2110,7 @@ async function resetDatabase2() {
     db2.exec("COMMIT");
     console.log("\u2705 Base de datos reseteada");
     await runMigrations2();
-  } catch (error) {
+  } catch (error:any) {
     db2.exec("ROLLBACK");
     console.error("\u274C Error al resetear la base de datos:", error);
     throw error;
@@ -2548,7 +2548,7 @@ async function seedDatabase2() {
           createdPermissions.set(permission.name, result.data.id);
           console.log(`  \u2705 Permiso creado: ${permission.name}`);
         }
-      } catch (error) {
+      } catch (error:any) {
         console.log(`  \u26A0\uFE0F  Permiso ya existe: ${permission.name}`);
       }
     }
@@ -2571,7 +2571,7 @@ async function seedDatabase2() {
           }
           console.log(`    \uD83D\uDCCB Permisos asignados al rol ${role.name}`);
         }
-      } catch (error) {
+      } catch (error:any) {
         console.log(`  \u26A0\uFE0F  Rol ya existe: ${role.name}`);
       }
     }
@@ -2594,7 +2594,7 @@ async function seedDatabase2() {
           }
           console.log(`    \uD83C\uDFAD Roles asignados al usuario ${user.email}`);
         }
-      } catch (error) {
+      } catch (error:any) {
         console.log(`  \u26A0\uFE0F  Usuario ya existe: ${user.email}`);
       }
     }
@@ -2611,7 +2611,7 @@ async function seedDatabase2() {
     console.log("  Editor: editor@example.com / Editor123!");
     console.log("  Author: author@example.com / Author123!");
     console.log("  User: user@example.com / User123!");
-  } catch (error) {
+  } catch (error:any) {
     console.error("\u274C Error durante el seeding:", error);
     throw error;
   }
@@ -2626,7 +2626,7 @@ async function cleanDatabase2() {
     let db2 = getDatabase();
     try {
       db2.exec("PRAGMA foreign_keys = OFF");
-    } catch (error) {
+    } catch (error:any) {
       if (error instanceof Error && (error.message.includes("Database has closed") || error.message.includes("Cannot use a closed database"))) {
         console.log("\uD83D\uDD04 Database was closed during operation, force reinitializing...");
         db2 = forceReinitDatabase();
@@ -2647,13 +2647,13 @@ async function cleanDatabase2() {
       try {
         db2.exec(`DELETE FROM ${table}`);
         console.log(`  \u2705 Tabla ${table} limpiada`);
-      } catch (error) {
+      } catch (error:any) {
         console.log(`  \u26A0\uFE0F  Error limpiando tabla ${table}:`, error);
       }
     }
     db2.exec("PRAGMA foreign_keys = ON");
     console.log("\u2728 Base de datos limpiada exitosamente!");
-  } catch (error) {
+  } catch (error:any) {
     console.error("\u274C Error durante la limpieza:", error);
     throw error;
   }
@@ -2664,7 +2664,7 @@ async function resetDatabase3() {
     await cleanDatabase2();
     await seedDatabase2();
     console.log("\u2728 Base de datos reseteada exitosamente!");
-  } catch (error) {
+  } catch (error:any) {
     console.error("\u274C Error durante el reseteo:", error);
     throw error;
   }
@@ -2680,7 +2680,7 @@ async function checkDatabaseStatus2() {
       try {
         const result = db2.query(`SELECT COUNT(*) as count FROM ${table}`).get();
         console.log(`  ${table}: ${result.count} registros`);
-      } catch (error) {
+      } catch (error:any) {
         console.log(`  ${table}: Tabla no existe`);
       }
     }
@@ -2700,10 +2700,10 @@ async function checkDatabaseStatus2() {
           console.log(`  ${user.email}: ${user.roles || "Sin roles"}`);
         });
       }
-    } catch (error) {
+    } catch (error:any) {
       console.log("  \u26A0\uFE0F  No se pudieron obtener usuarios con roles");
     }
-  } catch (error) {
+  } catch (error:any) {
     console.error("\u274C Error verificando estado:", error);
     throw error;
   }
@@ -2828,7 +2828,7 @@ async function runDevCommand(command, ...args) {
         showHelp();
         break;
     }
-  } catch (error) {
+  } catch (error:any) {
     console.error(`\u274C Error ejecutando comando ${command}:`, error);
     process.exit(1);
   }
@@ -2860,7 +2860,7 @@ async function createUser(args) {
           await permissionService.assignRoleToUser(result.user.id, roleResult.id);
           console.log(`  \uD83C\uDFAD Rol asignado: ${roleName}`);
         }
-      } catch (error) {
+      } catch (error:any) {
         console.log(`  \u26A0\uFE0F  No se pudo asignar rol: ${roleName}`);
       }
     }
@@ -2920,7 +2920,7 @@ async function assignUserRoles(args) {
       } else {
         console.log(`  \u274C Rol no encontrado: ${roleName}`);
       }
-    } catch (error) {
+    } catch (error:any) {
       console.log(`  \u26A0\uFE0F  Error asignando rol ${roleName}:`, error);
     }
   }
@@ -2963,7 +2963,7 @@ async function createRole(args) {
           await permissionService.assignPermissionToRole(result.id, permResult.id);
           console.log(`  \uD83D\uDCCB Permiso asignado: ${permissionName}`);
         }
-      } catch (error) {
+      } catch (error:any) {
         console.log(`  \u26A0\uFE0F  No se pudo asignar permiso: ${permissionName}`);
       }
     }
@@ -2994,7 +2994,7 @@ async function getRoleByName(args) {
     } else {
       console.log("  \uD83D\uDD10 Permisos: Sin permisos asignados");
     }
-  } catch (error) {
+  } catch (error:any) {
     console.error(`\u274C Error obteniendo rol: ${error}`);
   }
 }
@@ -3095,7 +3095,7 @@ async function verifyJWT(token) {
     const payload = jwtService.verifyToken(token);
     console.log("\u2705 Token v\xE1lido");
     console.log(`Payload: ${JSON.stringify(payload, null, 2)}`);
-  } catch (error) {
+  } catch (error:any) {
     console.error("\u274C Token inv\xE1lido:", error);
   }
 }
@@ -3206,7 +3206,7 @@ class AuthLibrary {
       initDatabase();
       await runMigrations();
       console.log("\u2705 Auth Library inicializada correctamente");
-    } catch (error) {
+    } catch (error:any) {
       console.error("\u274C Error inicializando Auth Library:", error);
       throw error;
     }

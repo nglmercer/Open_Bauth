@@ -216,7 +216,7 @@ export class JWTService {
   verifyToken(token: string): any {
     try {
       return jwt.verify(token, this.secret);
-    } catch (error) {
+    } catch (error:any) {
       throw new Error("Token inválido");
     }
   }
@@ -467,7 +467,7 @@ export class AuthMiddleware {
         };
 
         if (next) next();
-      } catch (error) {
+      } catch (error:any) {
         return res.status(401).json({ error: "Token inválido" });
       }
     };
@@ -689,7 +689,7 @@ app.post('/auth/register', async (c) => {
   try {
     const result = await authService.register(email, password);
     return c.json(result);
-  } catch (error) {
+  } catch (error:any) {
     return c.json({ error: error.message }, 400);
   }
 });
@@ -699,7 +699,7 @@ app.post('/auth/login', async (c) => {
   try {
     const result = await authService.login(email, password);
     return c.json(result);
-  } catch (error) {
+  } catch (error:any) {
     return c.json({ error: error.message }, 401);
   }
 });
@@ -769,7 +769,7 @@ export class WebSocketAuthAdapter {
     try {
       const user = await this.authService.verifyToken(token);
       return { success: true, user };
-    } catch (error) {
+    } catch (error:any) {
       return { success: false, error: error.message };
     }
   }

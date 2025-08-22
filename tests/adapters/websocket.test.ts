@@ -683,7 +683,7 @@ describe('WebSocket Adapter', () => {
       
       try {
         await middleware(mockWs, message);
-      } catch (error) {
+      } catch (error:any) {
         // Error esperado
       }
       

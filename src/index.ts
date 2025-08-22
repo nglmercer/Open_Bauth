@@ -186,7 +186,7 @@ export class AuthLibrary {
       initDatabase();
       await runMigrations();
       console.log('✅ Auth Library inicializada correctamente');
-    } catch (error) {
+    } catch (error:any) {
       console.error('❌ Error inicializando Auth Library:', error);
       throw error;
     }

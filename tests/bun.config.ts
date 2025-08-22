@@ -97,7 +97,7 @@ export class BunTestUtils {
       this.db.exec('PRAGMA busy_timeout = 5000');
       
       return this.db;
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error initializing test database:', error);
       throw error;
     }
@@ -132,7 +132,7 @@ export class BunTestUtils {
       
       // Resetear secuencias
       this.db.exec("DELETE FROM sqlite_sequence");
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error cleaning test database:', error);
       throw error;
     }
@@ -152,7 +152,7 @@ export class BunTestUtils {
       if (existsSync(testConfig.testDbPath)) {
         await unlink(testConfig.testDbPath);
       }
-    } catch (error) {
+    } catch (error:any) {
       console.warn('Warning: Could not delete test database file:', error);
     }
   }
@@ -167,7 +167,7 @@ export class BunTestUtils {
     
     try {
       this.db.exec(migrationSql);
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error running migration:', error);
       throw error;
     }
@@ -184,7 +184,7 @@ export class BunTestUtils {
     try {
       const backup = this.db.serialize();
       return Buffer.from(backup).toString('base64');
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error creating database snapshot:', error);
       throw error;
     }
@@ -203,7 +203,7 @@ export class BunTestUtils {
       this.db.close();
       this.db = new Database(':memory:');
       this.db.deserialize(backup);
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error restoring database snapshot:', error);
       throw error;
     }
@@ -303,7 +303,7 @@ export class BunTestUtils {
     };
     
     (mockFn as any).mockRejectedValueOnce = (error: any) => {
-      mockFn.mockImplementationOnce(() => Promise.reject(error));
+      mockFn.mockImplementationOnce(() => Promise.reject(error:any));
       return mockFn;
     };
     

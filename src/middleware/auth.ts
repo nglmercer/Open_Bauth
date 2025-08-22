@@ -67,7 +67,7 @@ export async function authenticateRequest(
     let payload;
     try {
       payload = await jwtService.verifyToken(token);
-    } catch (error) {
+    } catch (error:any) {
       return {
         success: false,
         error: 'Invalid or expired token',
@@ -121,7 +121,7 @@ export async function authenticateRequest(
     }
 
     return { success: true, context: authContext };
-  } catch (error) {
+  } catch (error:any) {
     console.error('Authentication middleware error:', error);
     return {
       success: false,
@@ -168,7 +168,7 @@ export async function authorizeRequest(
     }
 
     return { success: true };
-  } catch (error) {
+  } catch (error:any) {
     console.error('Authorization error:', error);
     return {
       success: false,
@@ -311,7 +311,7 @@ export async function refreshTokenIfNeeded(authContext: AuthContext): Promise<st
     );
 
     return newToken !== authContext.token ? newToken : null;
-  } catch (error) {
+  } catch (error:any) {
     console.error('Error refreshing token:', error);
     return null;
   }
@@ -353,7 +353,7 @@ export async function validateResourcePermission(
       success: false,
       error: `Insufficient permissions for ${resource}.${action}`
     };
-  } catch (error) {
+  } catch (error:any) {
     console.error('Error validating resource permission:', error);
     return {
       success: false,

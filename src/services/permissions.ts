@@ -5,8 +5,12 @@ import type {
   Permission, 
   CreateRoleData, 
   CreatePermissionData, 
+  UpdatePermissionData,
   AssignRoleData, 
-  PermissionOptions 
+  PermissionOptions,
+  PermissionResult,
+  RoleResult,
+  AuthErrorType
 } from '../types/auth';
 
 /**
@@ -17,81 +21,146 @@ export class PermissionService {
   /**
    * Crea un nuevo permiso
    * @param data Datos del permiso
-   * @returns Permiso creado
+   * @returns Resultado de la operación
    */
-  async createPermission(data: CreatePermissionData): Promise<Permission> {
+  async createPermission(data: CreatePermissionData): Promise<PermissionResult> {
     try {
       const db = getDatabase();
 
       // Validar datos
-      this.validatePermissionData(data);
+      const validation = this.validatePermissionData(data);
+      if (!validation.isValid) {
+        return {
+          success: false,
+          error: {
+            type: 'VALIDATION_ERROR' as AuthErrorType,
+            message: validation.error!
+          }
+        };
+      }
 
       // Verificar si el permiso ya existe
       const existingPermission = await this.findPermissionByName(data.name);
       if (existingPermission) {
-        throw new Error(`Permission '${data.name}' already exists`);
+        return {
+          success: false,
+          error: {
+            type: 'VALIDATION_ERROR' as AuthErrorType,
+            message: `Permission '${data.name}' already exists`
+          }
+        };
       }
 
       // Crear permiso
       const permissionId = crypto.randomUUID();
-      db.query(
-        "INSERT INTO permissions (id, name, resource, action, created_at) VALUES (?, ?, ?, ?, datetime('now'))"
-      ).run(permissionId, data.name, data.resource, data.action);
+      const query = db.query(
+        "INSERT INTO permissions (id, name, description, resource, action, created_at, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))"
+      );
+      query.run(permissionId, data.name, data.description || '', data.resource, data.action);
 
       // Obtener el permiso creado
       const permission = await this.findPermissionById(permissionId);
       if (!permission) {
-        throw new Error('Failed to create permission');
+        return {
+          success: false,
+          error: {
+            type: 'DATABASE_ERROR' as AuthErrorType,
+            message: 'Failed to create permission'
+          }
+        };
       }
 
       console.log(`✅ Permiso creado: ${permission.name}`);
-      return permission;
-    } catch (error) {
+      return {
+        success: true,
+        permission
+      };
+    } catch (error:any) {
       console.error('Error creating permission:', error);
-      throw new Error(`Failed to create permission: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: 'DATABASE_ERROR' as AuthErrorType,
+          message: `Failed to create permission: ${error.message}`
+        }
+      };
     }
   }
 
   /**
    * Crea un nuevo rol
    * @param data Datos del rol
-   * @returns Rol creado
+   * @returns Resultado de la operación
    */
-  async createRole(data: CreateRoleData): Promise<Role> {
+  async createRole(data: CreateRoleData): Promise<RoleResult> {
     try {
       const db = getDatabase();
 
       // Validar datos
-      this.validateRoleData(data);
+      const validation = this.validateRoleData(data);
+      if (!validation.isValid) {
+        return {
+          success: false,
+          error: {
+            type: 'VALIDATION_ERROR' as AuthErrorType,
+            message: validation.error!
+          }
+        };
+      }
 
       // Verificar si el rol ya existe
       const existingRole = await this.findRoleByName(data.name);
       if (existingRole) {
-        throw new Error(`Role '${data.name}' already exists`);
+        return {
+          success: false,
+          error: {
+            type: 'VALIDATION_ERROR' as AuthErrorType,
+            message: `Role '${data.name}' already exists`
+          }
+        };
       }
 
       // Crear rol
       const roleId = crypto.randomUUID();
-      db.query(
-        "INSERT INTO roles (id, name, created_at) VALUES (?, ?, datetime('now'))"
-      ).run(roleId, data.name);
+      const query = db.query(
+        "INSERT INTO roles (id, name, description, created_at, updated_at) VALUES (?, ?, ?, datetime('now'), datetime('now'))"
+      );
+      query.run(roleId, data.name, data.description || '');
 
       // Asignar permisos si se proporcionan
       if (data.permissionIds && data.permissionIds.length > 0) {
-        await this.assignPermissionsToRole(roleId, data.permissionIds);
+        const assignResult = await this.assignPermissionsToRole(roleId, data.permissionIds);
+        if (!assignResult.success) {
+          return assignResult;
+        }
       }
 
       // Obtener el rol creado con permisos
       const role = await this.findRoleById(roleId, true);
       if (!role) {
-        throw new Error('Failed to create role');
+        return {
+          success: false,
+          error: {
+            type: 'DATABASE_ERROR' as AuthErrorType,
+            message: 'Failed to create role'
+          }
+        };
       }
 
       console.log(`✅ Rol creado: ${role.name}`);
-      return role;
-    } catch (error) {
+      return {
+        success: true,
+        role
+      };
+    } catch (error:any) {
       console.error('Error creating role:', error);
-      throw new Error(`Failed to create role: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: 'DATABASE_ERROR' as AuthErrorType,
+          message: `Failed to create role: ${error.message}`
+        }
+      };
     }
   }
 
@@ -99,41 +168,66 @@ export class PermissionService {
    * Asigna un rol a un usuario
    * @param data Datos de asignación
    */
-  async assignRoleToUser(data: AssignRoleData): Promise<void> {
+  async assignRoleToUser(data: AssignRoleData): Promise<PermissionResult> {
     try {
       const db = getDatabase();
 
       // Verificar que el usuario y el rol existen
       const userExists = await this.checkUserExists(data.userId);
       if (!userExists) {
-        throw new Error('User not found');
+        return {
+          success: false,
+          error: {
+            type: 'NOT_FOUND_ERROR' as AuthErrorType,
+            message: 'User not found'
+          }
+        };
       }
 
       const roleExists = await this.checkRoleExists(data.roleId);
       if (!roleExists) {
-        throw new Error('Role not found');
+        return {
+          success: false,
+          error: {
+            type: 'NOT_FOUND_ERROR' as AuthErrorType,
+            message: 'Role not found'
+          }
+        };
       }
 
       // Verificar si la asignación ya existe
-      const existingAssignment = await db`
-        SELECT id FROM user_roles 
-        WHERE user_id = ${data.userId} AND role_id = ${data.roleId}
-      `;
+      const existingQuery = db.query(
+        "SELECT id FROM user_roles WHERE user_id = ? AND role_id = ?"
+      );
+      const existingAssignment = existingQuery.all(data.userId, data.roleId);
 
       if (existingAssignment.length > 0) {
-        throw new Error('User already has this role');
+        return {
+          success: false,
+          error: {
+            type: 'VALIDATION_ERROR' as AuthErrorType,
+            message: 'User already has this role'
+          }
+        };
       }
 
       // Crear asignación
-      await db`
-        INSERT INTO user_roles (id, user_id, role_id, created_at)
-        VALUES (${crypto.randomUUID()}, ${data.userId}, ${data.roleId}, datetime('now'))
-      `;
+      const insertQuery = db.query(
+        "INSERT INTO user_roles (id, user_id, role_id, created_at) VALUES (?, ?, ?, datetime('now'))"
+      );
+      insertQuery.run(crypto.randomUUID(), data.userId, data.roleId);
 
       console.log(`✅ Rol asignado al usuario: ${data.userId} -> ${data.roleId}`);
-    } catch (error) {
+      return { success: true };
+    } catch (error:any) {
       console.error('Error assigning role to user:', error);
-      throw new Error(`Failed to assign role: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: 'DATABASE_ERROR' as AuthErrorType,
+          message: `Failed to assign role: ${error.message}`
+        }
+      };
     }
   }
 
@@ -142,19 +236,26 @@ export class PermissionService {
    * @param userId ID del usuario
    * @param roleId ID del rol
    */
-  async removeRoleFromUser(userId: string, roleId: string): Promise<void> {
+  async removeRoleFromUser(userId: string, roleId: string): Promise<PermissionResult> {
     try {
       const db = getDatabase();
 
-      const result = await db`
-        DELETE FROM user_roles 
-        WHERE user_id = ${userId} AND role_id = ${roleId}
-      `;
+      const query = db.query(
+        "DELETE FROM user_roles WHERE user_id = ? AND role_id = ?"
+      );
+      query.run(userId, roleId);
 
       console.log(`✅ Rol removido del usuario: ${userId} -> ${roleId}`);
-    } catch (error) {
+      return { success: true };
+    } catch (error:any) {
       console.error('Error removing role from user:', error);
-      throw new Error(`Failed to remove role: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: 'DATABASE_ERROR' as AuthErrorType,
+          message: `Failed to remove role: ${error.message}`
+        }
+      };
     }
   }
 
@@ -163,31 +264,44 @@ export class PermissionService {
    * @param roleId ID del rol
    * @param permissionIds Array de IDs de permisos
    */
-  async assignPermissionsToRole(roleId: string, permissionIds: string[]): Promise<void> {
+  async assignPermissionsToRole(roleId: string, permissionIds: string[]): Promise<PermissionResult> {
     try {
       const db = getDatabase();
 
       // Verificar que el rol existe
       const roleExists = await this.checkRoleExists(roleId);
       if (!roleExists) {
-        throw new Error('Role not found');
+        return {
+          success: false,
+          error: {
+            type: 'NOT_FOUND_ERROR' as AuthErrorType,
+            message: 'Role not found'
+          }
+        };
       }
 
       // Verificar que todos los permisos existen
       for (const permissionId of permissionIds) {
         const permissionExists = await this.checkPermissionExists(permissionId);
         if (!permissionExists) {
-          throw new Error(`Permission not found: ${permissionId}`);
+          return {
+            success: false,
+            error: {
+              type: 'NOT_FOUND_ERROR' as AuthErrorType,
+              message: `Permission not found: ${permissionId}`
+            }
+          };
         }
       }
 
       // Asignar permisos (ignorar duplicados)
       for (const permissionId of permissionIds) {
         try {
-          db.query(
+          const query = db.query(
             "INSERT INTO role_permissions (id, role_id, permission_id, created_at) VALUES (?, ?, ?, datetime('now'))"
-          ).run(crypto.randomUUID(), roleId, permissionId);
-        } catch (error) {
+          );
+          query.run(crypto.randomUUID(), roleId, permissionId);
+        } catch (error:any) {
           // Ignorar errores de duplicados
           if (!error.message.includes('UNIQUE constraint')) {
             throw error;
@@ -196,10 +310,26 @@ export class PermissionService {
       }
 
       console.log(`✅ Permisos asignados al rol: ${roleId}`);
-    } catch (error) {
+      return { success: true };
+    } catch (error:any) {
       console.error('Error assigning permissions to role:', error);
-      throw new Error(`Failed to assign permissions: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: 'DATABASE_ERROR' as AuthErrorType,
+          message: `Failed to assign permissions: ${error.message}`
+        }
+      };
     }
+  }
+
+  /**
+   * Asigna un permiso específico a un rol (método individual)
+   * @param roleId ID del rol
+   * @param permissionId ID del permiso
+   */
+  async assignPermissionToRole(roleId: string, permissionId: string): Promise<PermissionResult> {
+    return this.assignPermissionsToRole(roleId, [permissionId]);
   }
 
   /**
@@ -207,21 +337,200 @@ export class PermissionService {
    * @param roleId ID del rol
    * @param permissionIds Array de IDs de permisos
    */
-  async removePermissionsFromRole(roleId: string, permissionIds: string[]): Promise<void> {
+  async removePermissionsFromRole(roleId: string, permissionIds: string[]): Promise<PermissionResult> {
     try {
       const db = getDatabase();
 
       for (const permissionId of permissionIds) {
-        await db`
-          DELETE FROM role_permissions 
-          WHERE role_id = ${roleId} AND permission_id = ${permissionId}
-        `;
+        const query = db.query(
+          "DELETE FROM role_permissions WHERE role_id = ? AND permission_id = ?"
+        );
+        query.run(roleId, permissionId);
       }
 
       console.log(`✅ Permisos removidos del rol: ${roleId}`);
-    } catch (error) {
+      return { success: true };
+    } catch (error:any) {
       console.error('Error removing permissions from role:', error);
-      throw new Error(`Failed to remove permissions: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: 'DATABASE_ERROR' as AuthErrorType,
+          message: `Failed to remove permissions: ${error.message}`
+        }
+      };
+    }
+  }
+
+  /**
+   * Actualiza un permiso existente
+   * @param id ID del permiso
+   * @param data Datos de actualización
+   */
+  async updatePermission(id: string, data: UpdatePermissionData): Promise<PermissionResult> {
+    try {
+      const db = getDatabase();
+
+      // Verificar que el permiso existe
+      const existingPermission = await this.findPermissionById(id);
+      if (!existingPermission) {
+        return {
+          success: false,
+          error: {
+            type: 'NOT_FOUND_ERROR' as AuthErrorType,
+            message: 'Permission not found'
+          }
+        };
+      }
+
+      // Verificar que el nombre no esté en uso por otro permiso
+      if (data.name && data.name !== existingPermission.name) {
+        const existingByName = await this.findPermissionByName(data.name);
+        if (existingByName && existingByName.id !== id) {
+          return {
+            success: false,
+            error: {
+              type: 'VALIDATION_ERROR' as AuthErrorType,
+              message: 'Permission name already exists'
+            }
+          };
+        }
+      }
+
+      const query = db.query(
+        "UPDATE permissions SET name = ?, description = ?, updated_at = datetime('now') WHERE id = ?"
+      );
+      query.run(
+        data.name || existingPermission.name,
+        data.description || existingPermission.description,
+        id
+      );
+
+      const updatedPermission = await this.findPermissionById(id);
+      console.log(`✅ Permiso actualizado: ${updatedPermission?.name}`);
+      
+      return {
+        success: true,
+        permission: updatedPermission as Permission
+      };
+    } catch (error:any) {
+      console.error('Error updating permission:', error);
+      return {
+        success: false,
+        error: {
+          type: 'DATABASE_ERROR' as AuthErrorType,
+          message: `Failed to update permission: ${error.message}`
+        }
+      };
+    }
+  }
+
+  /**
+   * Elimina un permiso
+   * @param id ID del permiso
+   */
+  async deletePermission(id: string): Promise<PermissionResult> {
+    try {
+      const db = getDatabase();
+
+      // Verificar que el permiso existe
+      const existingPermission = await this.findPermissionById(id);
+      if (!existingPermission) {
+        return {
+          success: false,
+          error: {
+            type: 'NOT_FOUND_ERROR' as AuthErrorType,
+            message: 'Permission not found'
+          }
+        };
+      }
+
+      // Eliminar relaciones primero
+      const deleteRelationsQuery = db.query(
+        "DELETE FROM role_permissions WHERE permission_id = ?"
+      );
+      deleteRelationsQuery.run(id);
+
+      // Eliminar el permiso
+      const deletePermissionQuery = db.query(
+        "DELETE FROM permissions WHERE id = ?"
+      );
+      deletePermissionQuery.run(id);
+
+      console.log(`✅ Permiso eliminado: ${existingPermission.name}`);
+      return { success: true };
+    } catch (error:any) {
+      console.error('Error deleting permission:', error);
+      return {
+        success: false,
+        error: {
+          type: 'DATABASE_ERROR' as AuthErrorType,
+          message: `Failed to delete permission: ${error.message}`
+        }
+      };
+    }
+  }
+
+  /**
+   * Actualiza un rol existente
+   * @param id ID del rol
+   * @param data Datos de actualización
+   */
+  async updateRole(id: string, data: CreateRoleData): Promise<RoleResult> {
+    try {
+      const db = getDatabase();
+
+      // Verificar que el rol existe
+      const existingRole = await this.findRoleById(id);
+      if (!existingRole) {
+        return {
+          success: false,
+          error: {
+            type: 'NOT_FOUND_ERROR' as AuthErrorType,
+            message: 'Role not found'
+          }
+        };
+      }
+
+      // Verificar que el nombre no esté en uso por otro rol
+      if (data.name && data.name !== existingRole.name) {
+        const existingByName = await this.findRoleByName(data.name);
+        if (existingByName && existingByName.id !== id) {
+          return {
+            success: false,
+            error: {
+              type: 'VALIDATION_ERROR' as AuthErrorType,
+              message: 'Role name already exists'
+            }
+          };
+        }
+      }
+
+      const query = db.query(
+        "UPDATE roles SET name = ?, description = ?, updated_at = datetime('now') WHERE id = ?"
+      );
+      query.run(
+        data.name || existingRole.name,
+        data.description || existingRole.description,
+        id
+      );
+
+      const updatedRole = await this.findRoleById(id);
+      console.log(`✅ Rol actualizado: ${updatedRole?.name}`);
+      
+      return {
+        success: true,
+        role: updatedRole
+      };
+    } catch (error:any) {
+      console.error('Error updating role:', error);
+      return {
+        success: false,
+        error: {
+          type: 'DATABASE_ERROR' as AuthErrorType,
+          message: `Failed to update role: ${error.message}`
+        }
+      };
     }
   }
 
@@ -247,11 +556,97 @@ export class PermissionService {
         INNER JOIN user_roles ur ON rp.role_id = ur.role_id
         WHERE ur.user_id = ? AND p.name = ?
       `);
-      const result = query.all(userId, permissionName);
+      const result = query.get(userId, permissionName) as { count: number };
 
-      return result[0].count > 0;
-    } catch (error) {
+      return result?.count > 0;
+    } catch (error:any) {
       console.error('Error checking user permission:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Verifica si un usuario tiene un rol específico
+   * @param userId ID del usuario
+   * @param roleName Nombre del rol
+   * @returns true si el usuario tiene el rol
+   */
+  async userHasRole(userId: string, roleName: string): Promise<boolean> {
+    try {
+      const db = getDatabase();
+      
+      const query = db.query(`
+        SELECT COUNT(*) as count
+        FROM user_roles ur
+        INNER JOIN roles r ON ur.role_id = r.id
+        WHERE ur.user_id = ? AND r.name = ?
+      `);
+      
+      const result = query.get(userId, roleName) as { count: number };
+      
+      return result?.count > 0;
+    } catch (error:any) {
+      console.error('Error checking user role:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Verifica si un usuario tiene todos los permisos especificados
+   * @param userId ID del usuario
+   * @param permissionNames Array de nombres de permisos
+   * @returns true si el usuario tiene todos los permisos
+   */
+  async userHasAllPermissions(userId: string, permissionNames: string[]): Promise<boolean> {
+    try {
+      for (const permissionName of permissionNames) {
+        const hasPermission = await this.userHasPermission(userId, permissionName);
+        if (!hasPermission) {
+          return false;
+        }
+      }
+      return true;
+    } catch (error:any) {
+      console.error('Error checking user permissions:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Verifica si un usuario tiene al menos uno de los permisos especificados
+   * @param userId ID del usuario
+   * @param permissionNames Array de nombres de permisos
+   * @returns true si el usuario tiene al menos uno de los permisos
+   */
+  async userHasAnyPermission(userId: string, permissionNames: string[]): Promise<boolean> {
+    try {
+      for (const permissionName of permissionNames) {
+        const hasPermission = await this.userHasPermission(userId, permissionName);
+        if (hasPermission) {
+          return true;
+        }
+      }
+      return false;
+    } catch (error:any) {
+      console.error('Error checking user permissions:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Verifica si un usuario puede acceder a un recurso específico
+   * @param userId ID del usuario
+   * @param resource Nombre del recurso
+   * @param action Acción a realizar (read, write, delete, etc.)
+   * @returns true si el usuario puede acceder al recurso
+   */
+  async userCanAccessResource(userId: string, resource: string, action: string): Promise<boolean> {
+    try {
+      // Construir el nombre del permiso basado en el recurso y la acción
+      const permissionName = `${resource}:${action}`;
+      return await this.userHasPermission(userId, permissionName);
+    } catch (error:any) {
+      console.error('Error checking resource access:', error);
       return false;
     }
   }
@@ -286,7 +681,7 @@ export class PermissionService {
 
       // Por defecto, solo se requiere uno (OR)
       return results.some(result => result);
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error checking user permissions:', error);
       return false;
     }
@@ -318,7 +713,7 @@ export class PermissionService {
         action: row.action,
         created_at: new Date(row.created_at)
       }));
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error getting user permissions:', error);
       throw new Error(`Failed to get user permissions: ${error.message}`);
     }
@@ -333,23 +728,23 @@ export class PermissionService {
     try {
       const db = getDatabase();
 
-      const result = db.query(
+      const query = db.query(
         "SELECT id, name, resource, action, created_at FROM permissions WHERE id = ?"
-      ).all(id);
+      );
+      const result = query.get(id);
 
-      if (result.length === 0) {
+      if (!result) {
         return null;
       }
 
-      const row = result[0];
       return {
-        id: row.id,
-        name: row.name,
-        resource: row.resource,
-        action: row.action,
-        created_at: new Date(row.created_at)
+        id: result.id,
+        name: result.name,
+        resource: result.resource,
+        action: result.action,
+        created_at: new Date(result.created_at)
       };
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error finding permission by ID:', error);
       return null;
     }
@@ -364,23 +759,23 @@ export class PermissionService {
     try {
       const db = getDatabase();
 
-      const result = db.query(
+      const query = db.query(
         "SELECT id, name, resource, action, created_at FROM permissions WHERE name = ?"
-      ).all(name);
+      );
+      const result = query.get(name);
 
-      if (result.length === 0) {
+      if (!result) {
         return null;
       }
 
-      const row = result[0];
       return {
-        id: row.id,
-        name: row.name,
-        resource: row.resource,
-        action: row.action,
-        created_at: new Date(row.created_at)
+        id: result.id,
+        name: result.name,
+        resource: result.resource,
+        action: result.action,
+        created_at: new Date(result.created_at)
       };
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error finding permission by name:', error);
       return null;
     }
@@ -396,19 +791,19 @@ export class PermissionService {
     try {
       const db = getDatabase();
 
-      const result = db.query(
+      const query = db.query(
         "SELECT id, name, created_at FROM roles WHERE id = ?"
-      ).all(id);
+      );
+      const result = query.get(id);
 
-      if (result.length === 0) {
+      if (!result) {
         return null;
       }
 
-      const row = result[0];
       const role: Role = {
-        id: row.id,
-        name: row.name,
-        created_at: new Date(row.created_at),
+        id: result.id,
+        name: result.name,
+        created_at: new Date(result.created_at),
         permissions: []
       };
 
@@ -417,7 +812,7 @@ export class PermissionService {
       }
 
       return role;
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error finding role by ID:', error);
       return null;
     }
@@ -433,28 +828,28 @@ export class PermissionService {
     try {
       const db = getDatabase();
 
-      const result = db.query(
+      const query = db.query(
         "SELECT id, name, created_at FROM roles WHERE name = ?"
-      ).all(name);
+      );
+      const result = query.get(name);
 
-      if (result.length === 0) {
+      if (!result) {
         return null;
       }
 
-      const row = result[0];
       const role: Role = {
-        id: row.id,
-        name: row.name,
-        created_at: new Date(row.created_at),
+        id: result.id,
+        name: result.name,
+        created_at: new Date(result.created_at),
         permissions: []
       };
 
       if (includePermissions) {
-        role.permissions = await this.getRolePermissions(row.id);
+        role.permissions = await this.getRolePermissions(result.id);
       }
 
       return role;
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error finding role by name:', error);
       return null;
     }
@@ -484,7 +879,7 @@ export class PermissionService {
         action: row.action,
         created_at: new Date(row.created_at)
       }));
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error getting role permissions:', error);
       return [];
     }
@@ -523,7 +918,7 @@ export class PermissionService {
       }
 
       return roles;
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error getting all roles:', error);
       throw new Error(`Failed to get roles: ${error.message}`);
     }
@@ -551,7 +946,7 @@ export class PermissionService {
         action: row.action,
         created_at: new Date(row.created_at)
       }));
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error getting all permissions:', error);
       throw new Error(`Failed to get permissions: ${error.message}`);
     }
@@ -559,32 +954,50 @@ export class PermissionService {
 
   // Métodos de validación y utilidad privados
 
-  private validatePermissionData(data: CreatePermissionData): void {
+  private validatePermissionData(data: CreatePermissionData): { isValid: boolean; error?: string } {
     if (!data.name || !data.resource || !data.action) {
-      throw new Error('Name, resource, and action are required');
+      return {
+        isValid: false,
+        error: 'Name, resource, and action are required'
+      };
     }
 
     if (data.name.length < 3) {
-      throw new Error('Permission name must be at least 3 characters long');
+      return {
+        isValid: false,
+        error: 'Permission name must be at least 3 characters long'
+      };
     }
+
+    return { isValid: true };
   }
 
-  private validateRoleData(data: CreateRoleData): void {
+  private validateRoleData(data: CreateRoleData): { isValid: boolean; error?: string } {
     if (!data.name) {
-      throw new Error('Role name is required');
+      return {
+        isValid: false,
+        error: 'Role name is required'
+      };
     }
 
     if (data.name.length < 3) {
-      throw new Error('Role name must be at least 3 characters long');
+      return {
+        isValid: false,
+        error: 'Role name must be at least 3 characters long'
+      };
     }
+
+    return { isValid: true };
   }
 
   private async checkUserExists(userId: string): Promise<boolean> {
     try {
       const db = getDatabase();
-      const result = await db`SELECT id FROM users WHERE id = ${userId}`;
-      return result.length > 0;
-    } catch (error) {
+      const query = db.query("SELECT id FROM users WHERE id = ?");
+      const result = query.get(userId);
+      return !!result;
+    } catch (error:any) {
+      console.error('Error checking user existence:', error);
       return false;
     }
   }
@@ -592,9 +1005,11 @@ export class PermissionService {
   private async checkRoleExists(roleId: string): Promise<boolean> {
     try {
       const db = getDatabase();
-      const result = db.query("SELECT id FROM roles WHERE id = ?").all(roleId);
-      return result.length > 0;
-    } catch (error) {
+      const query = db.query("SELECT id FROM roles WHERE id = ?");
+      const result = query.get(roleId);
+      return !!result;
+    } catch (error:any) {
+      console.error('Error checking role existence:', error);
       return false;
     }
   }
@@ -602,9 +1017,11 @@ export class PermissionService {
   private async checkPermissionExists(permissionId: string): Promise<boolean> {
     try {
       const db = getDatabase();
-      const result = db.query("SELECT id FROM permissions WHERE id = ?").all(permissionId);
-      return result.length > 0;
-    } catch (error) {
+      const query = db.query("SELECT id FROM permissions WHERE id = ?");
+      const result = query.get(permissionId);
+      return !!result;
+    } catch (error:any) {
+      console.error('Error checking permission existence:', error);
       return false;
     }
   }
