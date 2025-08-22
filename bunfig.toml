@@ -1,0 +1,239 @@
+# bunfig.toml
+# Configuración de Bun para el proyecto
+
+[test]
+# Configuración específica para tests
+preload = ["./tests/setup.ts"]
+timeout = 10000
+coverage = true
+coverageDir = "./coverage"
+coverageReporter = ["text", "lcov"]
+coverageThreshold = 80
+
+# Patrones de archivos de test
+testNamePattern = ".*\\.(test|spec)\\.(js|jsx|ts|tsx)$"
+
+# Configuración de watch mode
+watchMode = {
+  ignore = [
+    "node_modules/**",
+    "dist/**",
+    "coverage/**",
+    "*.log",
+    ".git/**"
+  ]
+}
+
+# Variables de entorno para tests
+[test.env]
+NODE_ENV = "test"
+TEST_DB_PATH = "./tests/data/test.db"
+JWT_SECRET = "test-secret-key-for-development"
+LOG_LEVEL = "error"
+
+[install]
+# Configuración de instalación de dependencias
+cache = true
+frozenLockfile = true
+
+# Configuración de desarrollo
+[run]
+# Scripts personalizados
+[run.scripts]
+test = "bun test"
+"test:watch" = "bun test --watch"
+"test:coverage" = "bun test --coverage"
+"test:unit" = "bun test tests/services tests/middleware"
+"test:integration" = "bun test tests/integration"
+"test:adapters" = "bun test tests/adapters"
+"test:ci" = "bun test --reporter=junit --reporter-outfile=test-results.xml"
+"test:performance" = "bun test --test-name-pattern=Performance"
+"test:debug" = "bun test --timeout=0"
+lint = "echo 'Linting not configured yet'"
+"type-check" = "tsc --noEmit"
+build = "echo 'Build script not configured yet'"
+
+# Configuración de TypeScript
+[typescript]
+# Habilitar soporte completo de TypeScript
+compilerOptions = {
+  target = "ES2022",
+  module = "ESNext",
+  moduleResolution = "node",
+  strict = true,
+  esModuleInterop = true,
+  skipLibCheck = true,
+  forceConsistentCasingInFileNames = true,
+  declaration = true,
+  declarationMap = true,
+  sourceMap = true,
+  outDir = "./dist",
+  rootDir = "./src",
+  baseUrl = ".",
+  paths = {
+    "@/*" = ["./src/*"],
+    "@tests/*" = ["./tests/*"]
+  }
+}
+
+# Configuración de JSX (si se necesita para tests de UI)
+[jsx]
+factory = "React.createElement"
+fragment = "React.Fragment"
+importSource = "react"
+
+# Configuración de bundling
+[bundle]
+# Configuración para cuando se haga build del paquete
+external = ["sqlite3", "better-sqlite3"]
+minify = true
+sourcemap = true
+target = "node"
+format = "esm"
+
+# Configuración de logging
+[log]
+level = "info"
+
+# Configuración de desarrollo
+[dev]
+# Hot reload para desarrollo
+hot = true
+port = 3000
+
+# Configuración de macros (si se usan)
+[macro]
+# Configuración de macros personalizados si se necesitan
+
+# Configuración de plugins
+[plugin]
+# Plugins de Bun si se necesitan
+
+# Configuración de servidor (para tests de integración)
+[serve]
+port = 3001
+hostname = "localhost"
+
+# Configuración de fetch (para tests que usen fetch)
+[fetch]
+timeout = 30000
+retries = 3
+
+# Configuración de WebSocket (para tests de WebSocket)
+[websocket]
+maxPayloadLength = 16777216
+idleTimeout = 120
+
+# Configuración de base de datos para tests
+[database]
+# Configuración específica para SQLite en tests
+sqlite = {
+  busyTimeout = 5000,
+  journalMode = "WAL",
+  synchronous = "NORMAL",
+  cacheSize = 2000,
+  tempStore = "MEMORY"
+}
+
+# Configuración de seguridad
+[security]
+# Configuraciones de seguridad para tests
+allowUnsafeEval = false
+allowUnsafeInline = false
+
+# Configuración de performance
+[performance]
+# Configuraciones de rendimiento
+maxConcurrency = 4
+memoryLimit = "512MB"
+
+# Configuración de debugging
+[debug]
+# Configuraciones para debugging
+sourceMap = true
+inlineSourceMap = false
+
+# Configuración de paths
+[paths]
+# Paths personalizados para el proyecto
+root = "."
+src = "./src"
+tests = "./tests"
+dist = "./dist"
+coverage = "./coverage"
+logs = "./logs"
+data = "./data"
+
+# Configuración de archivos temporales
+[temp]
+# Configuración de archivos temporales para tests
+dir = "./tmp"
+cleanup = true
+maxAge = 3600
+
+# Configuración de cache
+[cache]
+# Configuración de cache para mejorar performance
+dir = "./.bun-cache"
+maxSize = "1GB"
+ttl = 86400
+
+# Configuración de workers (si se usan)
+[worker]
+# Configuración de Web Workers
+maxWorkers = 4
+timeout = 30000
+
+# Configuración de streams
+[stream]
+# Configuración de streams para tests
+highWaterMark = 16384
+objectMode = false
+
+# Configuración de crypto
+[crypto]
+# Configuración de funciones criptográficas
+legacy = false
+fips = false
+
+# Configuración de internacionalización
+[i18n]
+# Configuración de i18n si se necesita
+locale = "en-US"
+timezone = "UTC"
+
+# Configuración de experimentales
+[experimental]
+# Características experimentales de Bun
+macros = false
+hotReload = true
+optimizeForSize = false
+
+# Configuración de compatibilidad
+[compat]
+# Configuración de compatibilidad con Node.js
+node = true
+npm = true
+yarn = false
+pnpm = false
+
+# Configuración de monitoreo
+[monitor]
+# Configuración de monitoreo para tests
+enabled = false
+interval = 1000
+metrics = ["memory", "cpu", "gc"]
+
+# Configuración de reportes
+[report]
+# Configuración de reportes de tests
+format = ["console", "json"]
+output = "./reports"
+verbose = true
+
+# Configuración de limpieza
+[cleanup]
+# Configuración de limpieza automática
+auto = true
+interval = 3600
+targets = ["tmp", "logs", "coverage"]

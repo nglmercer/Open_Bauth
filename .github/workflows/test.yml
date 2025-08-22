@@ -1,0 +1,228 @@
+# .github/workflows/test.yml
+# GitHub Actions workflow para ejecutar tests automáticamente
+
+name: Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Ejecutar tests diariamente a las 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        bun-version: [1.0.0, latest]
+        node-version: [18, 20]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ matrix.bun-version }}
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+            
+      - name: Install dependencies
+        run: bun install
+        
+      - name: Create test database directory
+        run: mkdir -p tests/data
+        
+      - name: Run linting
+        run: bun run lint
+        continue-on-error: true
+        
+      - name: Run type checking
+        run: bun run type-check
+        
+      - name: Run unit tests
+        run: bun test --coverage --reporter=junit --reporter-outfile=test-results.xml
+        env:
+          NODE_ENV: test
+          TEST_DB_PATH: ./tests/data/test.db
+          JWT_SECRET: test-secret-key-for-ci
+          
+      - name: Run integration tests
+        run: bun test tests/integration --reporter=junit --reporter-outfile=integration-results.xml
+        env:
+          NODE_ENV: test
+          TEST_DB_PATH: ./tests/data/integration.db
+          JWT_SECRET: test-secret-key-for-ci
+          
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results-${{ matrix.bun-version }}-node${{ matrix.node-version }}
+          path: |
+            test-results.xml
+            integration-results.xml
+            coverage/
+            
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        if: matrix.bun-version == 'latest' && matrix.node-version == '20'
+        with:
+          file: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+          
+      - name: Comment PR with test results
+        uses: actions/github-script@v6
+        if: github.event_name == 'pull_request' && matrix.bun-version == 'latest' && matrix.node-version == '20'
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Leer resultados de tests si existen
+            let testSummary = '## 🧪 Test Results\n\n';
+            
+            try {
+              // Aquí podrías parsear los archivos XML de JUnit para obtener estadísticas
+              testSummary += '✅ All tests passed!\n';
+              testSummary += '📊 Coverage report available in artifacts\n';
+            } catch (error) {
+              testSummary += '❌ Some tests failed. Check the workflow logs for details.\n';
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: testSummary
+            });
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        
+      - name: Install dependencies
+        run: bun install
+        
+      - name: Run security audit
+        run: bun audit
+        continue-on-error: true
+        
+      - name: Run CodeQL Analysis
+        uses: github/codeql-action/init@v2
+        with:
+          languages: typescript
+          
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+
+  performance:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        
+      - name: Install dependencies
+        run: bun install
+        
+      - name: Run performance tests
+        run: bun test tests/integration --test-name-pattern="Performance"
+        env:
+          NODE_ENV: test
+          TEST_DB_PATH: ./tests/data/perf.db
+          JWT_SECRET: test-secret-key-for-ci
+          
+      - name: Benchmark results
+        run: |
+          echo "## 🚀 Performance Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Performance tests completed successfully." >> $GITHUB_STEP_SUMMARY
+          echo "Check the workflow logs for detailed timing information." >> $GITHUB_STEP_SUMMARY
+
+  build:
+    name: Build Package
+    runs-on: ubuntu-latest
+    needs: [test]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        
+      - name: Install dependencies
+        run: bun install
+        
+      - name: Build package
+        run: bun run build
+        
+      - name: Check build output
+        run: |
+          ls -la dist/
+          echo "Build completed successfully!"
+          
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-artifacts
+          path: dist/
+
+  notify:
+    name: Notify Results
+    runs-on: ubuntu-latest
+    needs: [test, security, build]
+    if: always()
+    
+    steps:
+      - name: Notify success
+        if: needs.test.result == 'success' && needs.security.result == 'success' && needs.build.result == 'success'
+        run: |
+          echo "## ✅ All Checks Passed!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Tests: Passed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Security: Passed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Build: Passed" >> $GITHUB_STEP_SUMMARY
+          
+      - name: Notify failure
+        if: needs.test.result == 'failure' || needs.security.result == 'failure' || needs.build.result == 'failure'
+        run: |
+          echo "## ❌ Some Checks Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Tests: ${{ needs.test.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Security: ${{ needs.security.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Build: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Please check the failed jobs for more details." >> $GITHUB_STEP_SUMMARY

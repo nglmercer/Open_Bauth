@@ -1,0 +1,129 @@
+{
+  "name": "bun-auth-library",
+  "version": "1.0.0",
+  "description": "Framework-agnostic authentication library built with Bun, TypeScript, and SQLite",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "dev": "bun run --hot src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun --format esm --sourcemap",
+    "test": "bun test --preload ./tests/setup.ts",
+    "test:watch": "bun test --watch --preload ./tests/setup.ts",
+    "test:coverage": "bun test --coverage --preload ./tests/setup.ts",
+    "test:unit": "bun test tests/services tests/middleware --preload ./tests/setup.ts",
+    "test:integration": "bun test tests/integration --preload ./tests/setup.ts --timeout 60000",
+    "test:adapters": "bun test tests/adapters --preload ./tests/setup.ts",
+    "test:performance": "bun test --test-name-pattern=Performance --timeout 120000",
+    "test:ci": "bun test --reporter=junit --reporter-outfile=test-results.xml --coverage",
+    "test:debug": "bun test --timeout=0 --preload ./tests/setup.ts",
+    "test:bail": "bun test --bail --preload ./tests/setup.ts",
+    "test:rerun": "bun test --rerun-each=3 --preload ./tests/setup.ts",
+    "test:runner": "bun run scripts/test-runner.ts",
+    "test:specific": "bun run scripts/test-runner.ts specific",
+    "lint": "echo 'Linting not configured yet - add ESLint or Biome'",
+    "lint:fix": "echo 'Lint fix not configured yet'",
+    "type-check": "tsc --noEmit",
+    "format": "echo 'Formatting not configured yet - add Prettier or Biome'",
+    "format:check": "echo 'Format check not configured yet'",
+    "clean": "rm -rf dist coverage test-results.xml reports logs tmp",
+    "prepare": "bun run build",
+    "prepublishOnly": "bun run test && bun run build",
+    "migration:create": "bun run scripts/migrations.ts create",
+    "migration:run": "bun run scripts/migrations.ts run",
+    "migration:rollback": "bun run scripts/migrations.ts rollback",
+    "seed": "bun run scripts/seed.ts",
+    "db:reset": "bun run scripts/db-reset.ts",
+    "benchmark": "bun run scripts/benchmark.ts",
+    "docs": "echo 'Documentation generation not configured yet'",
+    "release": "echo 'Release script not configured yet'",
+    "test:build:types": "bun run type-check && bun run build && bun run test",
+    "fix-types": "bun run type-check --noEmit false",
+    "ci": "bun install && bun run test:build:types"
+  },
+  "dependencies": {
+    "hono": "^4.9.2",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "ws": "^8.16.0",
+    "express": "^4.18.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/express": "^4.17.21",
+    "@types/ws": "^8.5.10",
+    "typescript": "^5.3.3"
+  },
+  "peerDependencies": {
+    "express": "^4.18.0",
+    "ws": "^8.16.0"
+  },
+  "peerDependenciesMeta": {
+    "express": {
+      "optional": true
+    },
+    "ws": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "authentication",
+    "authorization",
+    "jwt",
+    "rbac",
+    "bun",
+    "typescript",
+    "sqlite",
+    "framework-agnostic",
+    "hono",
+    "express",
+    "websocket",
+    "middleware",
+    "security"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/bun-auth-library.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/bun-auth-library/issues"
+  },
+  "homepage": "https://github.com/yourusername/bun-auth-library#readme",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "engines": {
+    "bun": ">=1.0.0",
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./adapters/hono": {
+      "import": "./dist/adapters/hono.js",
+      "types": "./dist/adapters/hono.d.ts"
+    },
+    "./adapters/express": {
+      "import": "./dist/adapters/express.js",
+      "types": "./dist/adapters/express.d.ts"
+    },
+    "./adapters/websocket": {
+      "import": "./dist/adapters/websocket.js",
+      "types": "./dist/adapters/websocket.d.ts"
+    }
+  },
+  "trustedDependencies": [
+    "@types/bun"
+  ]
+}
