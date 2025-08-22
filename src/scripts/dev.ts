@@ -192,7 +192,7 @@ async function createUser(args: string[]): Promise<void> {
     lastName
   });
   
-  if (!result) {
+  if (!result  || !result.user) {
     console.error('❌ Error creando usuario:', result);
     return;
   }

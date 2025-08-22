@@ -51,7 +51,14 @@ export async function authenticateWebSocket(
   try {
     // Extraer token de la query string o headers
     const url = new URL(request.url, 'http://localhost');
-    const token = url.searchParams.get('token') || request.headers.authorization?.replace('Bearer ', '');
+    let token = url.searchParams.get('token');
+    
+    if (!token && request.headers.authorization) {
+      const authHeader = request.headers.authorization;
+      if (authHeader.startsWith('Bearer ')) {
+        token = authHeader.replace('Bearer ', '');
+      }
+    }
 
     if (!token && config.required !== false) {
       ws.close(1008, 'Authentication required');
@@ -62,7 +69,7 @@ export async function authenticateWebSocket(
     const authRequest: AuthRequest = {
       headers: {
         ...request.headers,
-        authorization: token ? `Bearer ${token}` : undefined
+        ...(token && { authorization: `Bearer ${token}` })
       }
     };
 

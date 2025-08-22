@@ -20,11 +20,20 @@ export interface AuthMiddlewareConfig {
   permissionOptions?: PermissionOptions; // Opciones de verificación de permisos
   skipPaths?: string[]; // Rutas que se saltan la autenticación
   tokenHeader?: string; // Header del token (default: 'authorization')
+  extractToken?: (req: any) => string | null; // Custom token extraction function
+  userProperty?: string; // Property name to attach user to request (default: 'user')
+  contextProperty?: string; // Property name to attach auth context to request (default: 'authContext')
   jwtSecret?: string; // JWT secret for testing
   authService?: any; // Auth service instance for testing
   jwtService?: any; // JWT service instance for testing
   permissionService?: any; // Permission service instance for testing
   onError?: (error: Error, req: any, res: any) => void; // Custom error handler
+  onSuccess?: (user: any, context: AuthContext, req: any) => void; // Custom success handler
+  config?: { // Nested config object for backward compatibility
+    tokenHeader?: string;
+    userProperty?: string;
+    contextProperty?: string;
+  };
 }
 
 /**
@@ -39,40 +48,55 @@ export async function authenticateRequest(
     required = true,
     permissions = [],
       permissionOptions = {},
-      tokenHeader = 'authorization'
+      tokenHeader = 'authorization',
+      extractToken
     } = config;
 
-    // Extraer token del header
-    const authHeader = request.headers[tokenHeader] || request.headers[tokenHeader.toLowerCase()];
+    let token: string | null = null;
     
-    if (!authHeader) {
+    // Use custom token extraction if provided
+    if (extractToken) {
+      token = extractToken(request);
+    } else {
+      // Extraer token del header
+      const authHeader = request.headers[tokenHeader] || request.headers[tokenHeader.toLowerCase()];
+      
+      if (!authHeader) {
+        if (!required) {
+          return { success: true, context: { permissions: [], isAuthenticated: false } };
+        }
+        return {
+          success: false,
+          error: 'Authorization header is required',
+          statusCode: 401
+        };
+      }
+
+      const jwtService = config.jwtService || getJWTService();
+      token = jwtService.extractTokenFromHeader(authHeader);
+    }
+    
+    if (!token) {
       if (!required) {
         return { success: true, context: { permissions: [], isAuthenticated: false } };
       }
       return {
         success: false,
-        error: 'Authorization header is required',
-        statusCode: 401
-      };
-    }
-
-    const jwtService = config.jwtService || getJWTService();
-    const token = jwtService.extractTokenFromHeader(authHeader);
-    
-    if (!token) {
-      return {
-        success: false,
-        error: 'Invalid authorization header format. Use: Bearer <token>',
+        error: extractToken ? 'Token not found' : 'Invalid authorization header format. Use: Bearer <token>',
         statusCode: 401
       };
     }
 
     // Verificar token
+    const jwtService = config.jwtService || getJWTService();
     const result = await jwtService.verifyToken(token)
-      .then((payload) => ({ success: true, payload }))
+      .then((payload:any) => ({ success: true, payload }))
       .catch((error: any) => ({ success: false, error: error.message }));
     
     if (!result.success) {
+      if (!required) {
+        return { success: true, context: { permissions: [], isAuthenticated: false } };
+      }
       return {
         success: false,
         error: 'Invalid or expired token',
@@ -101,7 +125,7 @@ export async function authenticateRequest(
     // Obtener permisos del usuario
     const permissionService = config.permissionService || getPermissionService();
     const userPermissions = await permissionService.getUserPermissions(user.id);
-    const permissionNames = userPermissions.map(p => p.name);
+    const permissionNames = userPermissions.map((p:any) => p.name);
 
     // Crear contexto de autenticación
     const authContext: AuthContext = {
@@ -439,13 +463,22 @@ export function extractUserAgent(headers: Record<string, string>): string {
 export function createAuthMiddleware(config: AuthMiddlewareConfig = {}) {
   return async (req: any, res: any, next: any) => {
     try {
+      // Handle nested config for backward compatibility
+      const finalConfig = {
+        ...config,
+        tokenHeader: config.config?.tokenHeader || config.tokenHeader || 'authorization',
+        userProperty: config.config?.userProperty || config.userProperty || 'user',
+        contextProperty: config.config?.contextProperty || config.contextProperty || 'authContext'
+      };
+
       const authRequest: AuthRequest = {
         headers: req.headers || {},
         url: req.url || '',
-        method: req.method || 'GET'
+        method: req.method || 'GET',
+        query: req.query
       };
 
-      const result = await authenticateRequest(authRequest, config);
+      const result = await authenticateRequest(authRequest, finalConfig);
       
       if (!result.success) {
         if (config.onError) {
@@ -458,9 +491,15 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig = {}) {
         });
       }
 
-      // Agregar contexto de autenticación al request
-      req.authContext = result.context;
-      req.user = result.context?.user;
+      // Agregar contexto de autenticación al request usando propiedades configurables
+      req[finalConfig.contextProperty] = result.context;
+      req[finalConfig.userProperty] = result.context?.user;
+      
+      // Call success callback if provided
+      if (config.onSuccess && result.context) {
+        config.onSuccess(result.context.user, result.context, req);
+      }
+      
       next();
     } catch (error: any) {
       // Only catch unexpected errors, not authentication errors

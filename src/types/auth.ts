@@ -71,6 +71,7 @@ export interface AuthRequest {
   headers: Record<string, string>;
   url?: string;
   method?: string;
+  query?: any;
   auth?: AuthContext;
 }
 
@@ -145,8 +146,8 @@ export interface PermissionOptions {
 export interface CreatePermissionData {
   name: string;
   description?: string;
-  resource: string;
-  action: string;
+  resource?: string;
+  action?: string;
 }
 
 /**

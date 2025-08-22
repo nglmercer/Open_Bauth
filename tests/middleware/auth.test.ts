@@ -185,8 +185,8 @@ describe('Auth Middleware', () => {
       );
     });
 
-    test('should handle expired token', async () => {
-      const expiredToken = testUtils.generateTestJWT(
+    test('should reject expired token', async () => {
+      const expiredToken = await testUtils.generateTestJWT(
         { userId: testUserId },
         { expiresIn: '-1h' }
       );
@@ -206,13 +206,17 @@ describe('Auth Middleware', () => {
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: false,
-          error: expect.stringContaining('Token expired')
+          error: 'Invalid or expired token'
         })
       );
     });
 
     test('should support custom token extraction', async () => {
       delete mockRequest.headers.authorization;
+      // Ensure query object exists and set the token
+      if (!mockRequest.query) {
+        mockRequest.query = {};
+      }
       mockRequest.query.token = testToken;
       
       const middleware = createAuthMiddleware({
@@ -220,7 +224,7 @@ describe('Auth Middleware', () => {
         authService,
         jwtService,
         permissionService,
-        extractToken: (req) => req.query.token as string
+        extractToken: (req) => req.query?.token || null
       });
       
       await middleware(mockRequest, mockResponse, mockNext);
@@ -456,6 +460,9 @@ describe('Auth Middleware', () => {
       const role2Data = testUtils.generateTestRole({ name: 'second_role' });
       await permissionService.createRole(role2Data);
       await authService.assignRole(testUserId, role2Data.name);
+      
+      // Actualizar el contexto de autenticación con los nuevos roles
+      mockRequest.authContext.roles = await authService.getUserRoles(testUserId);
       
       const middleware = createRoleMiddleware({
         roles: [roleName, role2Data.name],

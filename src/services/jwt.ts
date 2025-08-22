@@ -263,7 +263,7 @@ export class JWTService {
       'w': 604800
     };
 
-    const match = expiresIn.match(/^(\d+)([smhdw])$/);
+    const match = expiresIn.match(/^(-?\d+)([smhdw])$/);
     if (!match) {
       throw new Error(`Invalid expiration format: ${expiresIn}`);
     }

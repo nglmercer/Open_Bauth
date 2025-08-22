@@ -158,10 +158,11 @@ export const testUtils = {
   /**
    * Generar JWT de prueba
    */
-  async generateTestJWT(payload = {}) {
+  async generateTestJWT(payload = {}, options = {}) {
     try {
       const { JWTService } = require('../src/services/jwt');
-      const jwtService = new JWTService(TEST_JWT_SECRET);
+      const { expiresIn = '24h' } = options;
+      const jwtService = new JWTService(TEST_JWT_SECRET, expiresIn);
       
       // Create a proper User object for JWT generation
       const defaultUser = {
@@ -181,7 +182,35 @@ export const testUtils = {
     } catch (error:any) {
       console.error('Error generating test JWT:', error);
       // Return a simple mock token for tests that don't need real JWT
-      return 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsImVtYWlsIjoidGVzdEBleGFtcGxlLmNvbSIsInJvbGVzIjpbInVzZXIiXSwiaWF0IjoxNjQwOTk1MjAwLCJleHAiOjE2NDA5OTg4MDB9.mock-signature';
+      // Create a proper mock token with valid signature for the test secret
+      const mockPayload = {
+        userId: 1,
+        email: 'test@example.com',
+        roles: ['user'],
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 3600
+      };
+      
+      // Use the same JWT service with test secret to create a valid token
+      const fallbackJwtService = new (require('../src/services/jwt').JWTService)(TEST_JWT_SECRET);
+      const mockUser = {
+        id: 1,
+        email: 'test@example.com',
+        firstName: 'Test',
+        lastName: 'User',
+        isActive: true,
+        roles: [{ name: 'user' }],
+        permissions: ['read'],
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      try {
+        return await fallbackJwtService.generateToken(mockUser);
+      } catch (fallbackError) {
+        console.error('Fallback token generation failed:', fallbackError);
+        throw new Error('Unable to generate test token');
+      }
     }
   },
 
