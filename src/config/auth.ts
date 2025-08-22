@@ -129,6 +129,7 @@ export const DEV_CONFIG: Partial<AuthConfig> = {
     level: 'debug',
     enableConsole: true,
     enableFile: false,
+    filePath: './logs/auth.log',
     enableDatabase: false
   }
 };
@@ -155,6 +156,7 @@ export const PROD_CONFIG: Partial<AuthConfig> = {
     level: 'warn',
     enableConsole: false,
     enableFile: true,
+    filePath: './logs/auth.log',
     enableDatabase: true
   }
 };
@@ -176,8 +178,19 @@ export function getAuthConfig(environment?: string): AuthConfig {
       break;
     case 'test':
       config = mergeConfig(config, {
-        database: { path: ':memory:' },
-        logging: { level: 'error', enableConsole: false }
+        database: { 
+          path: ':memory:',
+          enableWAL: false,
+          enableForeignKeys: true,
+          busyTimeout: 5000
+        },
+        logging: { 
+          level: 'error', 
+          enableConsole: false,
+          enableFile: false,
+          filePath: './logs/auth.log',
+          enableDatabase: false
+        }
       });
       break;
   }
@@ -318,10 +331,15 @@ function mergeConfig(base: AuthConfig, override: Partial<AuthConfig>): AuthConfi
     const value = override[key as keyof AuthConfig];
     if (value !== undefined) {
       if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        result[key as keyof AuthConfig] = {
-          ...result[key as keyof AuthConfig],
-          ...value
-        } as any;
+        const baseValue = result[key as keyof AuthConfig];
+        if (typeof baseValue === 'object' && baseValue !== null && !Array.isArray(baseValue)) {
+          result[key as keyof AuthConfig] = {
+            ...baseValue,
+            ...value
+          } as any;
+        } else {
+          result[key as keyof AuthConfig] = value as any;
+        }
       } else {
         result[key as keyof AuthConfig] = value as any;
       }

@@ -6,8 +6,13 @@ function initDatabase2(dbPath = "./auth.db") {
   if (!db) {
     try {
       db = new Database(dbPath);
+      db.exec("PRAGMA journal_mode = WAL;");
+      db.exec("PRAGMA synchronous = NORMAL;");
+      db.exec("PRAGMA cache_size = 1000;");
+      db.exec("PRAGMA temp_store = memory;");
+      db.exec("PRAGMA busy_timeout = 5000;");
       console.log(`\u2705 Base de datos SQLite inicializada: ${dbPath}`);
-    } catch (error:any) {
+    } catch (error) {
       console.error(`\u274C Error al inicializar la base de datos: ${error}`);
       throw new Error(`Failed to initialize database: ${error}`);
     }
@@ -19,12 +24,32 @@ function getDatabase() {
     console.log("\u26A0\uFE0F Database not initialized, auto-initializing with test.db");
     initDatabase2("./test.db");
   }
+  try {
+    if (!db) {
+      throw new Error("Database not initialized");
+    }
+    db.query("SELECT 1").get();
+  } catch (error) {
+    if (error.message && error.message.includes("closed database")) {
+      console.log("\u26A0\uFE0F Database connection closed, reinitializing...");
+      db = null;
+      initDatabase2("./test.db");
+    } else {
+      throw error;
+    }
+  }
+  if (!db) {
+    throw new Error("Failed to initialize database");
+  }
   return db;
 }
 function forceReinitDatabase() {
   console.log("\uD83D\uDD04 Force reinitializing database...");
   db = null;
   initDatabase2("./test.db");
+  if (!db) {
+    throw new Error("Failed to reinitialize database");
+  }
   return db;
 }
 async function closeDatabase2() {
@@ -33,7 +58,7 @@ async function closeDatabase2() {
       db.close();
       db = null;
       console.log("\u2705 Conexi\xF3n a la base de datos cerrada");
-    } catch (error:any) {
+    } catch (error) {
       console.error(`\u274C Error al cerrar la base de datos: ${error}`);
       throw error;
     }
@@ -48,7 +73,7 @@ async function testConnection() {
     db2.query("SELECT 1 as test").get();
     console.log("\u2705 Conexi\xF3n a la base de datos verificada");
     return true;
-  } catch (error:any) {
+  } catch (error) {
     console.error(`\u274C Error en la conexi\xF3n a la base de datos: ${error}`);
     return false;
   }
@@ -66,7 +91,7 @@ async function getDatabaseInfo() {
       encoding: encodingResult?.encoding || "unknown",
       journalMode: journalModeResult?.journal_mode || "unknown"
     };
-  } catch (error:any) {
+  } catch (error) {
     console.error(`\u274C Error al obtener informaci\xF3n de la base de datos: ${error}`);
     throw error;
   }
@@ -106,13 +131,13 @@ class JWTService2 {
       const encodedPayload = this.base64UrlEncode(JSON.stringify(payload));
       const signature = await this.createSignature(`${encodedHeader}.${encodedPayload}`);
       return `${encodedHeader}.${encodedPayload}.${signature}`;
-    } catch (error:any) {
+    } catch (error) {
       console.error("Error generating JWT token:", error);
       throw new Error("Failed to generate token");
     }
   }
   async verifyToken(token) {
-    try {
+    return Promise.resolve().then(async () => {
       if (!token) {
         throw new Error("Token is required");
       }
@@ -131,10 +156,10 @@ class JWTService2 {
         throw new Error("Token has expired");
       }
       return payload;
-    } catch (error:any) {
+    }).catch((error) => {
       console.error("Error verifying JWT token:", error);
       throw new Error(`Invalid token: ${error.message}`);
-    }
+    });
   }
   extractTokenFromHeader(authHeader) {
     if (!authHeader) {
@@ -155,7 +180,7 @@ class JWTService2 {
       const payload = JSON.parse(this.base64UrlDecode(parts[1]));
       const now = Math.floor(Date.now() / 1000);
       return payload.exp ? payload.exp < now : false;
-    } catch (error:any) {
+    } catch (error) {
       return true;
     }
   }
@@ -172,7 +197,7 @@ class JWTService2 {
       }
       const remaining = payload.exp - now;
       return Math.max(0, remaining);
-    } catch (error:any) {
+    } catch (error) {
       return 0;
     }
   }
@@ -213,7 +238,7 @@ class JWTService2 {
       d: 86400,
       w: 604800
     };
-    const match = expiresIn.match(/^(\d+)([smhdw])$/);
+    const match = expiresIn.match(/^(-?\d+)([smhdw])$/);
     if (!match) {
       throw new Error(`Invalid expiration format: ${expiresIn}`);
     }
@@ -255,7 +280,7 @@ class JWTService2 {
         throw new Error("Refresh token has expired");
       }
       return payload.userId;
-    } catch (error:any) {
+    } catch (error) {
       throw new Error(`Invalid refresh token: ${error.message}`);
     }
   }
@@ -274,31 +299,63 @@ class AuthService2 {
     try {
       const db2 = getDatabase();
       const jwtService = getJWTService();
-      this.validateRegisterData(data);
+      try {
+        this.validateRegisterData(data);
+      } catch (validationError) {
+        return {
+          success: false,
+          error: {
+            type: validationError.type || "VALIDATION_ERROR",
+            message: validationError.message
+          }
+        };
+      }
       const existingUser = await this.findUserByEmail(data.email);
       if (existingUser) {
-        throw new Error("User already exists with this email");
+        return {
+          success: false,
+          error: {
+            type: "VALIDATION_ERROR",
+            message: "User already exists with this email"
+          }
+        };
       }
       const passwordHash = await Bun.password.hash(data.password, {
         algorithm: "bcrypt",
         cost: 12
       });
       const userId = crypto.randomUUID();
-      await db2`
-        INSERT INTO users (id, email, password_hash, created_at, updated_at, is_active)
-        VALUES (${userId}, ${data.email.toLowerCase()}, ${passwordHash}, datetime('now'), datetime('now'), 1)
-      `;
+      const isActive = data.isActive !== undefined ? data.isActive : true;
+      const insertQuery = db2.query(`
+        INSERT INTO users (id, email, password_hash, first_name, last_name, created_at, updated_at, is_active)
+        VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'), ?)
+      `);
+      insertQuery.run(userId, data.email.toLowerCase(), passwordHash, data.firstName || null, data.lastName || null, isActive ? 1 : 0);
       await this.assignDefaultRole(userId);
       const user = await this.findUserById(userId, { includeRoles: true, includePermissions: true });
       if (!user) {
         throw new Error("Failed to create user");
       }
+      const updateLoginQuery = db2.query("UPDATE users SET last_login_at = datetime('now') WHERE id = ?");
+      updateLoginQuery.run(user.id);
       const token = await jwtService.generateToken(user);
-      console.log(`\u2705 Usuario registrado: ${user.email}`);
-      return { user, token };
-    } catch (error:any) {
+      const refreshToken = await jwtService.generateRefreshToken(Number(user.id));
+      const updatedUser = await this.findUserById(user.id, { includeRoles: true, includePermissions: true });
+      return {
+        success: true,
+        user: updatedUser || user,
+        token,
+        refreshToken
+      };
+    } catch (error) {
       console.error("Error registering user:", error);
-      throw new Error(`Registration failed: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: error.type || "SERVER_ERROR",
+          message: error.message || "Registration failed"
+        }
+      };
     }
   }
   async login(data) {
@@ -311,55 +368,85 @@ class AuthService2 {
         includePermissions: true
       });
       if (!user) {
-        throw new Error("Invalid credentials");
+        return {
+          success: false,
+          error: {
+            type: "AUTHENTICATION_ERROR",
+            message: "Invalid credentials"
+          }
+        };
       }
       if (!user.is_active) {
-        throw new Error("Account is deactivated");
+        return {
+          success: false,
+          error: {
+            type: "AUTHENTICATION_ERROR",
+            message: "Account is inactive"
+          }
+        };
       }
       const isValidPassword = await Bun.password.verify(data.password, user.password_hash);
       if (!isValidPassword) {
-        throw new Error("Invalid credentials");
+        return {
+          success: false,
+          error: {
+            type: "AUTHENTICATION_ERROR",
+            message: "Invalid credentials"
+          }
+        };
       }
-      await db2`
-        UPDATE users 
-        SET updated_at = datetime('now')
-        WHERE id = ${user.id}
-      `;
-      const token = await jwtService.generateToken(user);
-      console.log(`\u2705 Usuario autenticado: ${user.email}`);
-      return { user, token };
-    } catch (error:any) {
+      const updateQuery = db2.query("UPDATE users SET updated_at = datetime('now'), last_login_at = datetime('now') WHERE id = ?");
+      updateQuery.run(user.id);
+      const updatedUser = await this.findUserById(user.id, { includeRoles: true, includePermissions: true });
+      if (!updatedUser) {
+        return {
+          success: false,
+          error: {
+            type: "DATABASE_ERROR",
+            message: "User not found after update"
+          }
+        };
+      }
+      const token = await jwtService.generateToken(updatedUser);
+      const refreshToken = await jwtService.generateRefreshToken(Number(updatedUser.id));
+      console.log(`\u2705 Usuario autenticado: ${updatedUser.email}`);
+      return {
+        success: true,
+        user: updatedUser,
+        token,
+        refreshToken
+      };
+    } catch (error) {
       console.error("Error during login:", error);
-      throw new Error(`Login failed: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: error.type || "AUTHENTICATION_ERROR",
+          message: error.message || "Login failed"
+        }
+      };
     }
   }
   async findUserById(id, options = {}) {
     try {
       const db2 = getDatabase();
-      const userResult = await db2`
-        SELECT id, email, password_hash, created_at, updated_at, is_active
+      const activeCondition = options.activeOnly ? " AND is_active = 1" : "";
+      const query = db2.query(`
+        SELECT id, email, password_hash, first_name, last_name, created_at, updated_at, is_active, last_login_at
         FROM users
-        WHERE id = ${id}
-        ${options.activeOnly ? db2`AND is_active = 1` : db2``}
-      `;
+        WHERE id = ?${activeCondition}
+      `);
+      const userResult = query.all(id);
       if (userResult.length === 0) {
         return null;
       }
       const userData = userResult[0];
-      const user = {
-        id: userData.id,
-        email: userData.email,
-        password_hash: userData.password_hash,
-        created_at: new Date(userData.created_at),
-        updated_at: new Date(userData.updated_at),
-        is_active: Boolean(userData.is_active),
-        roles: []
-      };
+      const user = this.mapDatabaseUserToUser(userData);
       if (options.includeRoles) {
         user.roles = await this.getUserRoles(id, options.includePermissions);
       }
       return user;
-    } catch (error:any) {
+    } catch (error) {
       console.error("Error finding user by ID:", error);
       throw new Error(`Failed to find user: ${error.message}`);
     }
@@ -367,30 +454,26 @@ class AuthService2 {
   async findUserByEmail(email, options = {}) {
     try {
       const db2 = getDatabase();
-      const userResult = await db2`
-        SELECT id, email, password_hash, created_at, updated_at, is_active
+      let query = `
+        SELECT id, email, password_hash, first_name, last_name, created_at, updated_at, is_active, last_login_at
         FROM users
-        WHERE email = ${email.toLowerCase()}
-        ${options.activeOnly ? db2`AND is_active = 1` : db2``}
+        WHERE email = ?
       `;
+      const params = [email.toLowerCase()];
+      if (options.activeOnly) {
+        query += ` AND is_active = 1`;
+      }
+      const userResult = db2.query(query).all(...params);
       if (userResult.length === 0) {
         return null;
       }
       const userData = userResult[0];
-      const user = {
-        id: userData.id,
-        email: userData.email,
-        password_hash: userData.password_hash,
-        created_at: new Date(userData.created_at),
-        updated_at: new Date(userData.updated_at),
-        is_active: Boolean(userData.is_active),
-        roles: []
-      };
+      const user = this.mapDatabaseUserToUser(userData);
       if (options.includeRoles) {
         user.roles = await this.getUserRoles(userData.id, options.includePermissions);
       }
       return user;
-    } catch (error:any) {
+    } catch (error) {
       console.error("Error finding user by email:", error);
       throw new Error(`Failed to find user: ${error.message}`);
     }
@@ -398,29 +481,32 @@ class AuthService2 {
   async getUserRoles(userId, includePermissions = false) {
     try {
       const db2 = getDatabase();
-      const rolesResult = await db2`
-        SELECT r.id, r.name, r.created_at
+      const rolesQuery = db2.query(`
+        SELECT r.id, r.name, r.created_at, r.is_active
         FROM roles r
         INNER JOIN user_roles ur ON r.id = ur.role_id
-        WHERE ur.user_id = ${userId}
+        WHERE ur.user_id = ?
         ORDER BY r.name
-      `;
+      `);
+      const rolesResult = rolesQuery.all(userId);
       const roles = [];
       for (const roleData of rolesResult) {
         const role = {
           id: roleData.id,
           name: roleData.name,
           created_at: new Date(roleData.created_at),
+          isActive: Boolean(roleData.is_active),
           permissions: []
         };
         if (includePermissions) {
-          const permissionsResult = await db2`
+          const permissionsQuery = db2.query(`
             SELECT p.id, p.name, p.resource, p.action, p.created_at
             FROM permissions p
             INNER JOIN role_permissions rp ON p.id = rp.permission_id
-            WHERE rp.role_id = ${role.id}
+            WHERE rp.role_id = ?
             ORDER BY p.resource, p.action
-          `;
+          `);
+          const permissionsResult = permissionsQuery.all(role.id);
           role.permissions = permissionsResult.map((permData) => ({
             id: permData.id,
             name: permData.name,
@@ -432,47 +518,100 @@ class AuthService2 {
         roles.push(role);
       }
       return roles;
-    } catch (error:any) {
+    } catch (error) {
       console.error("Error getting user roles:", error);
       throw new Error(`Failed to get user roles: ${error.message}`);
+    }
+  }
+  async assignRole(userId, roleName) {
+    try {
+      const db2 = getDatabase();
+      const user = await this.findUserById(userId);
+      if (!user) {
+        return {
+          success: false,
+          error: {
+            type: "USER_NOT_FOUND",
+            message: "User not found"
+          }
+        };
+      }
+      const findRoleQuery = db2.query("SELECT id FROM roles WHERE name = ?");
+      const roleResult = findRoleQuery.get(roleName);
+      if (!roleResult) {
+        return {
+          success: false,
+          error: {
+            type: "NOT_FOUND_ERROR",
+            message: `Role '${roleName}' not found`
+          }
+        };
+      }
+      const existingQuery = db2.query("SELECT id FROM user_roles WHERE user_id = ? AND role_id = ?");
+      const existing = existingQuery.get(userId, roleResult.id);
+      if (existing) {
+        return {
+          success: false,
+          error: {
+            type: "VALIDATION_ERROR",
+            message: "User already has this role"
+          }
+        };
+      }
+      const assignRoleQuery = db2.query("INSERT INTO user_roles (id, user_id, role_id, created_at) VALUES (?, ?, ?, datetime('now'))");
+      assignRoleQuery.run(crypto.randomUUID(), userId, roleResult.id);
+      console.log(`\u2705 Rol ${roleName} asignado al usuario: ${userId}`);
+      return { success: true };
+    } catch (error) {
+      console.error("Error assigning role:", error);
+      return {
+        success: false,
+        error: {
+          type: "DATABASE_ERROR",
+          message: error.message || "Failed to assign role"
+        }
+      };
     }
   }
   async assignDefaultRole(userId) {
     try {
       const db2 = getDatabase();
-      let userRole = await db2`
-        SELECT id FROM roles WHERE name = 'user'
-      `;
+      const findRoleQuery = db2.query("SELECT id FROM roles WHERE name = 'user'");
+      let userRole = findRoleQuery.all();
       if (userRole.length === 0) {
         const roleId = crypto.randomUUID();
-        await db2`
-          INSERT INTO roles (id, name, created_at)
-          VALUES (${roleId}, 'user', datetime('now'))
-        `;
+        const createRoleQuery = db2.query("INSERT INTO roles (id, name, created_at) VALUES (?, ?, datetime('now'))");
+        createRoleQuery.run(roleId, "user");
         userRole = [{ id: roleId }];
       }
-      await db2`
-        INSERT INTO user_roles (id, user_id, role_id, created_at)
-        VALUES (${crypto.randomUUID()}, ${userId}, ${userRole[0].id}, datetime('now'))
-      `;
-    } catch (error:any) {
+      const assignRoleQuery = db2.query("INSERT INTO user_roles (id, user_id, role_id, created_at) VALUES (?, ?, ?, datetime('now'))");
+      assignRoleQuery.run(crypto.randomUUID(), userId, userRole[0].id);
+    } catch (error) {
       console.error("Error assigning default role:", error);
       throw error;
     }
   }
   validateRegisterData(data) {
     if (!data.email || !data.password) {
-      throw new Error("Email and password are required");
+      const error = new Error("Email and password are required");
+      error.type = "VALIDATION_ERROR";
+      throw error;
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(data.email)) {
-      throw new Error("Invalid email format");
+      const error = new Error("Invalid email format");
+      error.type = "VALIDATION_ERROR";
+      throw error;
     }
     if (data.password.length < 8) {
-      throw new Error("Password must be at least 8 characters long");
+      const error = new Error("Invalid password strength");
+      error.type = "VALIDATION_ERROR";
+      throw error;
     }
     if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(data.password)) {
-      throw new Error("Password must contain at least one uppercase letter, one lowercase letter, and one number");
+      const error = new Error("Password must contain at least one uppercase letter, one lowercase letter, and one number");
+      error.type = "VALIDATION_ERROR";
+      throw error;
     }
   }
   validateLoginData(data) {
@@ -488,89 +627,306 @@ class AuthService2 {
     try {
       const db2 = getDatabase();
       if (newPassword.length < 8) {
-        throw new Error("Password must be at least 8 characters long");
+        return {
+          success: false,
+          error: {
+            type: "VALIDATION_ERROR",
+            message: "Password must be at least 8 characters long"
+          }
+        };
       }
       const passwordHash = await Bun.password.hash(newPassword, {
         algorithm: "bcrypt",
         cost: 12
       });
-      await db2`
-        UPDATE users 
-        SET password_hash = ${passwordHash}, updated_at = datetime('now')
-        WHERE id = ${userId}
-      `;
+      const updatePasswordQuery = db2.query("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?");
+      updatePasswordQuery.run(passwordHash, userId);
       console.log(`\u2705 Contrase\xF1a actualizada para usuario: ${userId}`);
-    } catch (error:any) {
+      return { success: true };
+    } catch (error) {
       console.error("Error updating password:", error);
-      throw new Error(`Failed to update password: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: "DATABASE_ERROR",
+          message: `Failed to update password: ${error.message}`
+        }
+      };
+    }
+  }
+  async updateUser(userId, data) {
+    try {
+      const db2 = getDatabase();
+      const existingUser = await this.findUserById(userId);
+      if (!existingUser) {
+        return {
+          success: false,
+          error: {
+            type: "USER_NOT_FOUND",
+            message: "User not found"
+          }
+        };
+      }
+      if (data.email && data.email !== existingUser.email) {
+        const existingByEmail = await this.findUserByEmail(data.email);
+        if (existingByEmail && existingByEmail.id !== userId) {
+          return {
+            success: false,
+            error: {
+              type: "VALIDATION_ERROR",
+              message: "Email already exists"
+            }
+          };
+        }
+      }
+      let updateFields = [];
+      let updateValues = [];
+      if (data.email) {
+        updateFields.push("email = ?");
+        updateValues.push(data.email);
+      }
+      if (data.firstName !== undefined) {
+        updateFields.push("first_name = ?");
+        updateValues.push(data.firstName);
+      }
+      if (data.lastName !== undefined) {
+        updateFields.push("last_name = ?");
+        updateValues.push(data.lastName);
+      }
+      if (data.is_active !== undefined || data.isActive !== undefined) {
+        updateFields.push("is_active = ?");
+        const activeValue = data.is_active !== undefined ? data.is_active : data.isActive;
+        updateValues.push(activeValue ? 1 : 0);
+      }
+      if (data.password) {
+        const passwordHash = await Bun.password.hash(data.password, {
+          algorithm: "bcrypt",
+          cost: 12
+        });
+        updateFields.push("password_hash = ?");
+        updateValues.push(passwordHash);
+      }
+      updateFields.push("updated_at = datetime('now')");
+      updateValues.push(userId);
+      const updateQuery = db2.query(`UPDATE users SET ${updateFields.join(", ")} WHERE id = ?`);
+      updateQuery.run(...updateValues);
+      if (data.lastLoginAt) {
+        const loginUpdateQuery = db2.query("UPDATE users SET last_login_at = datetime('now') WHERE id = ?");
+        loginUpdateQuery.run(userId);
+      }
+      const updatedUser = await this.findUserById(userId, { includeRoles: true, includePermissions: true });
+      if (!updatedUser) {
+        return {
+          success: false,
+          error: {
+            type: "DATABASE_ERROR",
+            message: "Failed to retrieve updated user"
+          }
+        };
+      }
+      console.log(`\u2705 Usuario actualizado: ${updatedUser.email}`);
+      return { success: true, user: updatedUser };
+    } catch (error) {
+      console.error("Error updating user:", error);
+      return {
+        success: false,
+        error: {
+          type: "DATABASE_ERROR",
+          message: error.message || "Failed to update user"
+        }
+      };
     }
   }
   async deactivateUser(userId) {
     try {
       const db2 = getDatabase();
-      await db2`
-        UPDATE users 
-        SET is_active = 0, updated_at = datetime('now')
-        WHERE id = ${userId}
-      `;
+      const deactivateQuery = db2.query("UPDATE users SET is_active = 0, updated_at = datetime('now') WHERE id = ?");
+      deactivateQuery.run(userId);
       console.log(`\u2705 Usuario desactivado: ${userId}`);
-    } catch (error:any) {
+      return { success: true };
+    } catch (error) {
       console.error("Error deactivating user:", error);
-      throw new Error(`Failed to deactivate user: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: "DATABASE_ERROR",
+          message: `Failed to deactivate user: ${error.message}`
+        }
+      };
     }
   }
   async activateUser(userId) {
     try {
       const db2 = getDatabase();
-      await db2`
-        UPDATE users 
-        SET is_active = 1, updated_at = datetime('now')
-        WHERE id = ${userId}
-      `;
+      const activateQuery = db2.query("UPDATE users SET is_active = 1, updated_at = datetime('now') WHERE id = ?");
+      activateQuery.run(userId);
       console.log(`\u2705 Usuario activado: ${userId}`);
-    } catch (error:any) {
+      return { success: true };
+    } catch (error) {
       console.error("Error activating user:", error);
-      throw new Error(`Failed to activate user: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: "DATABASE_ERROR",
+          message: `Failed to activate user: ${error.message}`
+        }
+      };
+    }
+  }
+  async deleteUser(userId) {
+    try {
+      const db2 = getDatabase();
+      const existingUser = await this.findUserById(userId);
+      if (!existingUser) {
+        return {
+          success: false,
+          error: {
+            type: "USER_NOT_FOUND",
+            message: "User not found"
+          }
+        };
+      }
+      const deleteUserRolesQuery = db2.query("DELETE FROM user_roles WHERE user_id = ?");
+      deleteUserRolesQuery.run(userId);
+      const deleteUserQuery = db2.query("DELETE FROM users WHERE id = ?");
+      deleteUserQuery.run(userId);
+      console.log(`\u2705 Usuario eliminado: ${userId}`);
+      return { success: true };
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      return {
+        success: false,
+        error: {
+          type: "DATABASE_ERROR",
+          message: error.message || "Failed to delete user"
+        }
+      };
+    }
+  }
+  async removeRole(userId, roleName) {
+    try {
+      const db2 = getDatabase();
+      const existingUser = await this.findUserById(userId);
+      if (!existingUser) {
+        return {
+          success: false,
+          error: {
+            type: "USER_NOT_FOUND",
+            message: "User not found"
+          }
+        };
+      }
+      const roleQuery = db2.query("SELECT id FROM roles WHERE name = ?");
+      const role = roleQuery.get(roleName);
+      if (!role) {
+        return {
+          success: false,
+          error: {
+            type: "NOT_FOUND_ERROR",
+            message: "Role not found"
+          }
+        };
+      }
+      const userRoleQuery = db2.query("SELECT id FROM user_roles WHERE user_id = ? AND role_id = ?");
+      const userRole = userRoleQuery.get(userId, role.id);
+      if (!userRole) {
+        return {
+          success: false,
+          error: {
+            type: "NOT_FOUND_ERROR",
+            message: "User does not have this role"
+          }
+        };
+      }
+      const removeRoleQuery = db2.query("DELETE FROM user_roles WHERE user_id = ? AND role_id = ?");
+      removeRoleQuery.run(userId, role.id);
+      console.log(`\u2705 Rol ${roleName} removido del usuario: ${userId}`);
+      return { success: true };
+    } catch (error) {
+      console.error("Error removing role:", error);
+      return {
+        success: false,
+        error: {
+          type: "DATABASE_ERROR",
+          message: error.message || "Failed to remove role"
+        }
+      };
     }
   }
   async getUsers(page = 1, limit = 10, options = {}) {
     try {
       const db2 = getDatabase();
       const offset = (page - 1) * limit;
-      const countResult = await db2`
-        SELECT COUNT(*) as total
-        FROM users
-        ${options.activeOnly ? db2`WHERE is_active = 1` : db2``}
-      `;
-      const total = countResult[0].total;
-      const usersResult = await db2`
-        SELECT id, email, password_hash, created_at, updated_at, is_active
-        FROM users
-        ${options.activeOnly ? db2`WHERE is_active = 1` : db2``}
-        ORDER BY created_at DESC
-        LIMIT ${limit} OFFSET ${offset}
-      `;
+      let whereConditions = [];
+      let queryParams = [];
+      if (options.activeOnly) {
+        whereConditions.push("is_active = ?");
+        queryParams.push(1);
+      }
+      if (options.isActive !== undefined) {
+        whereConditions.push("is_active = ?");
+        queryParams.push(options.isActive ? 1 : 0);
+      }
+      if (options.search) {
+        whereConditions.push("(email LIKE ? OR first_name LIKE ? OR last_name LIKE ?)");
+        const searchTerm = `%${options.search}%`;
+        queryParams.push(searchTerm, searchTerm, searchTerm);
+      }
+      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(" AND ")}` : "";
+      let orderBy = "ORDER BY created_at DESC";
+      if (options.sortBy) {
+        const sortDirection = options.sortOrder === "asc" ? "ASC" : "DESC";
+        switch (options.sortBy) {
+          case "email":
+            orderBy = `ORDER BY email ${sortDirection}`;
+            break;
+          case "created_at":
+            orderBy = `ORDER BY created_at ${sortDirection}`;
+            break;
+          case "name":
+            orderBy = `ORDER BY first_name ${sortDirection}, last_name ${sortDirection}`;
+            break;
+          default:
+            orderBy = "ORDER BY created_at DESC";
+        }
+      }
+      const countQuery = db2.query(`SELECT COUNT(*) as total FROM users ${whereClause}`);
+      const countResult = countQuery.get(...queryParams);
+      const total = countResult?.total || countResult?.["COUNT(*)"] || 0;
+      const usersQuery = db2.query(`SELECT id, email, password_hash, first_name, last_name, created_at, updated_at, is_active, last_login_at FROM users ${whereClause} ${orderBy} LIMIT ? OFFSET ?`);
+      const usersResult = usersQuery.all(...queryParams, limit, offset);
       const users = [];
       for (const userData of usersResult) {
-        const user = {
-          id: userData.id,
-          email: userData.email,
-          password_hash: userData.password_hash,
-          created_at: new Date(userData.created_at),
-          updated_at: new Date(userData.updated_at),
-          is_active: Boolean(userData.is_active),
-          roles: []
-        };
+        const user = this.mapDatabaseUserToUser(userData);
         if (options.includeRoles) {
           user.roles = await this.getUserRoles(userData.id, options.includePermissions);
         }
         users.push(user);
       }
       return { users, total };
-    } catch (error:any) {
+    } catch (error) {
       console.error("Error getting users:", error);
       throw new Error(`Failed to get users: ${error.message}`);
     }
+  }
+  mapDatabaseUserToUser(userData) {
+    const createdAt = new Date(userData.created_at);
+    const updatedAt = new Date(userData.updated_at);
+    return {
+      id: userData.id,
+      email: userData.email,
+      password_hash: userData.password_hash,
+      firstName: userData.first_name,
+      lastName: userData.last_name,
+      created_at: createdAt,
+      updated_at: updatedAt,
+      createdAt,
+      updatedAt,
+      is_active: Boolean(userData.is_active),
+      isActive: Boolean(userData.is_active),
+      lastLoginAt: userData.last_login_at ? new Date(userData.last_login_at) : undefined,
+      roles: []
+    };
   }
 }
 var authServiceInstance = null;
@@ -585,46 +941,109 @@ class PermissionService2 {
   async createPermission(data) {
     try {
       const db2 = getDatabase();
-      this.validatePermissionData(data);
+      const validation = this.validatePermissionData(data);
+      if (!validation.isValid) {
+        return {
+          success: false,
+          error: {
+            type: "VALIDATION_ERROR",
+            message: validation.error
+          }
+        };
+      }
       const existingPermission = await this.findPermissionByName(data.name);
       if (existingPermission) {
-        throw new Error(`Permission '${data.name}' already exists`);
+        return {
+          success: false,
+          error: {
+            type: "VALIDATION_ERROR",
+            message: `Permission '${data.name}' already exists`
+          }
+        };
       }
       const permissionId = crypto.randomUUID();
-      db2.query("INSERT INTO permissions (id, name, resource, action, created_at) VALUES (?, ?, ?, ?, datetime('now'))").run(permissionId, data.name, data.resource, data.action);
+      const query = db2.query("INSERT INTO permissions (id, name, resource, action, description, created_at) VALUES (?, ?, ?, ?, ?, datetime('now'))");
+      query.run(permissionId, data.name, data.resource || "default", data.action || "read", data.description || null);
       const permission = await this.findPermissionById(permissionId);
       if (!permission) {
-        throw new Error("Failed to create permission");
+        return {
+          success: false,
+          error: {
+            type: "DATABASE_ERROR",
+            message: "Failed to create permission"
+          }
+        };
       }
-      console.log(`\u2705 Permiso creado: ${permission.name}`);
-      return permission;
-    } catch (error:any) {
+      return {
+        success: true,
+        permission
+      };
+    } catch (error) {
       console.error("Error creating permission:", error);
-      throw new Error(`Failed to create permission: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: "DATABASE_ERROR",
+          message: `Failed to create permission: ${error.message}`
+        }
+      };
     }
   }
   async createRole(data) {
     try {
       const db2 = getDatabase();
-      this.validateRoleData(data);
+      const validation = this.validateRoleData(data);
+      if (!validation.isValid) {
+        return {
+          success: false,
+          error: {
+            type: "VALIDATION_ERROR",
+            message: validation.error
+          }
+        };
+      }
       const existingRole = await this.findRoleByName(data.name);
       if (existingRole) {
-        throw new Error(`Role '${data.name}' already exists`);
+        return {
+          success: false,
+          error: {
+            type: "VALIDATION_ERROR",
+            message: `Role '${data.name}' already exists`
+          }
+        };
       }
       const roleId = crypto.randomUUID();
-      db2.query("INSERT INTO roles (id, name, created_at) VALUES (?, ?, datetime('now'))").run(roleId, data.name);
+      const query = db2.query("INSERT INTO roles (id, name, description, is_active, created_at) VALUES (?, ?, ?, ?, datetime('now'))");
+      query.run(roleId, data.name, data.description || null, 1);
       if (data.permissionIds && data.permissionIds.length > 0) {
-        await this.assignPermissionsToRole(roleId, data.permissionIds);
+        const assignResult = await this.assignPermissionsToRole(roleId, data.permissionIds);
+        if (!assignResult.success) {
+          return assignResult;
+        }
       }
       const role = await this.findRoleById(roleId, true);
       if (!role) {
-        throw new Error("Failed to create role");
+        return {
+          success: false,
+          error: {
+            type: "DATABASE_ERROR",
+            message: "Failed to create role"
+          }
+        };
       }
-      console.log(`\u2705 Rol creado: ${role.name}`);
-      return role;
-    } catch (error:any) {
+      return {
+        success: true,
+        role
+      };
+    } catch (error) {
       console.error("Error creating role:", error);
-      throw new Error(`Failed to create role: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: "DATABASE_ERROR",
+          message: `Failed to create role: ${error.message}`
+        }
+      };
     }
   }
   async assignRoleToUser(data) {
@@ -632,40 +1051,66 @@ class PermissionService2 {
       const db2 = getDatabase();
       const userExists = await this.checkUserExists(data.userId);
       if (!userExists) {
-        throw new Error("User not found");
+        return {
+          success: false,
+          error: {
+            type: "NOT_FOUND_ERROR",
+            message: "User not found"
+          }
+        };
       }
       const roleExists = await this.checkRoleExists(data.roleId);
       if (!roleExists) {
-        throw new Error("Role not found");
+        return {
+          success: false,
+          error: {
+            type: "NOT_FOUND_ERROR",
+            message: "Role not found"
+          }
+        };
       }
-      const existingAssignment = await db2`
-        SELECT id FROM user_roles 
-        WHERE user_id = ${data.userId} AND role_id = ${data.roleId}
-      `;
+      const existingQuery = db2.query("SELECT id FROM user_roles WHERE user_id = ? AND role_id = ?");
+      const existingAssignment = existingQuery.all(data.userId, data.roleId);
       if (existingAssignment.length > 0) {
-        throw new Error("User already has this role");
+        return {
+          success: false,
+          error: {
+            type: "VALIDATION_ERROR",
+            message: "User already has this role"
+          }
+        };
       }
-      await db2`
-        INSERT INTO user_roles (id, user_id, role_id, created_at)
-        VALUES (${crypto.randomUUID()}, ${data.userId}, ${data.roleId}, datetime('now'))
-      `;
+      const insertQuery = db2.query("INSERT INTO user_roles (id, user_id, role_id, created_at) VALUES (?, ?, ?, datetime('now'))");
+      insertQuery.run(crypto.randomUUID(), data.userId, data.roleId);
       console.log(`\u2705 Rol asignado al usuario: ${data.userId} -> ${data.roleId}`);
-    } catch (error:any) {
+      return { success: true };
+    } catch (error) {
       console.error("Error assigning role to user:", error);
-      throw new Error(`Failed to assign role: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: "DATABASE_ERROR",
+          message: `Failed to assign role: ${error.message}`
+        }
+      };
     }
   }
   async removeRoleFromUser(userId, roleId) {
     try {
       const db2 = getDatabase();
-      const result = await db2`
-        DELETE FROM user_roles 
-        WHERE user_id = ${userId} AND role_id = ${roleId}
-      `;
+      const query = db2.query("DELETE FROM user_roles WHERE user_id = ? AND role_id = ?");
+      query.run(userId, roleId);
       console.log(`\u2705 Rol removido del usuario: ${userId} -> ${roleId}`);
-    } catch (error:any) {
+      return { success: true };
+    } catch (error) {
       console.error("Error removing role from user:", error);
-      throw new Error(`Failed to remove role: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: "DATABASE_ERROR",
+          message: `Failed to remove role: ${error.message}`
+        }
+      };
     }
   }
   async assignPermissionsToRole(roleId, permissionIds) {
@@ -673,57 +1118,365 @@ class PermissionService2 {
       const db2 = getDatabase();
       const roleExists = await this.checkRoleExists(roleId);
       if (!roleExists) {
-        throw new Error("Role not found");
+        return {
+          success: false,
+          error: {
+            type: "NOT_FOUND_ERROR",
+            message: "Role not found"
+          }
+        };
       }
       for (const permissionId of permissionIds) {
         const permissionExists = await this.checkPermissionExists(permissionId);
         if (!permissionExists) {
-          throw new Error(`Permission not found: ${permissionId}`);
+          return {
+            success: false,
+            error: {
+              type: "NOT_FOUND_ERROR",
+              message: `Permission not found: ${permissionId}`
+            }
+          };
         }
       }
       for (const permissionId of permissionIds) {
-        try {
-          db2.query("INSERT INTO role_permissions (id, role_id, permission_id, created_at) VALUES (?, ?, ?, datetime('now'))").run(crypto.randomUUID(), roleId, permissionId);
-        } catch (error:any) {
-          if (!error.message.includes("UNIQUE constraint")) {
-            throw error;
-          }
+        const existingQuery = db2.query("SELECT id FROM role_permissions WHERE role_id = ? AND permission_id = ?");
+        const existing = existingQuery.get(roleId, permissionId);
+        if (existing) {
+          return {
+            success: false,
+            error: {
+              type: "VALIDATION_ERROR",
+              message: `Permission ${permissionId} is already assigned to role ${roleId}`
+            }
+          };
         }
+        const insertQuery = db2.query("INSERT INTO role_permissions (id, role_id, permission_id, created_at) VALUES (?, ?, ?, datetime('now'))");
+        insertQuery.run(crypto.randomUUID(), roleId, permissionId);
       }
-      console.log(`\u2705 Permisos asignados al rol: ${roleId}`);
-    } catch (error:any) {
+      return { success: true };
+    } catch (error) {
       console.error("Error assigning permissions to role:", error);
-      throw new Error(`Failed to assign permissions: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: "DATABASE_ERROR",
+          message: `Failed to assign permissions: ${error.message}`
+        }
+      };
     }
+  }
+  async assignPermissionToRole(roleId, permissionId) {
+    return this.assignPermissionsToRole(roleId, [permissionId]);
   }
   async removePermissionsFromRole(roleId, permissionIds) {
     try {
       const db2 = getDatabase();
       for (const permissionId of permissionIds) {
-        await db2`
-          DELETE FROM role_permissions 
-          WHERE role_id = ${roleId} AND permission_id = ${permissionId}
-        `;
+        const query = db2.query("DELETE FROM role_permissions WHERE role_id = ? AND permission_id = ?");
+        query.run(roleId, permissionId);
       }
       console.log(`\u2705 Permisos removidos del rol: ${roleId}`);
-    } catch (error:any) {
+      return { success: true };
+    } catch (error) {
       console.error("Error removing permissions from role:", error);
-      throw new Error(`Failed to remove permissions: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: "DATABASE_ERROR",
+          message: `Failed to remove permissions: ${error.message}`
+        }
+      };
     }
+  }
+  async updatePermission(id, data) {
+    try {
+      const db2 = getDatabase();
+      const existingPermission = await this.findPermissionById(id);
+      if (!existingPermission) {
+        return {
+          success: false,
+          error: {
+            type: "NOT_FOUND_ERROR",
+            message: "Permission not found"
+          }
+        };
+      }
+      if (data.name && data.name !== existingPermission.name) {
+        const existingByName = await this.findPermissionByName(data.name);
+        if (existingByName && existingByName.id !== id) {
+          return {
+            success: false,
+            error: {
+              type: "VALIDATION_ERROR",
+              message: "Permission name already exists"
+            }
+          };
+        }
+      }
+      const query = db2.query("UPDATE permissions SET name = ?, resource = ?, action = ?, description = ? WHERE id = ?");
+      query.run(data.name || existingPermission.name, data.resource || existingPermission.resource, data.action || existingPermission.action, data.description !== undefined ? data.description : existingPermission.description || null, id);
+      const updatedPermission = await this.findPermissionById(id);
+      console.log(`\u2705 Permiso actualizado: ${updatedPermission?.name}`);
+      return {
+        success: true,
+        permission: updatedPermission
+      };
+    } catch (error) {
+      console.error("Error updating permission:", error);
+      return {
+        success: false,
+        error: {
+          type: "DATABASE_ERROR",
+          message: `Failed to update permission: ${error.message}`
+        }
+      };
+    }
+  }
+  async deletePermission(id) {
+    try {
+      const db2 = getDatabase();
+      const existingPermission = await this.findPermissionById(id);
+      if (!existingPermission) {
+        return {
+          success: false,
+          error: {
+            type: "NOT_FOUND_ERROR",
+            message: "Permission not found"
+          }
+        };
+      }
+      const deleteRelationsQuery = db2.query("DELETE FROM role_permissions WHERE permission_id = ?");
+      deleteRelationsQuery.run(id);
+      const deletePermissionQuery = db2.query("DELETE FROM permissions WHERE id = ?");
+      deletePermissionQuery.run(id);
+      console.log(`\u2705 Permiso eliminado: ${existingPermission.name}`);
+      return { success: true };
+    } catch (error) {
+      console.error("Error deleting permission:", error);
+      return {
+        success: false,
+        error: {
+          type: "DATABASE_ERROR",
+          message: `Failed to delete permission: ${error.message}`
+        }
+      };
+    }
+  }
+  async updateRole(id, data) {
+    try {
+      const db2 = getDatabase();
+      const existingRole = await this.findRoleById(id);
+      if (!existingRole) {
+        return {
+          success: false,
+          error: {
+            type: "NOT_FOUND_ERROR",
+            message: "Role not found"
+          }
+        };
+      }
+      if (data.name && data.name !== existingRole.name) {
+        const existingByName = await this.findRoleByName(data.name);
+        if (existingByName && existingByName.id !== id) {
+          return {
+            success: false,
+            error: {
+              type: "VALIDATION_ERROR",
+              message: "Role name already exists"
+            }
+          };
+        }
+      }
+      const query = db2.query("UPDATE roles SET name = ?, description = ?, is_active = ? WHERE id = ?");
+      query.run(data.name || existingRole.name, data.description !== undefined ? data.description : existingRole.description || null, data.isActive !== undefined ? data.isActive ? 1 : 0 : existingRole.isActive ? 1 : 0, id);
+      const updatedRole = await this.findRoleById(id);
+      console.log(`\u2705 Rol actualizado: ${updatedRole?.name}`);
+      return {
+        success: true,
+        role: updatedRole || undefined
+      };
+    } catch (error) {
+      console.error("Error updating role:", error);
+      return {
+        success: false,
+        error: {
+          type: "DATABASE_ERROR",
+          message: `Failed to update role: ${error.message}`
+        }
+      };
+    }
+  }
+  async deleteRole(id) {
+    try {
+      const db2 = getDatabase();
+      const existingRole = await this.findRoleById(id);
+      if (!existingRole) {
+        return {
+          success: false,
+          error: {
+            type: "NOT_FOUND_ERROR",
+            message: "Role not found"
+          }
+        };
+      }
+      const deleteUserRolesQuery = db2.query("DELETE FROM user_roles WHERE role_id = ?");
+      deleteUserRolesQuery.run(id);
+      const deleteRolePermissionsQuery = db2.query("DELETE FROM role_permissions WHERE role_id = ?");
+      deleteRolePermissionsQuery.run(id);
+      const deleteRoleQuery = db2.query("DELETE FROM roles WHERE id = ?");
+      deleteRoleQuery.run(id);
+      console.log(`\u2705 Rol eliminado: ${existingRole.name}`);
+      return { success: true };
+    } catch (error) {
+      console.error("Error deleting role:", error);
+      return {
+        success: false,
+        error: {
+          type: "DATABASE_ERROR",
+          message: `Failed to delete role: ${error.message}`
+        }
+      };
+    }
+  }
+  async removePermissionFromRole(roleId, permissionId) {
+    return this.removePermissionsFromRole(roleId, [permissionId]);
   }
   async userHasPermission(userId, permissionName, options = {}) {
     try {
       const db2 = getDatabase();
-      const result = await db2`
+      const userQuery = db2.query(`
+        SELECT is_active
+        FROM users
+        WHERE id = ?
+      `);
+      const userResult = userQuery.get(userId);
+      if (!userResult || !userResult.is_active) {
+        return false;
+      }
+      const exactQuery = db2.query(`
         SELECT COUNT(*) as count
         FROM permissions p
         INNER JOIN role_permissions rp ON p.id = rp.permission_id
         INNER JOIN user_roles ur ON rp.role_id = ur.role_id
-        WHERE ur.user_id = ${userId} AND p.name = ${permissionName}
-      `;
-      return result[0].count > 0;
-    } catch (error:any) {
+        WHERE ur.user_id = ? AND p.name = ?
+      `);
+      const exactResult = exactQuery.get(userId, permissionName);
+      if (exactResult?.count > 0) {
+        return true;
+      }
+      const wildcardQuery = db2.query(`
+        SELECT COUNT(*) as count
+        FROM permissions p
+        INNER JOIN role_permissions rp ON p.id = rp.permission_id
+        INNER JOIN user_roles ur ON rp.role_id = ur.role_id
+        WHERE ur.user_id = ? AND (p.name = '*:*' OR p.name = 'admin:*' OR p.resource = '*' OR p.action = '*')
+      `);
+      const wildcardResult = wildcardQuery.get(userId);
+      return wildcardResult?.count > 0;
+    } catch (error) {
       console.error("Error checking user permission:", error);
+      return false;
+    }
+  }
+  async userHasRole(userId, roleName) {
+    try {
+      const db2 = getDatabase();
+      const query = db2.query(`
+        SELECT COUNT(*) as count
+        FROM user_roles ur
+        INNER JOIN roles r ON ur.role_id = r.id
+        WHERE ur.user_id = ? AND r.name = ?
+      `);
+      const result = query.get(userId, roleName);
+      return result?.count > 0;
+    } catch (error) {
+      console.error("Error checking user role:", error);
+      return false;
+    }
+  }
+  async userHasAllRoles(userId, roleNames) {
+    try {
+      for (const roleName of roleNames) {
+        const hasRole = await this.userHasRole(userId, roleName);
+        if (!hasRole) {
+          return false;
+        }
+      }
+      return true;
+    } catch (error) {
+      console.error("Error checking user roles:", error);
+      return false;
+    }
+  }
+  async userHasAnyRole(userId, roleNames) {
+    try {
+      for (const roleName of roleNames) {
+        const hasRole = await this.userHasRole(userId, roleName);
+        if (hasRole) {
+          return true;
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error("Error checking user roles:", error);
+      return false;
+    }
+  }
+  async userHasAllPermissions(userId, permissionNames) {
+    try {
+      for (const permissionName of permissionNames) {
+        const hasPermission = await this.userHasPermission(userId, permissionName);
+        if (!hasPermission) {
+          return false;
+        }
+      }
+      return true;
+    } catch (error) {
+      console.error("Error checking user permissions:", error);
+      return false;
+    }
+  }
+  async userHasAnyPermission(userId, permissionNames) {
+    try {
+      for (const permissionName of permissionNames) {
+        const hasPermission = await this.userHasPermission(userId, permissionName);
+        if (hasPermission) {
+          return true;
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error("Error checking user permissions:", error);
+      return false;
+    }
+  }
+  async userCanAccessResource(userId, resource, action) {
+    try {
+      const db2 = getDatabase();
+      const exactPermissionName = `${resource}:${action}`;
+      const hasExactPermission = await this.userHasPermission(userId, exactPermissionName);
+      if (hasExactPermission) {
+        return true;
+      }
+      const wildcardQuery = db2.query(`
+        SELECT COUNT(*) as count
+        FROM permissions p
+        INNER JOIN role_permissions rp ON p.id = rp.permission_id
+        INNER JOIN user_roles ur ON rp.role_id = ur.role_id
+        WHERE ur.user_id = ? AND (
+          p.name = '*:*' OR 
+          p.name = 'admin:*' OR 
+          p.name = ? OR 
+          p.name = ? OR 
+          (p.resource = '*' AND p.action = '*') OR
+          (p.resource = ? AND p.action = '*') OR
+          (p.resource = '*' AND p.action = ?)
+        )
+      `);
+      const wildcardResult = wildcardQuery.get(userId, `${resource}:*`, `*:${action}`, resource, action);
+      return wildcardResult?.count > 0;
+    } catch (error) {
+      console.error("Error checking resource access:", error);
       return false;
     }
   }
@@ -737,7 +1490,7 @@ class PermissionService2 {
         return results.every((result) => result);
       }
       return results.some((result) => result);
-    } catch (error:any) {
+    } catch (error) {
       console.error("Error checking user permissions:", error);
       return false;
     }
@@ -745,22 +1498,24 @@ class PermissionService2 {
   async getUserPermissions(userId) {
     try {
       const db2 = getDatabase();
-      const result = await db2`
-        SELECT DISTINCT p.id, p.name, p.resource, p.action, p.created_at
+      const query = db2.query(`
+        SELECT DISTINCT p.id, p.name, p.resource, p.action, p.description, p.created_at
         FROM permissions p
         INNER JOIN role_permissions rp ON p.id = rp.permission_id
         INNER JOIN user_roles ur ON rp.role_id = ur.role_id
-        WHERE ur.user_id = ${userId}
+        WHERE ur.user_id = ?
         ORDER BY p.resource, p.action
-      `;
+      `);
+      const result = query.all(userId);
       return result.map((row) => ({
         id: row.id,
         name: row.name,
         resource: row.resource,
         action: row.action,
+        description: row.description,
         created_at: new Date(row.created_at)
       }));
-    } catch (error:any) {
+    } catch (error) {
       console.error("Error getting user permissions:", error);
       throw new Error(`Failed to get user permissions: ${error.message}`);
     }
@@ -768,19 +1523,20 @@ class PermissionService2 {
   async findPermissionById(id) {
     try {
       const db2 = getDatabase();
-      const result = db2.query("SELECT id, name, resource, action, created_at FROM permissions WHERE id = ?").all(id);
-      if (result.length === 0) {
+      const query = db2.query("SELECT id, name, resource, action, description, created_at FROM permissions WHERE id = ?");
+      const result = query.get(id);
+      if (!result) {
         return null;
       }
-      const row = result[0];
       return {
-        id: row.id,
-        name: row.name,
-        resource: row.resource,
-        action: row.action,
-        created_at: new Date(row.created_at)
+        id: result.id,
+        name: result.name,
+        resource: result.resource,
+        action: result.action,
+        description: result.description,
+        created_at: new Date(result.created_at)
       };
-    } catch (error:any) {
+    } catch (error) {
       console.error("Error finding permission by ID:", error);
       return null;
     }
@@ -788,19 +1544,20 @@ class PermissionService2 {
   async findPermissionByName(name) {
     try {
       const db2 = getDatabase();
-      const result = db2.query("SELECT id, name, resource, action, created_at FROM permissions WHERE name = ?").all(name);
-      if (result.length === 0) {
+      const query = db2.query("SELECT id, name, resource, action, description, created_at FROM permissions WHERE name = ?");
+      const result = query.get(name);
+      if (!result) {
         return null;
       }
-      const row = result[0];
       return {
-        id: row.id,
-        name: row.name,
-        resource: row.resource,
-        action: row.action,
-        created_at: new Date(row.created_at)
+        id: result.id,
+        name: result.name,
+        resource: result.resource,
+        action: result.action,
+        description: result.description,
+        created_at: new Date(result.created_at)
       };
-    } catch (error:any) {
+    } catch (error) {
       console.error("Error finding permission by name:", error);
       return null;
     }
@@ -808,22 +1565,24 @@ class PermissionService2 {
   async findRoleById(id, includePermissions = false) {
     try {
       const db2 = getDatabase();
-      const result = db2.query("SELECT id, name, created_at FROM roles WHERE id = ?").all(id);
-      if (result.length === 0) {
+      const query = db2.query("SELECT id, name, description, created_at, is_active FROM roles WHERE id = ?");
+      const result = query.get(id);
+      if (!result) {
         return null;
       }
-      const row = result[0];
       const role = {
-        id: row.id,
-        name: row.name,
-        created_at: new Date(row.created_at),
+        id: result.id,
+        name: result.name,
+        description: result.description,
+        created_at: new Date(result.created_at),
+        isActive: Boolean(result.is_active),
         permissions: []
       };
       if (includePermissions) {
         role.permissions = await this.getRolePermissions(id);
       }
       return role;
-    } catch (error:any) {
+    } catch (error) {
       console.error("Error finding role by ID:", error);
       return null;
     }
@@ -831,22 +1590,24 @@ class PermissionService2 {
   async findRoleByName(name, includePermissions = false) {
     try {
       const db2 = getDatabase();
-      const result = db2.query("SELECT id, name, created_at FROM roles WHERE name = ?").all(name);
-      if (result.length === 0) {
+      const query = db2.query("SELECT id, name, description, created_at, is_active FROM roles WHERE name = ?");
+      const result = query.get(name);
+      if (!result) {
         return null;
       }
-      const row = result[0];
       const role = {
-        id: row.id,
-        name: row.name,
-        created_at: new Date(row.created_at),
+        id: result.id,
+        name: result.name,
+        description: result.description,
+        created_at: new Date(result.created_at),
+        isActive: Boolean(result.is_active),
         permissions: []
       };
       if (includePermissions) {
-        role.permissions = await this.getRolePermissions(row.id);
+        role.permissions = await this.getRolePermissions(result.id);
       }
       return role;
-    } catch (error:any) {
+    } catch (error) {
       console.error("Error finding role by name:", error);
       return null;
     }
@@ -855,7 +1616,7 @@ class PermissionService2 {
     try {
       const db2 = getDatabase();
       const result = db2.query(`
-        SELECT p.id, p.name, p.resource, p.action, p.created_at
+        SELECT p.id, p.name, p.resource, p.action, p.description, p.created_at
         FROM permissions p
         INNER JOIN role_permissions rp ON p.id = rp.permission_id
         WHERE rp.role_id = ?
@@ -866,9 +1627,10 @@ class PermissionService2 {
         name: row.name,
         resource: row.resource,
         action: row.action,
+        description: row.description,
         created_at: new Date(row.created_at)
       }));
-    } catch (error:any) {
+    } catch (error) {
       console.error("Error getting role permissions:", error);
       return [];
     }
@@ -876,17 +1638,20 @@ class PermissionService2 {
   async getAllRoles(includePermissions = false) {
     try {
       const db2 = getDatabase();
-      const result = await db2`
-        SELECT id, name, created_at
+      const query = db2.query(`
+        SELECT id, name, description, created_at, is_active
         FROM roles
         ORDER BY name
-      `;
+      `);
+      const result = query.all();
       const roles = [];
       for (const row of result) {
         const role = {
           id: row.id,
           name: row.name,
+          description: row.description,
           created_at: new Date(row.created_at),
+          isActive: Boolean(row.is_active),
           permissions: []
         };
         if (includePermissions) {
@@ -895,7 +1660,7 @@ class PermissionService2 {
         roles.push(role);
       }
       return roles;
-    } catch (error:any) {
+    } catch (error) {
       console.error("Error getting all roles:", error);
       throw new Error(`Failed to get roles: ${error.message}`);
     }
@@ -903,63 +1668,85 @@ class PermissionService2 {
   async getAllPermissions() {
     try {
       const db2 = getDatabase();
-      const result = await db2`
-        SELECT id, name, resource, action, created_at
+      const query = db2.query(`
+        SELECT id, name, resource, action, description, created_at
         FROM permissions
         ORDER BY resource, action
-      `;
+      `);
+      const result = query.all();
       return result.map((row) => ({
         id: row.id,
         name: row.name,
         resource: row.resource,
         action: row.action,
+        description: row.description,
         created_at: new Date(row.created_at)
       }));
-    } catch (error:any) {
+    } catch (error) {
       console.error("Error getting all permissions:", error);
       throw new Error(`Failed to get permissions: ${error.message}`);
     }
   }
   validatePermissionData(data) {
     if (!data.name || !data.resource || !data.action) {
-      throw new Error("Name, resource, and action are required");
+      return {
+        isValid: false,
+        error: "Name, resource, and action are required"
+      };
     }
     if (data.name.length < 3) {
-      throw new Error("Permission name must be at least 3 characters long");
+      return {
+        isValid: false,
+        error: "Permission name must be at least 3 characters long"
+      };
     }
+    return { isValid: true };
   }
   validateRoleData(data) {
     if (!data.name) {
-      throw new Error("Role name is required");
+      return {
+        isValid: false,
+        error: "Role name is required"
+      };
     }
     if (data.name.length < 3) {
-      throw new Error("Role name must be at least 3 characters long");
+      return {
+        isValid: false,
+        error: "Role name must be at least 3 characters long"
+      };
     }
+    return { isValid: true };
   }
   async checkUserExists(userId) {
     try {
       const db2 = getDatabase();
-      const result = await db2`SELECT id FROM users WHERE id = ${userId}`;
-      return result.length > 0;
-    } catch (error:any) {
+      const query = db2.query("SELECT id FROM users WHERE id = ?");
+      const result = query.get(userId);
+      return !!result;
+    } catch (error) {
+      console.error("Error checking user existence:", error);
       return false;
     }
   }
   async checkRoleExists(roleId) {
     try {
       const db2 = getDatabase();
-      const result = db2.query("SELECT id FROM roles WHERE id = ?").all(roleId);
-      return result.length > 0;
-    } catch (error:any) {
+      const query = db2.query("SELECT id FROM roles WHERE id = ?");
+      const result = query.get(roleId);
+      return !!result;
+    } catch (error) {
+      console.error("Error checking role existence:", error);
       return false;
     }
   }
   async checkPermissionExists(permissionId) {
     try {
       const db2 = getDatabase();
-      const result = db2.query("SELECT id FROM permissions WHERE id = ?").all(permissionId);
-      return result.length > 0;
-    } catch (error:any) {
+      const query = db2.query("SELECT id FROM permissions WHERE id = ?");
+      const result = query.get(permissionId);
+      return !!result;
+    } catch (error) {
+      console.error("Error checking permission existence:", error);
       return false;
     }
   }
@@ -973,17 +1760,21 @@ function getPermissionService() {
 }
 // src/middleware/auth.ts
 async function authenticateRequest(request, config = {}) {
-  try {
-    const {
-      required = true,
-      permissions = [],
-      permissionOptions = {},
-      tokenHeader = "authorization"
-    } = config;
+  const {
+    required = true,
+    permissions = [],
+    permissionOptions = {},
+    tokenHeader = "authorization",
+    extractToken
+  } = config;
+  let token = null;
+  if (extractToken) {
+    token = extractToken(request);
+  } else {
     const authHeader = request.headers[tokenHeader] || request.headers[tokenHeader.toLowerCase()];
     if (!authHeader) {
       if (!required) {
-        return { success: true, context: { permissions: [] } };
+        return { success: true, context: { permissions: [], isAuthenticated: false } };
       }
       return {
         success: false,
@@ -991,65 +1782,69 @@ async function authenticateRequest(request, config = {}) {
         statusCode: 401
       };
     }
-    const jwtService = getJWTService();
-    const token = jwtService.extractTokenFromHeader(authHeader);
-    if (!token) {
-      return {
-        success: false,
-        error: "Invalid authorization header format. Use: Bearer <token>",
-        statusCode: 401
-      };
+    const jwtService2 = config.jwtService || getJWTService();
+    if (tokenHeader === "authorization") {
+      token = jwtService2.extractTokenFromHeader(authHeader);
+    } else {
+      token = authHeader;
     }
-    let payload;
-    try {
-      payload = await jwtService.verifyToken(token);
-    } catch (error:any) {
-      return {
-        success: false,
-        error: "Invalid or expired token",
-        statusCode: 401
-      };
+  }
+  if (!token) {
+    if (!required) {
+      return { success: true, context: { permissions: [], isAuthenticated: false } };
     }
-    const authService = getAuthService();
-    const user = await authService.findUserById(payload.userId, {
-      includeRoles: true,
-      includePermissions: true,
-      activeOnly: true
-    });
-    if (!user) {
-      return {
-        success: false,
-        error: "User not found or inactive",
-        statusCode: 401
-      };
-    }
-    const permissionService = getPermissionService();
-    const userPermissions = await permissionService.getUserPermissions(user.id);
-    const permissionNames = userPermissions.map((p) => p.name);
-    const authContext = {
-      user,
-      token,
-      permissions: permissionNames
-    };
-    if (permissions.length > 0) {
-      const hasPermissions = await permissionService.userHasPermissions(user.id, permissions, permissionOptions);
-      if (!hasPermissions) {
-        return {
-          success: false,
-          error: `Insufficient permissions. Required: ${permissions.join(", ")}`,
-          statusCode: 403
-        };
-      }
-    }
-    return { success: true, context: authContext };
-  } catch (error:any) {
-    console.error("Authentication middleware error:", error);
     return {
       success: false,
-      error: "Internal authentication error",
-      statusCode: 500
+      error: extractToken ? "Token not found" : "Invalid authorization header format. Use: Bearer <token>",
+      statusCode: 401
     };
   }
+  const jwtService = config.jwtService || getJWTService();
+  const result = await jwtService.verifyToken(token).then((payload2) => ({ success: true, payload: payload2 })).catch((error) => ({ success: false, error: error.message }));
+  if (!result.success) {
+    if (!required) {
+      return { success: true, context: { permissions: [], isAuthenticated: false } };
+    }
+    return {
+      success: false,
+      error: "Invalid or expired token",
+      statusCode: 401
+    };
+  }
+  const payload = result.payload;
+  const authService = config.authService || getAuthService();
+  const user = await authService.findUserById(payload.userId, {
+    includeRoles: true,
+    includePermissions: true,
+    activeOnly: true
+  });
+  if (!user) {
+    return {
+      success: false,
+      error: "User not found or inactive",
+      statusCode: 401
+    };
+  }
+  const permissionService = config.permissionService || getPermissionService();
+  const userPermissions = await permissionService.getUserPermissions(user.id);
+  const permissionNames = userPermissions.map((p) => p.name);
+  const authContext = {
+    user,
+    token,
+    permissions: permissionNames,
+    isAuthenticated: true
+  };
+  if (permissions.length > 0) {
+    const hasPermissions = await permissionService.userHasPermissions(user.id, permissions, permissionOptions);
+    if (!hasPermissions) {
+      return {
+        success: false,
+        error: `Insufficient permissions. Required: ${permissions.join(", ")}`,
+        statusCode: 403
+      };
+    }
+  }
+  return { success: true, context: authContext };
 }
 async function authorizeRequest(authContext, requiredPermissions, options = {}) {
   try {
@@ -1073,7 +1868,7 @@ async function authorizeRequest(authContext, requiredPermissions, options = {}) 
       };
     }
     return { success: true };
-  } catch (error:any) {
+  } catch (error) {
     console.error("Authorization error:", error);
     return {
       success: false,
@@ -1087,7 +1882,8 @@ function getCurrentUser(authContext) {
 }
 function createEmptyAuthContext() {
   return {
-    permissions: []
+    permissions: [],
+    isAuthenticated: false
   };
 }
 function logAuthEvent(event, userId, metadata) {
@@ -1103,7 +1899,7 @@ function extractClientIP(headers) {
   return headers["x-forwarded-for"] || headers["x-real-ip"] || headers["x-client-ip"] || headers["cf-connecting-ip"] || "unknown";
 }
 function extractUserAgent(headers) {
-  return headers["user-agent"] || "unknown";
+  return headers["user-agent"] || headers["User-Agent"] || "Unknown";
 }
 // src/adapters/hono.ts
 function honoAuthMiddleware2(config = {}) {
@@ -1141,7 +1937,7 @@ function honoAuthMiddleware2(config = {}) {
         });
       }
       await next();
-    } catch (error:any) {
+    } catch (error) {
       console.error("Hono auth middleware error:", error);
       return c.json({
         error: "Internal authentication error",
@@ -1342,7 +2138,7 @@ function expressAuthMiddleware2(config = {}) {
         });
       }
       next();
-    } catch (error:any) {
+    } catch (error) {
       console.error("Express auth middleware error:", error);
       return res.status(500).json({
         error: "Internal authentication error",
@@ -1542,7 +2338,7 @@ function expressJsonValidator2() {
         if (req.body && typeof req.body === "string") {
           req.body = JSON.parse(req.body);
         }
-      } catch (error:any) {
+      } catch (error) {
         return res.status(400).json({
           error: "Invalid JSON format",
           timestamp: new Date().toISOString()
@@ -1583,7 +2379,13 @@ var connectionsBySession = new Map;
 async function authenticateWebSocket2(ws, request, config = {}) {
   try {
     const url = new URL(request.url, "http://localhost");
-    const token = url.searchParams.get("token") || request.headers.authorization?.replace("Bearer ", "");
+    let token = url.searchParams.get("token");
+    if (!token && request.headers.authorization) {
+      const authHeader = request.headers.authorization;
+      if (authHeader.startsWith("Bearer ")) {
+        token = authHeader.replace("Bearer ", "");
+      }
+    }
     if (!token && config.required !== false) {
       ws.close(1008, "Authentication required");
       return false;
@@ -1591,7 +2393,7 @@ async function authenticateWebSocket2(ws, request, config = {}) {
     const authRequest = {
       headers: {
         ...request.headers,
-        authorization: token ? `Bearer ${token}` : undefined
+        ...token && { authorization: `Bearer ${token}` }
       }
     };
     const result = await authenticateRequest(authRequest, config);
@@ -1630,7 +2432,7 @@ async function authenticateWebSocket2(ws, request, config = {}) {
       setupSessionTimeout(ws, config.sessionTimeout);
     }
     return true;
-  } catch (error:any) {
+  } catch (error) {
     console.error("WebSocket authentication error:", error);
     ws.close(1011, "Internal authentication error");
     return false;
@@ -2003,6 +2805,135 @@ var migrations = [
       db2.exec("DROP TABLE IF EXISTS migration_history");
       console.log("\u2705 Tabla migration_history eliminada");
     }
+  },
+  {
+    version: 8,
+    name: "add_description_fields",
+    up: async (db2) => {
+      db2.exec(`
+        ALTER TABLE roles ADD COLUMN description TEXT
+      `);
+      db2.exec(`
+        ALTER TABLE permissions ADD COLUMN description TEXT
+      `);
+      console.log("\u2705 Campos description agregados a roles y permissions");
+    },
+    down: async (db2) => {
+      db2.exec(`
+        CREATE TABLE roles_backup AS SELECT id, name, created_at FROM roles;
+        DROP TABLE roles;
+        CREATE TABLE roles (
+          id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+          name TEXT UNIQUE NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO roles SELECT * FROM roles_backup;
+        DROP TABLE roles_backup;
+      `);
+      db2.exec(`
+        CREATE TABLE permissions_backup AS SELECT id, name, resource, action, created_at FROM permissions;
+        DROP TABLE permissions;
+        CREATE TABLE permissions (
+          id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+          name TEXT UNIQUE NOT NULL,
+          resource TEXT NOT NULL,
+          action TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO permissions SELECT * FROM permissions_backup;
+        DROP TABLE permissions_backup;
+      `);
+      console.log("\u2705 Campos description removidos de roles y permissions");
+    }
+  },
+  {
+    version: 9,
+    name: "add_user_name_fields",
+    up: async (db2) => {
+      db2.exec(`
+        ALTER TABLE users ADD COLUMN first_name TEXT
+      `);
+      db2.exec(`
+        ALTER TABLE users ADD COLUMN last_name TEXT
+      `);
+      console.log("\u2705 Campos first_name y last_name agregados a users");
+    },
+    down: async (db2) => {
+      db2.exec(`
+        CREATE TABLE users_backup AS SELECT id, email, password_hash, created_at, updated_at, is_active FROM users;
+        DROP TABLE users;
+        CREATE TABLE users (
+          id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+          email TEXT UNIQUE NOT NULL,
+          password_hash TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          is_active BOOLEAN DEFAULT 1
+        );
+        INSERT INTO users SELECT * FROM users_backup;
+        DROP TABLE users_backup;
+      `);
+      db2.exec("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)");
+      db2.exec("CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)");
+      console.log("\u2705 Campos first_name y last_name removidos de users");
+    }
+  },
+  {
+    version: 10,
+    name: "add_last_login_at_field",
+    up: async (db2) => {
+      db2.exec(`
+        ALTER TABLE users ADD COLUMN last_login_at DATETIME
+      `);
+      console.log("\u2705 Campo last_login_at agregado a users");
+    },
+    down: async (db2) => {
+      db2.exec(`
+        CREATE TABLE users_backup AS SELECT id, email, password_hash, first_name, last_name, created_at, updated_at, is_active FROM users;
+        DROP TABLE users;
+        CREATE TABLE users (
+          id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+          email TEXT UNIQUE NOT NULL,
+          password_hash TEXT NOT NULL,
+          first_name TEXT,
+          last_name TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          is_active BOOLEAN DEFAULT 1
+        );
+        INSERT INTO users SELECT * FROM users_backup;
+        DROP TABLE users_backup;
+      `);
+      db2.exec("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)");
+      db2.exec("CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)");
+      console.log("\u2705 Campo last_login_at removido de users");
+    }
+  },
+  {
+    version: 11,
+    name: "add_roles_is_active_field",
+    up: async (db2) => {
+      db2.exec(`
+        ALTER TABLE roles ADD COLUMN is_active BOOLEAN DEFAULT 1
+      `);
+      console.log("\u2705 Campo is_active agregado a roles");
+    },
+    down: async (db2) => {
+      db2.exec(`
+        CREATE TABLE roles_backup AS SELECT id, name, description, created_at FROM roles;
+        DROP TABLE roles;
+        CREATE TABLE roles (
+          id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+          name TEXT UNIQUE NOT NULL,
+          description TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO roles SELECT * FROM roles_backup;
+        DROP TABLE roles_backup;
+      `);
+      db2.exec("CREATE INDEX IF NOT EXISTS idx_roles_name ON roles(name)");
+      console.log("\u2705 Campo is_active removido de roles");
+    }
   }
 ];
 async function getCurrentVersion() {
@@ -2010,7 +2941,7 @@ async function getCurrentVersion() {
     const db2 = getDatabase();
     const result = db2.query("SELECT MAX(version) as version FROM migration_history").get();
     return result?.version || 0;
-  } catch (error:any) {
+  } catch (error) {
     return 0;
   }
 }
@@ -2049,7 +2980,7 @@ async function runMigrations2() {
     }
     db2.exec("COMMIT");
     console.log("\uD83C\uDF89 Todas las migraciones completadas exitosamente");
-  } catch (error:any) {
+  } catch (error) {
     db2.exec("ROLLBACK");
     console.error("\u274C Error durante las migraciones:", error);
     throw error;
@@ -2075,7 +3006,7 @@ async function rollbackMigrations(targetVersion) {
     }
     db2.exec("COMMIT");
     console.log("\uD83C\uDF89 Rollback completado exitosamente");
-  } catch (error:any) {
+  } catch (error) {
     db2.exec("ROLLBACK");
     console.error("\u274C Error durante el rollback:", error);
     throw error;
@@ -2102,7 +3033,7 @@ async function resetDatabase2() {
     for (const migration of allMigrations) {
       try {
         await migration.down(db2);
-      } catch (error:any) {
+      } catch (error) {
         console.warn(`\u26A0\uFE0F Error al revertir ${migration.name}:`, error);
       }
     }
@@ -2110,7 +3041,7 @@ async function resetDatabase2() {
     db2.exec("COMMIT");
     console.log("\u2705 Base de datos reseteada");
     await runMigrations2();
-  } catch (error:any) {
+  } catch (error) {
     db2.exec("ROLLBACK");
     console.error("\u274C Error al resetear la base de datos:", error);
     throw error;
@@ -2215,6 +3146,7 @@ var DEV_CONFIG = {
     level: "debug",
     enableConsole: true,
     enableFile: false,
+    filePath: "./logs/auth.log",
     enableDatabase: false
   }
 };
@@ -2236,6 +3168,7 @@ var PROD_CONFIG = {
     level: "warn",
     enableConsole: false,
     enableFile: true,
+    filePath: "./logs/auth.log",
     enableDatabase: true
   }
 };
@@ -2251,8 +3184,19 @@ function getAuthConfig2(environment) {
       break;
     case "test":
       config = mergeConfig(config, {
-        database: { path: ":memory:" },
-        logging: { level: "error", enableConsole: false }
+        database: {
+          path: ":memory:",
+          enableWAL: false,
+          enableForeignKeys: true,
+          busyTimeout: 5000
+        },
+        logging: {
+          level: "error",
+          enableConsole: false,
+          enableFile: false,
+          filePath: "./logs/auth.log",
+          enableDatabase: false
+        }
       });
       break;
   }
@@ -2361,10 +3305,15 @@ function mergeConfig(base, override) {
     const value = override[key];
     if (value !== undefined) {
       if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-        result[key] = {
-          ...result[key],
-          ...value
-        };
+        const baseValue = result[key];
+        if (typeof baseValue === "object" && baseValue !== null && !Array.isArray(baseValue)) {
+          result[key] = {
+            ...baseValue,
+            ...value
+          };
+        } else {
+          result[key] = value;
+        }
       } else {
         result[key] = value;
       }
@@ -2383,38 +3332,38 @@ function printConfig(config) {
 var auth_default = getAuthConfig2();
 // src/scripts/seed.ts
 var initialPermissions = [
-  { name: "users.read", description: "Ver usuarios" },
-  { name: "users.create", description: "Crear usuarios" },
-  { name: "users.update", description: "Actualizar usuarios" },
-  { name: "users.delete", description: "Eliminar usuarios" },
-  { name: "users.manage", description: "Gestionar usuarios completamente" },
-  { name: "roles.read", description: "Ver roles" },
-  { name: "roles.create", description: "Crear roles" },
-  { name: "roles.update", description: "Actualizar roles" },
-  { name: "roles.delete", description: "Eliminar roles" },
-  { name: "roles.manage", description: "Gestionar roles completamente" },
-  { name: "permissions.read", description: "Ver permisos" },
-  { name: "permissions.create", description: "Crear permisos" },
-  { name: "permissions.update", description: "Actualizar permisos" },
-  { name: "permissions.delete", description: "Eliminar permisos" },
-  { name: "permissions.manage", description: "Gestionar permisos completamente" },
-  { name: "content.read", description: "Ver contenido" },
-  { name: "content.create", description: "Crear contenido" },
-  { name: "content.update", description: "Actualizar contenido" },
-  { name: "content.delete", description: "Eliminar contenido" },
-  { name: "content.publish", description: "Publicar contenido" },
-  { name: "content.moderate", description: "Moderar contenido" },
-  { name: "system.admin", description: "Administraci\xF3n del sistema" },
-  { name: "system.settings", description: "Configuraci\xF3n del sistema" },
-  { name: "system.logs", description: "Ver logs del sistema" },
-  { name: "system.backup", description: "Realizar backups" },
-  { name: "system.maintenance", description: "Modo mantenimiento" },
-  { name: "reports.view", description: "Ver reportes" },
-  { name: "reports.create", description: "Crear reportes" },
-  { name: "reports.export", description: "Exportar reportes" },
-  { name: "api.read", description: "Acceso de lectura a API" },
-  { name: "api.write", description: "Acceso de escritura a API" },
-  { name: "api.admin", description: "Acceso administrativo a API" }
+  { name: "users.read", resource: "users", action: "read" },
+  { name: "users.create", resource: "users", action: "create" },
+  { name: "users.update", resource: "users", action: "update" },
+  { name: "users.delete", resource: "users", action: "delete" },
+  { name: "users.manage", resource: "users", action: "manage" },
+  { name: "roles.read", resource: "roles", action: "read" },
+  { name: "roles.create", resource: "roles", action: "create" },
+  { name: "roles.update", resource: "roles", action: "update" },
+  { name: "roles.delete", resource: "roles", action: "delete" },
+  { name: "roles.manage", resource: "roles", action: "manage" },
+  { name: "permissions.read", resource: "permissions", action: "read" },
+  { name: "permissions.create", resource: "permissions", action: "create" },
+  { name: "permissions.update", resource: "permissions", action: "update" },
+  { name: "permissions.delete", resource: "permissions", action: "delete" },
+  { name: "permissions.manage", resource: "permissions", action: "manage" },
+  { name: "content.read", resource: "content", action: "read" },
+  { name: "content.create", resource: "content", action: "create" },
+  { name: "content.update", resource: "content", action: "update" },
+  { name: "content.delete", resource: "content", action: "delete" },
+  { name: "content.publish", resource: "content", action: "publish" },
+  { name: "content.moderate", resource: "content", action: "moderate" },
+  { name: "system.admin", resource: "system", action: "admin" },
+  { name: "system.settings", resource: "system", action: "settings" },
+  { name: "system.logs", resource: "system", action: "logs" },
+  { name: "system.backup", resource: "system", action: "backup" },
+  { name: "system.maintenance", resource: "system", action: "maintenance" },
+  { name: "reports.view", resource: "reports", action: "view" },
+  { name: "reports.create", resource: "reports", action: "create" },
+  { name: "reports.export", resource: "reports", action: "export" },
+  { name: "api.read", resource: "api", action: "read" },
+  { name: "api.write", resource: "api", action: "write" },
+  { name: "api.admin", resource: "api", action: "admin" }
 ];
 var initialRoles = [
   {
@@ -2544,11 +3493,10 @@ async function seedDatabase2() {
     for (const permission of initialPermissions) {
       try {
         const result = await permissionService.createPermission(permission);
-        if (result.success && result.data) {
-          createdPermissions.set(permission.name, result.data.id);
-          console.log(`  \u2705 Permiso creado: ${permission.name}`);
+        if (result && result.role) {
+          createdPermissions.set(permission.name, result.role.id);
         }
-      } catch (error:any) {
+      } catch (error) {
         console.log(`  \u26A0\uFE0F  Permiso ya existe: ${permission.name}`);
       }
     }
@@ -2560,18 +3508,16 @@ async function seedDatabase2() {
           name: role.name,
           description: role.description
         });
-        if (result.success && result.data) {
-          createdRoles.set(role.name, result.data.id);
-          console.log(`  \u2705 Rol creado: ${role.name}`);
-          for (const permissionName of role.permissions) {
+        if (result && result.role) {
+          createdRoles.set(role.name, result.role?.id);
+          for (const permissionName of role.permissionIds || []) {
             const permissionId = createdPermissions.get(permissionName);
             if (permissionId) {
-              await permissionService.assignPermissionToRole(result.data.id, permissionId);
+              await permissionService.assignPermissionsToRole(result.role?.id, [permissionId]);
             }
           }
-          console.log(`    \uD83D\uDCCB Permisos asignados al rol ${role.name}`);
         }
-      } catch (error:any) {
+      } catch (error) {
         console.log(`  \u26A0\uFE0F  Rol ya existe: ${role.name}`);
       }
     }
@@ -2580,21 +3526,22 @@ async function seedDatabase2() {
       try {
         const result = await authService.register({
           email: user.email,
-          password: user.password,
-          firstName: user.firstName,
-          lastName: user.lastName
+          password: user.password
         });
-        if (result.success && result.data) {
+        if (result) {
           console.log(`  \u2705 Usuario creado: ${user.email}`);
           for (const roleName of user.roles) {
             const roleId = createdRoles.get(roleName);
-            if (roleId) {
-              await permissionService.assignRoleToUser(result.data.user.id, roleId);
+            if (roleId && result.user) {
+              await permissionService.assignRoleToUser({
+                roleId,
+                userId: result.user?.id
+              });
             }
           }
           console.log(`    \uD83C\uDFAD Roles asignados al usuario ${user.email}`);
         }
-      } catch (error:any) {
+      } catch (error) {
         console.log(`  \u26A0\uFE0F  Usuario ya existe: ${user.email}`);
       }
     }
@@ -2611,22 +3558,20 @@ async function seedDatabase2() {
     console.log("  Editor: editor@example.com / Editor123!");
     console.log("  Author: author@example.com / Author123!");
     console.log("  User: user@example.com / User123!");
-  } catch (error:any) {
+  } catch (error) {
     console.error("\u274C Error durante el seeding:", error);
     throw error;
   }
 }
 async function cleanDatabase2() {
   try {
-    console.log("\uD83E\uDDF9 Limpiando base de datos...");
     if (!isDatabaseInitialized()) {
-      console.log("\u26A0\uFE0F Base de datos no inicializada, inicializando...");
       initDatabase2("./test.db");
     }
     let db2 = getDatabase();
     try {
       db2.exec("PRAGMA foreign_keys = OFF");
-    } catch (error:any) {
+    } catch (error) {
       if (error instanceof Error && (error.message.includes("Database has closed") || error.message.includes("Cannot use a closed database"))) {
         console.log("\uD83D\uDD04 Database was closed during operation, force reinitializing...");
         db2 = forceReinitDatabase();
@@ -2646,14 +3591,12 @@ async function cleanDatabase2() {
     for (const table of tables) {
       try {
         db2.exec(`DELETE FROM ${table}`);
-        console.log(`  \u2705 Tabla ${table} limpiada`);
-      } catch (error:any) {
+      } catch (error) {
         console.log(`  \u26A0\uFE0F  Error limpiando tabla ${table}:`, error);
       }
     }
     db2.exec("PRAGMA foreign_keys = ON");
-    console.log("\u2728 Base de datos limpiada exitosamente!");
-  } catch (error:any) {
+  } catch (error) {
     console.error("\u274C Error durante la limpieza:", error);
     throw error;
   }
@@ -2664,7 +3607,7 @@ async function resetDatabase3() {
     await cleanDatabase2();
     await seedDatabase2();
     console.log("\u2728 Base de datos reseteada exitosamente!");
-  } catch (error:any) {
+  } catch (error) {
     console.error("\u274C Error durante el reseteo:", error);
     throw error;
   }
@@ -2680,7 +3623,7 @@ async function checkDatabaseStatus2() {
       try {
         const result = db2.query(`SELECT COUNT(*) as count FROM ${table}`).get();
         console.log(`  ${table}: ${result.count} registros`);
-      } catch (error:any) {
+      } catch (error) {
         console.log(`  ${table}: Tabla no existe`);
       }
     }
@@ -2700,10 +3643,10 @@ async function checkDatabaseStatus2() {
           console.log(`  ${user.email}: ${user.roles || "Sin roles"}`);
         });
       }
-    } catch (error:any) {
+    } catch (error) {
       console.log("  \u26A0\uFE0F  No se pudieron obtener usuarios con roles");
     }
-  } catch (error:any) {
+  } catch (error) {
     console.error("\u274C Error verificando estado:", error);
     throw error;
   }
@@ -2828,7 +3771,7 @@ async function runDevCommand(command, ...args) {
         showHelp();
         break;
     }
-  } catch (error:any) {
+  } catch (error) {
     console.error(`\u274C Error ejecutando comando ${command}:`, error);
     process.exit(1);
   }
@@ -2847,7 +3790,7 @@ async function createUser(args) {
     firstName,
     lastName
   });
-  if (!result) {
+  if (!result || !result.user) {
     console.error("\u274C Error creando usuario:", result);
     return;
   }
@@ -2855,12 +3798,12 @@ async function createUser(args) {
   if (roles.length > 0) {
     for (const roleName of roles) {
       try {
-        const roleResult = await permissionService.getRoleByName(roleName);
-        if (roleResult.success && roleResult) {
-          await permissionService.assignRoleToUser(result.user.id, roleResult.id);
+        const role = await permissionService.findRoleByName(roleName);
+        if (role) {
+          await permissionService.assignRoleToUser({ userId: result.user.id, roleId: role.id });
           console.log(`  \uD83C\uDFAD Rol asignado: ${roleName}`);
         }
-      } catch (error:any) {
+      } catch (error) {
         console.log(`  \u26A0\uFE0F  No se pudo asignar rol: ${roleName}`);
       }
     }
@@ -2913,14 +3856,14 @@ async function assignUserRoles(args) {
   console.log(`\uD83D\uDC64 Asignando roles al usuario: ${email}`);
   for (const roleName of roles) {
     try {
-      const roleResult = await permissionService.getRoleByName(roleName);
-      if (roleResult.success && roleResult) {
-        await permissionService.assignRoleToUser(user.id, roleResult.id);
+      const role = await permissionService.findRoleByName(roleName);
+      if (role) {
+        await permissionService.assignRoleToUser({ userId: user.id, roleId: role.id });
         console.log(`  \u2705 Rol asignado: ${roleName}`);
       } else {
         console.log(`  \u274C Rol no encontrado: ${roleName}`);
       }
-    } catch (error:any) {
+    } catch (error) {
       console.log(`  \u26A0\uFE0F  Error asignando rol ${roleName}:`, error);
     }
   }
@@ -2954,16 +3897,15 @@ async function createRole(args) {
     console.error("\u274C Error creando rol:", result.error);
     return;
   }
-  console.log(`\u2705 Rol creado: ${name} (ID: ${result.id})`);
   if (permissions.length > 0) {
     for (const permissionName of permissions) {
       try {
-        const permResult = await permissionService.getPermissionByName(permissionName);
-        if (permResult.success && permResult) {
-          await permissionService.assignPermissionToRole(result.id, permResult.id);
+        const permission = await permissionService.findPermissionByName(permissionName);
+        if (permission) {
+          await permissionService.assignPermissionToRole(result.role.id, permission.id);
           console.log(`  \uD83D\uDCCB Permiso asignado: ${permissionName}`);
         }
-      } catch (error:any) {
+      } catch (error) {
         console.log(`  \u26A0\uFE0F  No se pudo asignar permiso: ${permissionName}`);
       }
     }
@@ -2994,7 +3936,7 @@ async function getRoleByName(args) {
     } else {
       console.log("  \uD83D\uDD10 Permisos: Sin permisos asignados");
     }
-  } catch (error:any) {
+  } catch (error) {
     console.error(`\u274C Error obteniendo rol: ${error}`);
   }
 }
@@ -3038,7 +3980,6 @@ async function createPermission(args) {
     console.error("\u274C Error creando permiso:", result.error);
     return;
   }
-  console.log(`\u2705 Permiso creado: ${name} (ID: ${result.id})`);
 }
 async function listPermissions() {
   const db2 = getDatabase();
@@ -3066,19 +4007,19 @@ async function generateJWT(args) {
   }
   const email = args[0];
   const authService = new AuthService2;
-  const user = await authService.findUserByEmail(email);
+  const user = await authService.findUserByEmail(email, { includeRoles: true });
   if (!user) {
     console.error(`\u274C Usuario no encontrado: ${email}`);
     return;
   }
   const jwtService = new JWTService2(DEV_CONFIG2.jwtSecret);
+  const token = await jwtService.generateToken(user);
+  const refreshToken = await jwtService.generateRefreshToken(Number(user.id));
   const payload = {
     userId: user.id,
     email: user.email,
-    roles: user.roles.map((r) => r.name)
+    roles: user.roles?.map((r) => r.name) || []
   };
-  const token = jwtService.generateToken(payload, DEV_CONFIG2.jwtExpiration);
-  const refreshToken = jwtService.generateRefreshToken(user.id, DEV_CONFIG2.refreshTokenExpiration);
   console.log("\uD83C\uDFAB Tokens generados:");
   console.log(`Access Token: ${token}`);
   console.log(`Refresh Token: ${refreshToken}`);
@@ -3095,7 +4036,7 @@ async function verifyJWT(token) {
     const payload = jwtService.verifyToken(token);
     console.log("\u2705 Token v\xE1lido");
     console.log(`Payload: ${JSON.stringify(payload, null, 2)}`);
-  } catch (error:any) {
+  } catch (error) {
     console.error("\u274C Token inv\xE1lido:", error);
   }
 }
@@ -3121,9 +4062,9 @@ async function testAuthentication() {
     email: "test@example.com",
     password: "Test123!"
   });
-  if (loginResult.success && loginResult) {
+  if (loginResult.success && loginResult.token) {
     console.log("\u2705 Login exitoso");
-    console.log(`Token: ${loginResult.accessToken.substring(0, 50)}...`);
+    console.log(`Token: ${loginResult.token.substring(0, 50)}...`);
   } else {
     console.log("\u274C Error en login:", loginResult.error);
   }
@@ -3206,7 +4147,7 @@ class AuthLibrary {
       initDatabase();
       await runMigrations();
       console.log("\u2705 Auth Library inicializada correctamente");
-    } catch (error:any) {
+    } catch (error) {
       console.error("\u274C Error inicializando Auth Library:", error);
       throw error;
     }
@@ -3441,5 +4382,5 @@ export {
   AUTH_LIBRARY_INFO
 };
 
-//# debugId=ECAD094F5D364E7664756E2164756E21
+//# debugId=04605040B768157964756E2164756E21
 //# sourceMappingURL=index.js.map

@@ -36,8 +36,12 @@ export function honoAuthMiddleware(config: AuthMiddlewareConfig = {}) {
       }
 
       // Convertir request de Hono a formato agnóstico
+      const headers: Record<string, string> = {};
+      c.req.raw.headers.forEach((value, key) => {
+        headers[key] = value;
+      });
       const authRequest: AuthRequest = {
-        headers: Object.fromEntries(c.req.header())
+        headers
       };
 
       // Ejecutar autenticación
@@ -58,7 +62,7 @@ export function honoAuthMiddleware(config: AuthMiddlewareConfig = {}) {
             error: result.error,
             timestamp: new Date().toISOString()
           },
-          result.statusCode || 401
+          (result.statusCode || 401) as any
         );
       }
 
@@ -262,7 +266,11 @@ export function honoRateLimit(
 
   return async (c: Context, next: Next) => {
     const authContext = c.get('auth');
-    const clientId = authContext?.user?.id || extractClientIP(Object.fromEntries(c.req.header()));
+    const headers: Record<string, string> = {};
+    c.req.raw.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+    const clientId = authContext?.user?.id || extractClientIP(headers);
     const now = Date.now();
     
     const clientData = requests.get(clientId);
@@ -307,7 +315,7 @@ export function honoCorsAuth(origins: string[] = ['*']) {
     }
 
     if (c.req.method === 'OPTIONS') {
-      return c.text('', 204);
+      return c.text('', 204 as any);
     }
 
     await next();
@@ -332,7 +340,7 @@ export function honoErrorResponse(
       path: c.req.path,
       method: c.req.method
     },
-    statusCode
+    statusCode as any
   );
 }
 
@@ -359,7 +367,7 @@ export function honoSuccessResponse(
     response.message = message;
   }
 
-  return c.json(response, statusCode);
+  return c.json(response, statusCode as any);
 }
 
 /**
@@ -373,14 +381,18 @@ export function honoAuthLogger() {
     await next();
     
     const duration = Date.now() - start;
+    const headers: Record<string, string> = {};
+    c.req.raw.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
     const logData = {
       method: c.req.method,
       path: c.req.path,
       status: c.res.status,
       duration: `${duration}ms`,
       userId: authContext?.user?.id,
-      ip: extractClientIP(Object.fromEntries(c.req.header())),
-      userAgent: extractUserAgent(Object.fromEntries(c.req.header()))
+      ip: extractClientIP(headers),
+      userAgent: extractUserAgent(headers)
     };
     
     console.log(`📝 Request: ${JSON.stringify(logData)}`);

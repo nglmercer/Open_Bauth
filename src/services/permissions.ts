@@ -57,7 +57,7 @@ export class PermissionService {
       const query = db.query(
         "INSERT INTO permissions (id, name, resource, action, description, created_at) VALUES (?, ?, ?, ?, ?, datetime('now'))"
       );
-      query.run(permissionId, data.name, data.resource, data.action, data.description || null);
+      query.run(permissionId, data.name, data.resource || 'default', data.action || 'read', data.description || null);
 
       // Obtener el permiso creado
       const permission = await this.findPermissionById(permissionId);
@@ -198,7 +198,7 @@ export class PermissionService {
       const existingQuery = db.query(
         "SELECT id FROM user_roles WHERE user_id = ? AND role_id = ?"
       );
-      const existingAssignment = existingQuery.all(data.userId, data.roleId);
+      const existingAssignment = existingQuery.all(data.userId, data.roleId) as any[];
 
       if (existingAssignment.length > 0) {
         return {
@@ -299,7 +299,7 @@ export class PermissionService {
         const existingQuery = db.query(
           "SELECT id FROM role_permissions WHERE role_id = ? AND permission_id = ?"
         );
-        const existing = existingQuery.get(roleId, permissionId);
+        const existing = existingQuery.get(roleId, permissionId) as any;
         
         if (existing) {
           return {
@@ -410,8 +410,9 @@ export class PermissionService {
       );
       query.run(
         data.name || existingPermission.name,
-        data.resource !== undefined ? data.resource : existingPermission.resource,
-        data.action !== undefined ? data.actior?     data.description !== undefined ? data.description : existingPermission.description,
+        data.resource || existingPermission.resource,
+        data.action || existingPermission.action,
+        data.description !== undefined ? data.description : (existingPermission.description || null),
         id
       );
 
@@ -520,7 +521,7 @@ export class PermissionService {
       );
       query.run(
         data.name || existingRole.name,
-        data.description !== undefined ? data.description : existingRole.description,
+        data.description !== undefined ? data.description : (existingRole.description || null),
         data.isActive !== undefined ? (data.isActive ? 1 : 0) : (existingRole.isActive ? 1 : 0),
         id
       );
@@ -530,7 +531,7 @@ export class PermissionService {
       
       return {
         success: true,
-        role: updatedRole
+        role: updatedRole || undefined
       };
     } catch (error:any) {
       console.error('Error updating role:', error);
@@ -877,9 +878,9 @@ export class PermissionService {
         WHERE ur.user_id = ?
         ORDER BY p.resource, p.action
       `);
-      const result = query.all(userId);
+      const result = query.all(userId) as any[];
 
-      return result.map(row => ({
+      return result.map((row: any) => ({
         id: row.id,
         name: row.name,
         resource: row.resource,
@@ -905,7 +906,7 @@ export class PermissionService {
       const query = db.query(
         "SELECT id, name, resource, action, description, created_at FROM permissions WHERE id = ?"
       );
-      const result = query.get(id);
+      const result = query.get(id) as any;
 
       if (!result) {
         return null;
@@ -937,7 +938,7 @@ export class PermissionService {
       const query = db.query(
         "SELECT id, name, resource, action, description, created_at FROM permissions WHERE name = ?"
       );
-      const result = query.get(name);
+      const result = query.get(name) as any;
 
       if (!result) {
         return null;
@@ -970,7 +971,7 @@ export class PermissionService {
       const query = db.query(
         "SELECT id, name, description, created_at, is_active FROM roles WHERE id = ?"
       );
-      const result = query.get(id);
+      const result = query.get(id) as any;
 
       if (!result) {
         return null;
@@ -1009,7 +1010,7 @@ export class PermissionService {
       const query = db.query(
         "SELECT id, name, description, created_at, is_active FROM roles WHERE name = ?"
       );
-      const result = query.get(name);
+      const result = query.get(name) as any;
 
       if (!result) {
         return null;
@@ -1052,7 +1053,7 @@ export class PermissionService {
         ORDER BY p.resource, p.action
       `).all(roleId);
 
-      return result.map(row => ({
+      return result.map((row: any) => ({
         id: row.id,
         name: row.name,
         resource: row.resource,
@@ -1080,10 +1081,10 @@ export class PermissionService {
         FROM roles
         ORDER BY name
       `);
-      const result = query.all();
+      const result = query.all() as any[];
 
       const roles = [];
-      for (const row of result) {
+      for (const row of result as any[]) {
         const role: Role = {
           id: row.id,
           name: row.name,
@@ -1120,9 +1121,9 @@ export class PermissionService {
         FROM permissions
         ORDER BY resource, action
       `);
-      const result = query.all();
+      const result = query.all() as any[];
 
-      return result.map(row => ({
+      return result.map((row: any) => ({
         id: row.id,
         name: row.name,
         resource: row.resource,
@@ -1178,7 +1179,7 @@ export class PermissionService {
     try {
       const db = getDatabase();
       const query = db.query("SELECT id FROM users WHERE id = ?");
-      const result = query.get(userId);
+      const result = query.get(userId) as any;
       return !!result;
     } catch (error:any) {
       console.error('Error checking user existence:', error);
@@ -1190,7 +1191,7 @@ export class PermissionService {
     try {
       const db = getDatabase();
       const query = db.query("SELECT id FROM roles WHERE id = ?");
-      const result = query.get(roleId);
+      const result = query.get(roleId) as any;
       return !!result;
     } catch (error:any) {
       console.error('Error checking role existence:', error);
@@ -1202,7 +1203,7 @@ export class PermissionService {
     try {
       const db = getDatabase();
       const query = db.query("SELECT id FROM permissions WHERE id = ?");
-      const result = query.get(permissionId);
+      const result = query.get(permissionId) as any;
       return !!result;
     } catch (error:any) {
       console.error('Error checking permission existence:', error);

@@ -60,8 +60,46 @@ export interface AuthContext {
  */
 export interface AuthConfig {
   jwtSecret: string;
-  jwtExpiresIn: string;
-  dbPath: string;
+  jwtExpiration: string;
+  refreshTokenExpiration: string;
+  database: {
+    path: string;
+    enableWAL: boolean;
+    enableForeignKeys: boolean;
+    busyTimeout: number;
+  };
+  security: {
+    bcryptRounds: number;
+    maxLoginAttempts: number;
+    lockoutDuration: number;
+    sessionTimeout: number;
+    requireEmailVerification: boolean;
+    allowMultipleSessions: boolean;
+    passwordMinLength: number;
+    passwordRequireUppercase: boolean;
+    passwordRequireLowercase: boolean;
+    passwordRequireNumbers: boolean;
+    passwordRequireSymbols: boolean;
+  };
+  cors: {
+    origins: string[];
+    credentials: boolean;
+    methods: string[];
+    headers: string[];
+  };
+  rateLimit: {
+    windowMs: number;
+    maxRequests: number;
+    skipSuccessfulRequests: boolean;
+    skipFailedRequests: boolean;
+  };
+  logging: {
+    level: 'debug' | 'info' | 'warn' | 'error';
+    enableConsole: boolean;
+    enableFile: boolean;
+    filePath: string;
+    enableDatabase: boolean;
+  };
 }
 
 /**
@@ -297,14 +335,37 @@ export interface AuthEventData {
  * Configuración de seguridad
  */
 export interface SecurityConfig {
-  passwordMinLength: number;
-  passwordRequireUppercase: boolean;
-  passwordRequireLowercase: boolean;
-  passwordRequireNumbers: boolean;
-  passwordRequireSymbols: boolean;
-  maxLoginAttempts: number;
-  lockoutDuration: number; // en minutos
-  sessionTimeout: number; // en minutos
+  // Configuración de headers de seguridad
+  securityHeaders: {
+    [key: string]: string;
+  };
+  
+  // Configuración de cookies
+  cookies: {
+    httpOnly: boolean;
+    secure: boolean;
+    sameSite: 'strict' | 'lax' | 'none';
+    maxAge: number;
+  };
+  
+  // Configuración de validación de entrada
+  validation: {
+    maxEmailLength: number;
+    maxNameLength: number;
+    maxPasswordLength: number;
+    allowedEmailDomains?: string[];
+    blockedEmailDomains: string[];
+  };
+  
+  // Configuración de IP y geolocalización
+  ipSecurity: {
+    enableGeoBlocking: boolean;
+    blockedCountries: string[];
+    enableIPWhitelist: boolean;
+    ipWhitelist: string[];
+    enableIPBlacklist: boolean;
+    ipBlacklist: string[];
+  };
 }
 
 /**

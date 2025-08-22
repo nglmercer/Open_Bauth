@@ -20,7 +20,7 @@ describe('Auth Middleware', () => {
   let authService: AuthService;
   let jwtService: JWTService;
   let permissionService: PermissionService;
-  let testUserId: number;
+  let testUserId: number |string;
   let testToken: string;
   let mockRequest: AuthRequest;
   let mockResponse: AuthResponse;

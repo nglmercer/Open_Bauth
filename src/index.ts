@@ -6,6 +6,78 @@ export { AuthService } from './services/auth';
 export { JWTService } from './services/jwt';
 export { PermissionService } from './services/permissions';
 
+// Importaciones para uso interno
+import { AuthService } from './services/auth';
+import { JWTService } from './services/jwt';
+import { PermissionService } from './services/permissions';
+import { 
+  getAuthConfig, 
+  validateAuthConfig
+} from './config/auth';
+import { type AuthConfig } from './types/auth';
+import {
+  authenticateWebSocket,
+  checkWebSocketPermissions,
+  checkWebSocketRoles,
+  getWebSocketCurrentUser,
+  isWebSocketAuthenticated,
+  getWebSocketAuthContext,
+  sendToUser,
+  sendToUsersWithPermissions,
+  sendToUsersWithRoles,
+  broadcastToAuthenticated,
+  getConnectionStats,
+  disconnectUser,
+  cleanupInactiveConnections,
+  handleAuthenticatedMessage,
+  createWebSocketResponse,
+  initializeConnectionCleanup
+} from './adapters/websocket';
+import { 
+  initDatabase, 
+  closeDatabase 
+} from './db/connection';
+import { runMigrations } from './db/migrations';
+import { 
+  seedDatabase, 
+  cleanDatabase, 
+  resetDatabase, 
+  checkDatabaseStatus 
+} from './scripts/seed';
+import {
+  honoAuthMiddleware,
+  honoOptionalAuth,
+  honoRequireAuth,
+  honoRequirePermissions,
+  honoRequireRoles,
+  honoRequireAdmin,
+  honoRequireModerator,
+  honoRequireOwnership,
+  honoRateLimit,
+  honoCorsAuth,
+  honoErrorResponse,
+  honoSuccessResponse,
+  honoAuthLogger
+} from './adapters/hono';
+import {
+  expressAuthMiddleware,
+  expressOptionalAuth,
+  expressRequireAuth,
+  expressRequirePermissions,
+  expressRequireRoles,
+  expressRequireAdmin,
+  expressRequireModerator,
+  expressRequireOwnership,
+  expressRateLimit,
+  expressCorsAuth,
+  expressErrorResponse,
+  expressSuccessResponse,
+  expressAuthLogger,
+  expressAuthErrorHandler,
+  expressJsonValidator,
+  expressSanitizer
+} from './adapters/express';
+
 // Middleware agnóstico
 export {
   authenticateRequest,
