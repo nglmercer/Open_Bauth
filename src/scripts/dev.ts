@@ -203,9 +203,9 @@ async function createUser(args: string[]): Promise<void> {
   if (roles.length > 0) {
     for (const roleName of roles) {
       try {
-        const roleResult = await permissionService.getRoleByName(roleName);
-        if (roleResult.success && roleResult) {
-          await permissionService.assignRoleToUser(result.user.id, roleResult.id);
+        const role = await permissionService.findRoleByName(roleName);
+        if (role) {
+          await permissionService.assignRoleToUser({userId: result.user.id, roleId: role.id});
           console.log(`  🎭 Rol asignado: ${roleName}`);
         }
       } catch (error:any) {
@@ -277,9 +277,9 @@ async function assignUserRoles(args: string[]): Promise<void> {
   
   for (const roleName of roles) {
     try {
-      const roleResult = await permissionService.getRoleByName(roleName);
-      if (roleResult.success && roleResult) {
-        await permissionService.assignRoleToUser(user.id, roleResult.id);
+      const role = await permissionService.findRoleByName(roleName);
+      if (role) {
+        await permissionService.assignRoleToUser({userId: user.id, roleId: role.id});
         console.log(`  ✅ Rol asignado: ${roleName}`);
       } else {
         console.log(`  ❌ Rol no encontrado: ${roleName}`);
@@ -342,9 +342,9 @@ async function createRole(args: string[]): Promise<void> {
   if (permissions.length > 0) {
     for (const permissionName of permissions) {
       try {
-        const permResult = await permissionService.getPermissionByName(permissionName);
-        if (permResult.success && permResult) {
-          await permissionService.assignPermissionToRole(result.id, permResult.id);
+        const permission = await permissionService.findPermissionByName(permissionName);
+        if (permission) {
+          await permissionService.assignPermissionToRole(result.role!.id, permission.id);
           console.log(`  📋 Permiso asignado: ${permissionName}`);
         }
       } catch (error:any) {
@@ -489,7 +489,7 @@ async function generateJWT(args: string[]): Promise<void> {
   const email = args[0];
   
   const authService = new AuthService();
-  const user = await authService.findUserByEmail(email);
+  const user = await authService.findUserByEmail(email, { includeRoles: true });
   
   if (!user) {
     console.error(`❌ Usuario no encontrado: ${email}`);
@@ -498,14 +498,14 @@ async function generateJWT(args: string[]): Promise<void> {
   
   const jwtService = new JWTService(DEV_CONFIG.jwtSecret);
   
+  const token = await jwtService.generateToken(user);
+  const refreshToken = await jwtService.generateRefreshToken(Number(user.id));
+  
   const payload = {
     userId: user.id,
     email: user.email,
-    roles: user.roles.map(r => r.name)
+    roles: user.roles?.map(r => r.name) || []
   };
-  
-  const token = jwtService.generateToken(payload, DEV_CONFIG.jwtExpiration);
-  const refreshToken = jwtService.generateRefreshToken(user.id, DEV_CONFIG.refreshTokenExpiration);
   
   console.log('🎫 Tokens generados:');
   console.log(`Access Token: ${token}`);
@@ -563,9 +563,9 @@ async function testAuthentication(): Promise<void> {
     password: 'Test123!'
   });
   
-  if (loginResult.success && loginResult) {
+  if (loginResult.success && loginResult.token) {
     console.log('✅ Login exitoso');
-    console.log(`Token: ${loginResult.accessToken.substring(0, 50)}...`);
+    console.log(`Token: ${loginResult.token.substring(0, 50)}...`);
   } else {
     console.log('❌ Error en login:', loginResult.error);
   }

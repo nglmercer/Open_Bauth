@@ -303,7 +303,7 @@ export class BunTestUtils {
     };
     
     (mockFn as any).mockRejectedValueOnce = (error: any) => {
-      mockFn.mockImplementationOnce(() => Promise.reject(error:any));
+      mockFn.mockImplementationOnce(() => Promise.reject(error));
       return mockFn;
     };
     

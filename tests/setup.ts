@@ -161,7 +161,7 @@ export const testUtils = {
   async generateTestJWT(payload = {}, options = {}) {
     try {
       const { JWTService } = require('../src/services/jwt');
-      const { expiresIn = '24h' } = options;
+      const { expiresIn = '24h' } = options as any;
       const jwtService = new JWTService(TEST_JWT_SECRET, expiresIn);
       
       // Create a proper User object for JWT generation

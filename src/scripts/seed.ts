@@ -176,8 +176,8 @@ export async function seedDatabase(): Promise<void> {
     for (const permission of initialPermissions) {
       try {
         const result = await permissionService.createPermission(permission);
-        if (result) {
-          createdPermissions.set(permission.name, result.id);
+        if (result && result.role) {
+          createdPermissions.set(permission.name, result.role.id);
         }
       } catch (error:any) {
         console.log(`  ⚠️  Permiso ya existe: ${permission.name}`);
@@ -195,14 +195,14 @@ export async function seedDatabase(): Promise<void> {
           description: role.description
         });
         
-        if (result && result) {
-          createdRoles.set(role.name, result.id);
+        if (result && result.role) {
+          createdRoles.set(role.name, result.role?.id);
           
           // Asignar permisos al rol
           for (const permissionName of role.permissionIds || []) {
             const permissionId = createdPermissions.get(permissionName);
             if (permissionId) {
-              await permissionService.assignPermissionsToRole(result.id, [permissionId]);
+              await permissionService.assignPermissionsToRole(result.role?.id, [permissionId]);
             }
           }
         }
@@ -227,10 +227,10 @@ export async function seedDatabase(): Promise<void> {
           // Asignar roles al usuario
           for (const roleName of user.roles) {
             const roleId = createdRoles.get(roleName);
-            if (roleId) {
+            if (roleId && result.user) {
               await permissionService.assignRoleToUser({
                 roleId: roleId,
-                userId: result.user.id
+                userId: result.user?.id,
               });
             }
           }

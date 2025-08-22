@@ -35,6 +35,7 @@ interface MockWebSocket extends Partial<AuthenticatedWebSocket> {
   ping: ReturnType<typeof mock>;
   pong: ReturnType<typeof mock>;
   terminate: ReturnType<typeof mock>;
+  on: ReturnType<typeof mock>;
   readyState: number;
   url?: string;
   protocol?: string;
@@ -54,6 +55,7 @@ function createMockWebSocket(options: Partial<MockWebSocket> = {}): MockWebSocke
     ping: mock(() => {}),
     pong: mock(() => {}),
     terminate: mock(() => {}),
+    on: mock(() => {}),
     readyState: 1, // OPEN
     url: 'ws://localhost:3000',
     protocol: '',
@@ -177,7 +179,10 @@ describe('WebSocket Adapter', () => {
           id: testUserId,
           email: 'test@example.com',
           permissions: [{ name: 'chat:send', resource: 'chat', action: 'send' }],
-          roles: []
+          roles: [{
+            name: 'user',
+            permissions: [{ name: 'chat:send', resource: 'chat', action: 'send' }]
+          }]
         },
         isAuthenticated: true,
         permissions: ['chat:send'],

@@ -38,8 +38,9 @@ describe('Dev CLI Commands', () => {
       });
       
       const createdRole = await permissionService.createRole(roleData);
-      expect(createdRole).toBeDefined();
-      expect(createdRole.name).toBe('test_role');
+      expect(createdRole.success).toBe(true);
+      expect(createdRole.role).toBeDefined();
+      expect(createdRole.role!.name).toBe('test_role');
       
       // Crear un permiso y asignarlo al rol
       const permissionData = testUtils.generateTestPermission({
@@ -49,12 +50,13 @@ describe('Dev CLI Commands', () => {
       });
       
       const createdPermission = await permissionService.createPermission(permissionData);
-      expect(createdPermission).toBeDefined();
-      expect(createdPermission.name).toBe('test_permission');
+      expect(createdPermission.success).toBe(true);
+      expect(createdPermission.permission).toBeDefined();
+      expect(createdPermission.permission!.name).toBe('test_permission');
       
       await permissionService.assignPermissionsToRole(
-        createdRole.id,
-        [createdPermission.id]
+        createdRole.role!.id,
+        [createdPermission.permission!.id]
       );
       
       // Ejecutar comando role:get
@@ -63,7 +65,7 @@ describe('Dev CLI Commands', () => {
       // Verificar que se mostraron los datos correctos
       expect(consoleSpy).toHaveBeenCalledWith('🎭 Información del rol:');
       expect(consoleSpy).toHaveBeenCalledWith('  📋 Nombre: test_role');
-      expect(consoleSpy).toHaveBeenCalledWith(`  🆔 ID: ${createdRole.id}`);
+      expect(consoleSpy).toHaveBeenCalledWith(`  🆔 ID: ${createdRole.role!.id}`);
       expect(consoleSpy).toHaveBeenCalledWith('  🔐 Permisos:');
       expect(consoleSpy).toHaveBeenCalledWith('    - test_permission (test_resource:read)');
     });
@@ -92,8 +94,9 @@ describe('Dev CLI Commands', () => {
       });
       
       const createdRole = await permissionService.createRole(roleData);
-      expect(createdRole).toBeDefined();
-      expect(createdRole.name).toBe('empty_role');
+      expect(createdRole.success).toBe(true);
+      expect(createdRole.role).toBeDefined();
+      expect(createdRole.role!.name).toBe('empty_role');
       
       // Ejecutar comando role:get
       await runDevCommand('role:get', 'empty_role');
@@ -101,7 +104,7 @@ describe('Dev CLI Commands', () => {
       // Verificar que se mostraron los datos correctos
       expect(consoleSpy).toHaveBeenCalledWith('🎭 Información del rol:');
       expect(consoleSpy).toHaveBeenCalledWith('  📋 Nombre: empty_role');
-      expect(consoleSpy).toHaveBeenCalledWith(`  🆔 ID: ${createdRole.id}`);
+      expect(consoleSpy).toHaveBeenCalledWith(`  🆔 ID: ${createdRole.role!.id}`);
       expect(consoleSpy).toHaveBeenCalledWith('  🔐 Permisos: Sin permisos asignados');
     });
 
@@ -113,8 +116,9 @@ describe('Dev CLI Commands', () => {
       });
       
       const createdRole = await permissionService.createRole(roleData);
-      expect(createdRole).toBeDefined();
-      expect(createdRole.name).toBe('multi_perm_role');
+      expect(createdRole.success).toBe(true);
+      expect(createdRole.role).toBeDefined();
+      expect(createdRole.role!.name).toBe('multi_perm_role');
       
       // Crear múltiples permisos
       const permissions = [
@@ -127,14 +131,15 @@ describe('Dev CLI Commands', () => {
       for (const perm of permissions) {
         const permissionData = testUtils.generateTestPermission(perm);
         const createdPermission = await permissionService.createPermission(permissionData);
-        expect(createdPermission).toBeDefined();
-        expect(createdPermission.name).toBe(perm.name);
-        createdPermissions.push(createdPermission);
+        expect(createdPermission.success).toBe(true);
+        expect(createdPermission.permission).toBeDefined();
+        expect(createdPermission.permission!.name).toBe(perm.name);
+        createdPermissions.push(createdPermission.permission!);
       }
       
       // Assign all permissions to the role at once
       await permissionService.assignPermissionsToRole(
-        createdRole.id,
+        createdRole.role!.id,
         createdPermissions.map(p => p.id)
       );
       

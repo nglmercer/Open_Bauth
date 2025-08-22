@@ -410,9 +410,8 @@ export class PermissionService {
       );
       query.run(
         data.name || existingPermission.name,
-        data.resource || existingPermission.resource,
-        data.action || existingPermission.action,
-        data.description !== undefined ? data.description : existingPermission.description,
+        data.resource !== undefined ? data.resource : existingPermission.resource,
+        data.action !== undefined ? data.actior?     data.description !== undefined ? data.description : existingPermission.description,
         id
       );
 

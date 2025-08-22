@@ -9,7 +9,9 @@ import type {
   UserQueryOptions,
   UpdateUserData,
   AuthError,
-  AuthErrorType 
+  AuthErrorType,
+  Role,
+  Permission 
 } from '../types/auth';
 
 /**
@@ -84,7 +86,7 @@ export class AuthService {
 
       // Generar token JWT
       const token = await jwtService.generateToken(user);
-      const refreshToken = await jwtService.generateRefreshToken(user.id);
+      const refreshToken = await jwtService.generateRefreshToken(Number(user.id));
 
       // Get updated user with lastLoginAt
       const updatedUser = await this.findUserById(user.id, { includeRoles: true, includePermissions: true });
@@ -179,7 +181,7 @@ export class AuthService {
 
       // Generar token JWT
       const token = await jwtService.generateToken(updatedUser);
-      const refreshToken = await jwtService.generateRefreshToken(updatedUser.id);
+      const refreshToken = await jwtService.generateRefreshToken(Number(updatedUser.id));
 
       console.log(`✅ Usuario autenticado: ${updatedUser.email}`);
 
@@ -218,7 +220,17 @@ export class AuthService {
         FROM users
         WHERE id = ?${activeCondition}
       `);
-      const userResult = query.all(id);
+      const userResult = query.all(id) as Array<{
+        id: string;
+        email: string;
+        password_hash: string;
+        first_name?: string;
+        last_name?: string;
+        created_at: string;
+        updated_at: string;
+        is_active: number;
+        last_login_at?: string;
+      }>;
 
       if (userResult.length === 0) {
         return null;
@@ -261,7 +273,17 @@ export class AuthService {
         query += ` AND is_active = 1`;
       }
 
-      const userResult = db.query(query).all(...params);
+      const userResult = db.query(query).all(...params) as Array<{
+        id: string;
+        email: string;
+        password_hash: string;
+        first_name?: string;
+        last_name?: string;
+        created_at: string;
+        updated_at: string;
+        is_active: number;
+        last_login_at?: string;
+      }>;
 
       if (userResult.length === 0) {
         return null;
@@ -288,7 +310,7 @@ export class AuthService {
    * @param includePermissions Si incluir permisos de los roles
    * @returns Array de roles
    */
-  async getUserRoles(userId: string, includePermissions: boolean = false) {
+  async getUserRoles(userId: string, includePermissions: boolean = false): Promise<Role[]> {
     try {
       const db = getDatabase();
 
@@ -299,16 +321,21 @@ export class AuthService {
         WHERE ur.user_id = ?
         ORDER BY r.name
       `);
-      const rolesResult = rolesQuery.all(userId);
+      const rolesResult = rolesQuery.all(userId) as Array<{
+        id: string;
+        name: string;
+        created_at: string;
+        is_active: number;
+      }>;
 
-      const roles = [];
+      const roles: Role[] = [];
       for (const roleData of rolesResult) {
-        const role = {
+        const role: Role = {
           id: roleData.id,
           name: roleData.name,
           created_at: new Date(roleData.created_at),
           isActive: Boolean(roleData.is_active),
-          permissions: []
+          permissions: [] as Permission[]
         };
 
         // Incluir permisos si se solicita
@@ -320,9 +347,15 @@ export class AuthService {
             WHERE rp.role_id = ?
             ORDER BY p.resource, p.action
           `);
-          const permissionsResult = permissionsQuery.all(role.id);
+          const permissionsResult = permissionsQuery.all(role.id) as Array<{
+            id: string;
+            name: string;
+            resource: string;
+            action: string;
+            created_at: string;
+          }>;
 
-          role.permissions = permissionsResult.map(permData => ({
+          role.permissions = permissionsResult.map((permData): Permission => ({
             id: permData.id,
             name: permData.name,
             resource: permData.resource,
@@ -770,7 +803,7 @@ export class AuthService {
 
       // Verificar que el rol existe
       const roleQuery = db.query("SELECT id FROM roles WHERE name = ?");
-      const role = roleQuery.get(roleName);
+      const role = roleQuery.get(roleName) as { id: string } | undefined;
       if (!role) {
         return {
           success: false,
@@ -875,16 +908,26 @@ export class AuthService {
 
       // Contar total de usuarios
       const countQuery = db.query(`SELECT COUNT(*) as total FROM users ${whereClause}`);
-      const countResult = countQuery.get(...queryParams) as any;
-      const total = countResult?.total || countResult?.['COUNT(*)'] || 0;
+      const countResult = countQuery.get(...queryParams) as { total: number } | { 'COUNT(*)': number } | undefined;
+      const total = (countResult as any)?.total || (countResult as any)?.["COUNT(*)"] || 0;
 
       // Obtener usuarios con paginación
       const usersQuery = db.query(
         `SELECT id, email, password_hash, first_name, last_name, created_at, updated_at, is_active, last_login_at FROM users ${whereClause} ${orderBy} LIMIT ? OFFSET ?`
       );
-      const usersResult = usersQuery.all(...queryParams, limit, offset);
+      const usersResult = usersQuery.all(...queryParams, limit, offset) as Array<{
+        id: string;
+        email: string;
+        password_hash: string;
+        first_name?: string;
+        last_name?: string;
+        created_at: string;
+        updated_at: string;
+        is_active: number;
+        last_login_at?: string;
+      }>;
 
-      const users = [];
+      const users: User[] = [];
       for (const userData of usersResult) {
         const user = this.mapDatabaseUserToUser(userData);
 
@@ -908,7 +951,17 @@ export class AuthService {
    * @param userData Raw user data from database
    * @returns User object with proper property names
    */
-  private mapDatabaseUserToUser(userData: any): User {
+  private mapDatabaseUserToUser(userData: {
+    id: string;
+    email: string;
+    password_hash: string;
+    first_name?: string;
+    last_name?: string;
+    created_at: string;
+    updated_at: string;
+    is_active: number;
+    last_login_at?: string;
+  }): User {
     const createdAt = new Date(userData.created_at);
     const updatedAt = new Date(userData.updated_at);
     
@@ -925,7 +978,7 @@ export class AuthService {
       is_active: Boolean(userData.is_active),
       isActive: Boolean(userData.is_active),
       lastLoginAt: userData.last_login_at ? new Date(userData.last_login_at) : undefined,
-      roles: []
+      roles: [] as Role[]
     };
   }
 }

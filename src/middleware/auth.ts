@@ -73,7 +73,12 @@ export async function authenticateRequest(
       }
 
       const jwtService = config.jwtService || getJWTService();
-      token = jwtService.extractTokenFromHeader(authHeader);
+      // For custom headers, use the token directly; for 'authorization', extract from Bearer format
+      if (tokenHeader === 'authorization') {
+        token = jwtService.extractTokenFromHeader(authHeader);
+      } else {
+        token = authHeader; // Custom headers contain the token directly
+      }
     }
     
     if (!token) {
