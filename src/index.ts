@@ -3,7 +3,7 @@
 
 // Servicios principales
 export { AuthService } from './services/auth';
-export { JWTService } from './services/jwt';
+export { JWTService,initJWTService } from './services/jwt';
 export { PermissionService } from './services/permissions';
 
 // Importaciones para uso interno
