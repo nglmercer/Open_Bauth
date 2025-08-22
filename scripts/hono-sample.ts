@@ -8,6 +8,8 @@ import {
   AuthService,
   PermissionService,
   initJWTService,
+  initAuthService,
+  initPermissionService,
   type RegisterData,
   type LoginData,
   type User
@@ -636,6 +638,9 @@ async function initializeApp() {
       jwtExpiration: '24h'
     })
     
+    // Initialize the global AuthService singleton
+    initAuthService()
+    initPermissionService()
     authService = authLibrary.getAuthService()
     permissionService = authLibrary.getPermissionService()
     

@@ -2,9 +2,9 @@
 // Punto de entrada principal de la librería de autenticación
 
 // Servicios principales
-export { AuthService } from './services/auth';
+export { AuthService, initAuthService, getAuthService } from './services/auth';
 export { JWTService,initJWTService } from './services/jwt';
-export { PermissionService } from './services/permissions';
+export { PermissionService,initPermissionService } from './services/permissions';
 
 // Importaciones para uso interno
 import { AuthService } from './services/auth';
