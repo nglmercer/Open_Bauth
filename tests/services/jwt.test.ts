@@ -9,13 +9,17 @@ describe('JWTService', () => {
   let jwtService: JWTService;
   const testSecret = 'test-jwt-secret-key-for-testing';
   const testUser = {
-    id: 1,
+    id: '1',
     email: 'test@example.com',
+    password_hash: 'test-hash',
     firstName: 'Test',
     lastName: 'User',
+    is_active: true,
     isActive: true,
-    roles: [{ name: 'user' }],
+    roles: [{ id: '1', name: 'user', permissions: [], created_at: new Date() }],
     permissions: ['read'],
+    created_at: new Date(),
+    updated_at: new Date(),
     createdAt: new Date(),
     updatedAt: new Date()
   };
@@ -145,7 +149,7 @@ describe('JWTService', () => {
 
   describe('Refresh Token Generation', () => {
     test('should generate refresh token', async () => {
-      const refreshToken = await jwtService.generateRefreshToken(testUser.id);
+      const refreshToken = await jwtService.generateRefreshToken(parseInt(testUser.id));
       
       expect(refreshToken).toBeDefined();
       expect(typeof refreshToken).toBe('string');
@@ -153,17 +157,17 @@ describe('JWTService', () => {
     });
 
     test('should generate refresh token with longer expiration', async () => {
-      const refreshToken = await jwtService.generateRefreshToken(testUser.id);
+      const refreshToken = await jwtService.generateRefreshToken(parseInt(testUser.id));
       const userId = await jwtService.verifyRefreshToken(refreshToken);
       
       expect(userId).toBeDefined();
-      expect(userId).toBe(testUser.id);
+      expect(userId).toBe(parseInt(testUser.id));
     });
 
     test('should generate different refresh tokens', async () => {
-      const token1 = await jwtService.generateRefreshToken(testUser.id);
+      const token1 = await jwtService.generateRefreshToken(parseInt(testUser.id));
       await new Promise(resolve => setTimeout(resolve, 1000)); // Ensure different timestamps
-      const token2 = await jwtService.generateRefreshToken(testUser.id);
+      const token2 = await jwtService.generateRefreshToken(parseInt(testUser.id));
       
       expect(token1).not.toBe(token2);
     });
@@ -171,13 +175,13 @@ describe('JWTService', () => {
 
   describe('Token Refresh', () => {
     test('should generate and verify refresh token', async () => {
-      const refreshToken = await jwtService.generateRefreshToken(testUser.id);
+      const refreshToken = await jwtService.generateRefreshToken(parseInt(testUser.id));
       
       expect(refreshToken).toBeDefined();
       expect(typeof refreshToken).toBe('string');
       
       const userId = await jwtService.verifyRefreshToken(refreshToken);
-      expect(userId).toBe(testUser.id);
+      expect(userId).toBe(parseInt(testUser.id));
     });
 
     test('should reject invalid refresh token', async () => {
@@ -202,7 +206,7 @@ describe('JWTService', () => {
 
     test('should reject expired refresh token', async () => {
       // Create a refresh token that expires immediately
-      const refreshToken = await jwtService.generateRefreshToken(testUser.id);
+      const refreshToken = await jwtService.generateRefreshToken(parseInt(testUser.id));
       
       // Wait a bit and then try to verify it (this test is more about the structure)
       await new Promise(resolve => setTimeout(resolve, 100));

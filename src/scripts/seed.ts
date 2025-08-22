@@ -381,7 +381,7 @@ export async function checkDatabaseStatus(): Promise<void> {
 }
 
 // Ejecutar seeding si el script se ejecuta directamente
-if (import.meta.main) {
+async function main() {
   const command = process.argv[2];
   
   switch (command) {
@@ -406,4 +406,9 @@ if (import.meta.main) {
   }
   
   process.exit(0);
+}
+
+// Check if this script is being run directly
+if (process.argv[1] && process.argv[1].endsWith('seed.ts')) {
+  main().catch(console.error);
 }

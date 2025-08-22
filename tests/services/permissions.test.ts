@@ -6,11 +6,12 @@ import { PermissionService } from '../../src/services/permissions';
 import { AuthService } from '../../src/services/auth';
 import { testUtils, TEST_TIMEOUTS } from '../setup';
 import type { CreatePermissionData, CreateRoleData } from '../../src/types/auth';
+import { AuthErrorType } from '../../src/types/auth';
 
 describe('PermissionService', () => {
   let permissionService: PermissionService;
   let authService: AuthService;
-  let testUserId: number;
+  let testUserId: string;
 
   beforeEach(async () => {
     permissionService = new PermissionService();
@@ -36,9 +37,9 @@ describe('PermissionService', () => {
       expect(result.success).toBe(true);
       expect(result.permission).toBeDefined();
       expect(result.permission?.name).toBe(permissionData.name);
-      expect(result.permission?.description).toBe(permissionData.description);
-      expect(result.permission?.resource).toBe(permissionData.resource);
-      expect(result.permission?.action).toBe(permissionData.action);
+      expect(result.permission?.description).toBe(permissionData?.description || '');
+      expect(result.permission?.resource).toBe(permissionData?.resource || '');
+      expect(result.permission?.action).toBe(permissionData?.action || '');
       testUtils.validatePermissionStructure(result.permission!);
     });
 
@@ -52,7 +53,7 @@ describe('PermissionService', () => {
       const result = await permissionService.createPermission(permissionData);
       
       expect(result.success).toBe(false);
-      expect(result.error?.type).toBe('VALIDATION_ERROR');
+      expect(result.error?.type).toBe(AuthErrorType.VALIDATION_ERROR);
       expect(result.error?.message).toContain('already exists');
     });
 
@@ -67,7 +68,7 @@ describe('PermissionService', () => {
       const result = await permissionService.createPermission(invalidData);
       
       expect(result.success).toBe(false);
-      expect(result.error?.type).toBe('VALIDATION_ERROR');
+      expect(result.error?.type).toBe(AuthErrorType.VALIDATION_ERROR);
     });
 
     test('should get all permissions', async () => {
@@ -148,7 +149,7 @@ describe('PermissionService', () => {
       expect(result.success).toBe(true);
       expect(result.role).toBeDefined();
       expect(result.role?.name).toBe(roleData.name);
-      expect(result.role?.description).toBe(roleData.description);
+      expect(result.role?.description).toBe(roleData?.description || '');
       expect(result.role?.isActive).toBe(true);
       testUtils.validateRoleStructure(result.role!);
     });
@@ -163,7 +164,7 @@ describe('PermissionService', () => {
       const result = await permissionService.createRole(roleData);
       
       expect(result.success).toBe(false);
-      expect(result.error?.type).toBe('VALIDATION_ERROR');
+      expect(result.error?.type).toBe(AuthErrorType.VALIDATION_ERROR);
       expect(result.error?.message).toContain('already exists');
     });
 
@@ -176,7 +177,7 @@ describe('PermissionService', () => {
       const result = await permissionService.createRole(invalidData);
       
       expect(result.success).toBe(false);
-      expect(result.error?.type).toBe('VALIDATION_ERROR');
+      expect(result.error?.type).toBe(AuthErrorType.VALIDATION_ERROR);
     });
 
     test('should get all roles', async () => {
@@ -251,8 +252,8 @@ describe('PermissionService', () => {
   });
 
   describe('Role-Permission Assignment', () => {
-    let roleId: number;
-    let permissionId: number;
+    let roleId: string;
+    let permissionId: string;
 
     beforeEach(async () => {
       // Crear rol y permiso de prueba
@@ -283,7 +284,7 @@ describe('PermissionService', () => {
       const result = await permissionService.assignPermissionToRole(roleId, permissionId);
       
       expect(result.success).toBe(false);
-      expect(result.error?.type).toBe('VALIDATION_ERROR');
+      expect(result.error?.type).toBe(AuthErrorType.VALIDATION_ERROR);
     });
 
     test('should remove permission from role', async () => {
@@ -323,19 +324,19 @@ describe('PermissionService', () => {
     });
 
     test('should handle non-existent role or permission', async () => {
-      const result1 = await permissionService.assignPermissionToRole(99999, permissionId);
+      const result1 = await permissionService.assignPermissionToRole('99999', permissionId);
       expect(result1.success).toBe(false);
-      expect(result1.error?.type).toBe('NOT_FOUND_ERROR');
+      expect(result1.error?.type).toBe(AuthErrorType.NOT_FOUND_ERROR);
       
-      const result2 = await permissionService.assignPermissionToRole(roleId, 99999);
+      const result2 = await permissionService.assignPermissionToRole(roleId, '99999');
       expect(result2.success).toBe(false);
-      expect(result2.error?.type).toBe('NOT_FOUND_ERROR');
+      expect(result2.error?.type).toBe(AuthErrorType.NOT_FOUND_ERROR);
     });
   });
 
   describe('User Permission Checking', () => {
-    let roleId: number;
-    let permissionId: number;
+    let roleId: string;
+    let permissionId: string;
     let roleName: string;
     let permissionName: string;
 
@@ -473,7 +474,7 @@ describe('PermissionService', () => {
   });
 
   describe('Resource and Action Permissions', () => {
-    let userId: number;
+    let userId: string;
 
     beforeEach(async () => {
       // Crear usuario y estructura de permisos
@@ -558,7 +559,7 @@ describe('PermissionService', () => {
   describe('Error Handling', () => {
     test('should handle invalid user IDs', async () => {
       const hasPermission = await permissionService.userHasPermission(
-        -1,
+        '-1',
         'any-permission'
       );
       
@@ -579,7 +580,7 @@ describe('PermissionService', () => {
       const result = await permissionService.createPermission(permissionData); // Segundo intento debería fallar
       
       expect(result.success).toBe(false);
-      expect(result.error?.type).toBe('VALIDATION_ERROR'); // Cambiado a VALIDATION_ERROR ya que es un error de duplicado
+      expect(result.error?.type).toBe(AuthErrorType.VALIDATION_ERROR); // Cambiado a VALIDATION_ERROR ya que es un error de duplicado
       
       // Reinicializar para otros tests
       await testUtils.cleanTestData();
@@ -589,7 +590,7 @@ describe('PermissionService', () => {
       const hasPermission = await permissionService.userHasPermission(
         testUserId,
         'test-permission',
-        { strict: true, includeInactive: false }
+        { strict: true }
       );
       
       expect(typeof hasPermission).toBe('boolean');

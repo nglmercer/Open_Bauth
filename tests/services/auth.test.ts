@@ -5,6 +5,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { AuthService } from '../../src/services/auth';
 import { testUtils, TEST_TIMEOUTS } from '../setup';
 import type { RegisterData, LoginData } from '../../src/types/auth';
+import { AuthErrorType } from '../../src/types/auth';
 
 describe('AuthService', () => {
   let authService: AuthService;
@@ -59,7 +60,7 @@ describe('AuthService', () => {
       const result = await authService.register(userData);
       
       expect(result.success).toBe(false);
-      expect(result.error?.type).toBe('VALIDATION_ERROR');
+      expect(result.error?.type).toBe(AuthErrorType.VALIDATION_ERROR);
       expect(result.error?.message).toContain('already exists');
       expect(result.user).toBeUndefined();
       expect(result.token).toBeUndefined();
@@ -76,7 +77,7 @@ describe('AuthService', () => {
       const result = await authService.register(invalidData);
       
       expect(result.success).toBe(false);
-      expect(result.error?.type).toBe('VALIDATION_ERROR');
+      expect(result.error?.type).toBe(AuthErrorType.VALIDATION_ERROR);
     });
 
     test('should validate email format', async () => {
@@ -88,7 +89,7 @@ describe('AuthService', () => {
       const result = await authService.register(userData);
       
       expect(result.success).toBe(false);
-      expect(result.error?.type).toBe('VALIDATION_ERROR');
+      expect(result.error?.type).toBe(AuthErrorType.VALIDATION_ERROR);
       expect(result.error?.message).toContain('email');
     });
 
@@ -101,7 +102,7 @@ describe('AuthService', () => {
       const result = await authService.register(userData);
       
       expect(result.success).toBe(false);
-      expect(result.error?.type).toBe('VALIDATION_ERROR');
+      expect(result.error?.type).toBe(AuthErrorType.VALIDATION_ERROR);
       expect(result.error?.message).toContain('password');
     });
 
@@ -121,7 +122,7 @@ describe('AuthService', () => {
 
   describe('User Login', () => {
     let registeredUser: RegisterData;
-    let userId: number;
+    let userId: string;
 
     beforeEach(async () => {
       registeredUser = testUtils.generateTestUser();
@@ -154,7 +155,7 @@ describe('AuthService', () => {
       const result = await authService.login(loginData);
       
       expect(result.success).toBe(false);
-      expect(result.error?.type).toBe('AUTHENTICATION_ERROR');
+      expect(result.error?.type).toBe(AuthErrorType.AUTHENTICATION_ERROR);
       expect(result.error?.message).toContain('Invalid credentials');
     });
 
@@ -167,7 +168,7 @@ describe('AuthService', () => {
       const result = await authService.login(loginData);
       
       expect(result.success).toBe(false);
-      expect(result.error?.type).toBe('AUTHENTICATION_ERROR');
+      expect(result.error?.type).toBe(AuthErrorType.AUTHENTICATION_ERROR);
       expect(result.error?.message).toContain('Invalid credentials');
     });
 
@@ -183,7 +184,7 @@ describe('AuthService', () => {
       const result = await authService.login(loginData);
       
       expect(result.success).toBe(false);
-      expect(result.error?.type).toBe('AUTHENTICATION_ERROR');
+      expect(result.error?.type).toBe(AuthErrorType.AUTHENTICATION_ERROR);
       expect(result.error?.message).toContain('inactive');
     });
 
@@ -207,7 +208,7 @@ describe('AuthService', () => {
   });
 
   describe('User Management', () => {
-    let userId: number;
+    let userId: string;
 
     beforeEach(async () => {
       const userData = testUtils.generateTestUser();
@@ -235,7 +236,7 @@ describe('AuthService', () => {
     });
 
     test('should return null for non-existent user', async () => {
-      const user = await authService.findUserById(99999);
+      const user = await authService.findUserById('99999');
       expect(user).toBeNull();
       
       const userByEmail = await authService.findUserByEmail('nonexistent@example.com');
@@ -266,7 +267,7 @@ describe('AuthService', () => {
       const result = await authService.updateUser(userId, { email: secondUser.email });
       
       expect(result.success).toBe(false);
-      expect(result.error?.type).toBe('VALIDATION_ERROR');
+      expect(result.error?.type).toBe(AuthErrorType.VALIDATION_ERROR);
     });
 
     test('should update password', async () => {
@@ -313,7 +314,7 @@ describe('AuthService', () => {
   });
 
   describe('Role Management', () => {
-    let userId: number;
+    let userId: string;
 
     beforeEach(async () => {
       await testUtils.seedTestData(); // Crear roles por defecto
@@ -360,7 +361,7 @@ describe('AuthService', () => {
       const result = await authService.assignRole(userId, 'non-existent-role');
       
       expect(result.success).toBe(false);
-      expect(result.error?.type).toBe('NOT_FOUND_ERROR');
+      expect(result.error?.type).toBe(AuthErrorType.NOT_FOUND_ERROR);
     });
 
     test('should not assign duplicate role', async () => {
@@ -371,7 +372,7 @@ describe('AuthService', () => {
       const result = await authService.assignRole(userId, 'admin');
       
       expect(result.success).toBe(false);
-      expect(result.error?.type).toBe('VALIDATION_ERROR');
+      expect(result.error?.type).toBe(AuthErrorType.VALIDATION_ERROR);
     });
   });
 
@@ -459,7 +460,7 @@ describe('AuthService', () => {
      });
 
     test('should validate input parameters', async () => {
-      const result = await authService.findUserById(-1);
+      const result = await authService.findUserById('-1');
       expect(result).toBeNull();
       
       const result2 = await authService.findUserByEmail('');
