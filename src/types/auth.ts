@@ -28,6 +28,7 @@ export interface Role {
   permissions: Permission[];
   description?: string;
   created_at: Date;
+  isActive?: boolean;
 }
 
 /**
@@ -172,6 +173,15 @@ export interface UpdatePermissionData {
   resource?: string;
   action?: string;
   name?: string;
+}
+
+/**
+ * Tipos de datos para actualizar un rol
+ */
+export interface UpdateRoleData {
+  name?: string;
+  description?: string;
+  isActive?: boolean;
 }
 
 /**

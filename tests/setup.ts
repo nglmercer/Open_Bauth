@@ -236,6 +236,7 @@ export const testUtils = {
     expect(role).toHaveProperty('id');
     expect(role).toHaveProperty('name');
     expect(role).toHaveProperty('created_at');
+    expect(role).toHaveProperty('isActive');
   },
 
   /**

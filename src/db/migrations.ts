@@ -326,50 +326,34 @@ const migrations: Migration[] = [
 
   {
     version: 11,
-    name: 'restore_description_fields',
+    name: 'add_roles_is_active_field',
     up: async (db: Database) => {
-      // Agregar columna description a permissions
+      // Agregar campo is_active a la tabla roles
       db.exec(`
-        ALTER TABLE permissions ADD COLUMN description TEXT;
+        ALTER TABLE roles ADD COLUMN is_active BOOLEAN DEFAULT 1
       `);
       
-      // Agregar columna description a roles
-      db.exec(`
-        ALTER TABLE roles ADD COLUMN description TEXT;
-      `);
-      
-      console.log('✅ Campos description restaurados en roles y permissions');
+      console.log('✅ Campo is_active agregado a roles');
     },
     down: async (db: Database) => {
-      // Recrear tabla permissions sin description
+      // SQLite no soporta DROP COLUMN, necesitamos recrear la tabla
       db.exec(`
-        CREATE TABLE permissions_backup AS SELECT id, name, resource, action, created_at FROM permissions;
-        DROP TABLE permissions;
-        CREATE TABLE permissions (
-          id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-          name TEXT UNIQUE NOT NULL,
-          resource TEXT NOT NULL,
-          action TEXT NOT NULL,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        );
-        INSERT INTO permissions SELECT * FROM permissions_backup;
-        DROP TABLE permissions_backup;
-      `);
-      
-      // Recrear tabla roles sin description
-      db.exec(`
-        CREATE TABLE roles_backup AS SELECT id, name, created_at FROM roles;
+        CREATE TABLE roles_backup AS SELECT id, name, description, created_at FROM roles;
         DROP TABLE roles;
         CREATE TABLE roles (
           id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
           name TEXT UNIQUE NOT NULL,
+          description TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         INSERT INTO roles SELECT * FROM roles_backup;
         DROP TABLE roles_backup;
       `);
       
-      console.log('✅ Campos description removidos de roles y permissions');
+      // Recrear índices
+      db.exec("CREATE INDEX IF NOT EXISTS idx_roles_name ON roles(name)");
+      
+      console.log('✅ Campo is_active removido de roles');
     }
   }
 ];

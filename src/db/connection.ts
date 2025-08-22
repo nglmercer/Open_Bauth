@@ -4,7 +4,7 @@ import { Database } from "bun:sqlite";
 /**
  * Instancia global de la base de datos SQLite
  */
-let db: Database;
+let db: Database|null;
 
 /**
  * Inicializa la conexión a la base de datos SQLite
@@ -30,7 +30,7 @@ export function initDatabase(dbPath: string = "./auth.db"): Database {
  * @returns Instancia de la base de datos
  * @throws Error si la base de datos no ha sido inicializada
  */
-export function getDatabase(): Database {
+export function getDatabase(): Database | null {
   if (!db) {
     console.log("⚠️ Database not initialized, auto-initializing with test.db");
     initDatabase('./test.db');
@@ -39,7 +39,11 @@ export function getDatabase(): Database {
   // Check if database is still open, if not reinitialize
   try {
     // Test if database is still accessible
+    if (!db) {
+      throw new Error("Database not initialized");
+    }
     db.query("SELECT 1").get();
+
   } catch (error: any) {
     if (error.message && error.message.includes('closed database')) {
       console.log("⚠️ Database connection closed, reinitializing...");
@@ -53,7 +57,7 @@ export function getDatabase(): Database {
   return db;
 }
 
-export function forceReinitDatabase(): Database {
+export function forceReinitDatabase(): Database | null {
   console.log("🔄 Force reinitializing database...");
   db = null;
   initDatabase('./test.db');
@@ -92,6 +96,10 @@ export function isDatabaseInitialized(): boolean {
 export async function testConnection(): Promise<boolean> {
   try {
     const db = getDatabase();
+    if (!db) {
+      throw new Error("Database not initialized");
+    }
+  
     db.query("SELECT 1 as test").get();
     console.log("✅ Conexión a la base de datos verificada");
     return true;
@@ -108,6 +116,10 @@ export async function testConnection(): Promise<boolean> {
 export async function enableForeignKeys(): Promise<void> {
   try {
     const db = getDatabase();
+    if (!db) {
+      throw new Error("Database not initialized");
+    }
+  
     db.exec("PRAGMA foreign_keys = ON");
     console.log("✅ Claves foráneas habilitadas");
   } catch (error:any) {
@@ -122,7 +134,9 @@ export async function enableForeignKeys(): Promise<void> {
 export async function optimizeDatabase(): Promise<void> {
   try {
     const db = getDatabase();
-    
+    if (!db) {
+      throw new Error("Database not initialized");
+    }
     // Configuraciones de rendimiento para SQLite
     db.exec("PRAGMA journal_mode = WAL"); // Write-Ahead Logging para mejor concurrencia
     db.exec("PRAGMA synchronous = NORMAL"); // Balance entre seguridad y rendimiento
@@ -149,7 +163,9 @@ export async function getDatabaseInfo(): Promise<{
 }> {
   try {
     const db = getDatabase();
-    
+    if (!db) {
+      throw new Error("Database not initialized");
+    }  
     const versionResult = db.query("PRAGMA user_version").get() as { user_version: number } | undefined;
     const pageSizeResult = db.query("PRAGMA page_size").get() as { page_size: number } | undefined;
     const encodingResult = db.query("PRAGMA encoding").get() as { encoding: string } | undefined;
@@ -173,6 +189,9 @@ export async function getDatabaseInfo(): Promise<{
 export async function vacuumDatabase(): Promise<void> {
   try {
     const db = getDatabase();
+    if (!db) {
+      throw new Error("Database not initialized");
+    }    
     db.exec("VACUUM");
     console.log("✅ VACUUM ejecutado exitosamente");
   } catch (error:any) {
@@ -188,6 +207,9 @@ export async function vacuumDatabase(): Promise<void> {
 export async function checkIntegrity(): Promise<boolean> {
   try {
     const db = getDatabase();
+    if (!db) {
+      throw new Error("Database not initialized");
+    }
     const result = db.query("PRAGMA integrity_check").all() as { integrity_check: string }[];
     const isOk = result.length === 1 && result[0].integrity_check === 'ok';
     

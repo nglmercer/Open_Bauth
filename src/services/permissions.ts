@@ -6,6 +6,7 @@ import type {
   CreateRoleData, 
   CreatePermissionData, 
   UpdatePermissionData,
+  UpdateRoleData,
   AssignRoleData, 
   PermissionOptions,
   PermissionResult,
@@ -122,9 +123,9 @@ export class PermissionService {
       // Crear rol
       const roleId = crypto.randomUUID();
       const query = db.query(
-        "INSERT INTO roles (id, name, created_at) VALUES (?, ?, datetime('now'))"
+        "INSERT INTO roles (id, name, description, is_active, created_at) VALUES (?, ?, ?, ?, datetime('now'))"
       );
-      query.run(roleId, data.name);
+      query.run(roleId, data.name, data.description || null, 1);
 
       // Asignar permisos si se proporcionan
       if (data.permissionIds && data.permissionIds.length > 0) {
@@ -405,12 +406,13 @@ export class PermissionService {
       }
 
       const query = db.query(
-        "UPDATE permissions SET name = ?, resource = ?, action = ? WHERE id = ?"
+        "UPDATE permissions SET name = ?, resource = ?, action = ?, description = ? WHERE id = ?"
       );
       query.run(
         data.name || existingPermission.name,
         data.resource || existingPermission.resource,
         data.action || existingPermission.action,
+        data.description !== undefined ? data.description : existingPermission.description,
         id
       );
 
@@ -484,7 +486,7 @@ export class PermissionService {
    * @param id ID del rol
    * @param data Datos de actualización
    */
-  async updateRole(id: string, data: CreateRoleData): Promise<RoleResult> {
+  async updateRole(id: string, data: UpdateRoleData): Promise<RoleResult> {
     try {
       const db = getDatabase();
 
@@ -515,10 +517,12 @@ export class PermissionService {
       }
 
       const query = db.query(
-        "UPDATE roles SET name = ?, created_at = datetime('now') WHERE id = ?"
+        "UPDATE roles SET name = ?, description = ?, is_active = ? WHERE id = ?"
       );
       query.run(
         data.name || existingRole.name,
+        data.description !== undefined ? data.description : existingRole.description,
+        data.isActive !== undefined ? (data.isActive ? 1 : 0) : (existingRole.isActive ? 1 : 0),
         id
       );
 
@@ -616,6 +620,18 @@ export class PermissionService {
   ): Promise<boolean> {
     try {
       const db = getDatabase();
+
+      // First check if user is active
+      const userQuery = db.query(`
+        SELECT is_active
+        FROM users
+        WHERE id = ?
+      `);
+      const userResult = userQuery.get(userId) as { is_active: number } | undefined;
+      
+      if (!userResult || !userResult.is_active) {
+        return false;
+      }
 
       // Verificar permiso exacto
       const exactQuery = db.query(`
@@ -855,7 +871,7 @@ export class PermissionService {
       const db = getDatabase();
 
       const query = db.query(`
-        SELECT DISTINCT p.id, p.name, p.resource, p.action, p.created_at
+        SELECT DISTINCT p.id, p.name, p.resource, p.action, p.description, p.created_at
         FROM permissions p
         INNER JOIN role_permissions rp ON p.id = rp.permission_id
         INNER JOIN user_roles ur ON rp.role_id = ur.role_id
@@ -869,6 +885,7 @@ export class PermissionService {
         name: row.name,
         resource: row.resource,
         action: row.action,
+        description: row.description,
         created_at: new Date(row.created_at)
       }));
     } catch (error:any) {
@@ -887,7 +904,7 @@ export class PermissionService {
       const db = getDatabase();
 
       const query = db.query(
-        "SELECT id, name, resource, action, created_at FROM permissions WHERE id = ?"
+        "SELECT id, name, resource, action, description, created_at FROM permissions WHERE id = ?"
       );
       const result = query.get(id);
 
@@ -900,6 +917,7 @@ export class PermissionService {
         name: result.name,
         resource: result.resource,
         action: result.action,
+        description: result.description,
         created_at: new Date(result.created_at)
       };
     } catch (error:any) {
@@ -918,7 +936,7 @@ export class PermissionService {
       const db = getDatabase();
 
       const query = db.query(
-        "SELECT id, name, resource, action, created_at FROM permissions WHERE name = ?"
+        "SELECT id, name, resource, action, description, created_at FROM permissions WHERE name = ?"
       );
       const result = query.get(name);
 
@@ -931,6 +949,7 @@ export class PermissionService {
         name: result.name,
         resource: result.resource,
         action: result.action,
+        description: result.description,
         created_at: new Date(result.created_at)
       };
     } catch (error:any) {
@@ -950,7 +969,7 @@ export class PermissionService {
       const db = getDatabase();
 
       const query = db.query(
-        "SELECT id, name, created_at FROM roles WHERE id = ?"
+        "SELECT id, name, description, created_at, is_active FROM roles WHERE id = ?"
       );
       const result = query.get(id);
 
@@ -961,7 +980,9 @@ export class PermissionService {
       const role: Role = {
         id: result.id,
         name: result.name,
+        description: result.description,
         created_at: new Date(result.created_at),
+        isActive: Boolean(result.is_active),
         permissions: []
       };
 
@@ -987,7 +1008,7 @@ export class PermissionService {
       const db = getDatabase();
 
       const query = db.query(
-        "SELECT id, name, created_at FROM roles WHERE name = ?"
+        "SELECT id, name, description, created_at, is_active FROM roles WHERE name = ?"
       );
       const result = query.get(name);
 
@@ -998,7 +1019,9 @@ export class PermissionService {
       const role: Role = {
         id: result.id,
         name: result.name,
+        description: result.description,
         created_at: new Date(result.created_at),
+        isActive: Boolean(result.is_active),
         permissions: []
       };
 
@@ -1023,7 +1046,7 @@ export class PermissionService {
       const db = getDatabase();
 
       const result = db.query(`
-        SELECT p.id, p.name, p.resource, p.action, p.created_at
+        SELECT p.id, p.name, p.resource, p.action, p.description, p.created_at
         FROM permissions p
         INNER JOIN role_permissions rp ON p.id = rp.permission_id
         WHERE rp.role_id = ?
@@ -1035,6 +1058,7 @@ export class PermissionService {
         name: row.name,
         resource: row.resource,
         action: row.action,
+        description: row.description,
         created_at: new Date(row.created_at)
       }));
     } catch (error:any) {
@@ -1053,7 +1077,7 @@ export class PermissionService {
       const db = getDatabase();
 
       const query = db.query(`
-        SELECT id, name, created_at
+        SELECT id, name, description, created_at, is_active
         FROM roles
         ORDER BY name
       `);
@@ -1064,7 +1088,9 @@ export class PermissionService {
         const role: Role = {
           id: row.id,
           name: row.name,
+          description: row.description,
           created_at: new Date(row.created_at),
+          isActive: Boolean(row.is_active),
           permissions: []
         };
 
@@ -1091,7 +1117,7 @@ export class PermissionService {
       const db = getDatabase();
 
       const query = db.query(`
-        SELECT id, name, resource, action, created_at
+        SELECT id, name, resource, action, description, created_at
         FROM permissions
         ORDER BY resource, action
       `);
@@ -1102,6 +1128,7 @@ export class PermissionService {
         name: row.name,
         resource: row.resource,
         action: row.action,
+        description: row.description,
         created_at: new Date(row.created_at)
       }));
     } catch (error:any) {
