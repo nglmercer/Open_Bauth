@@ -36,6 +36,20 @@ export function getDatabase(): Database {
     initDatabase('./test.db');
   }
   
+  // Check if database is still open, if not reinitialize
+  try {
+    // Test if database is still accessible
+    db.query("SELECT 1").get();
+  } catch (error: any) {
+    if (error.message && error.message.includes('closed database')) {
+      console.log("⚠️ Database connection closed, reinitializing...");
+      db = null as any;
+      initDatabase('./test.db');
+    } else {
+      throw error;
+    }
+  }
+  
   return db;
 }
 

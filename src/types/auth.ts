@@ -7,10 +7,14 @@ export interface User {
   id: string;
   email: string;
   password_hash: string;
+  firstName?: string;
+  lastName?: string;
   roles: Role[];
   created_at: Date;
   updated_at: Date;
   is_active: boolean;
+  isActive?: boolean;
+  lastLoginAt?: Date;
 }
 
 /**
@@ -60,8 +64,15 @@ export interface AuthConfig {
  */
 export interface AuthRequest {
   headers: Record<string, string>;
+  url?: string;
+  method?: string;
   auth?: AuthContext;
 }
+
+/**
+ * Tipo para funciones de middleware next
+ */
+export type NextFunction = () => void;
 
 /**
  * Interface para responses de autenticación (framework agnóstico)
@@ -77,6 +88,8 @@ export interface AuthResponse {
 export interface RegisterData {
   email: string;
   password: string;
+  firstName?: string;
+  lastName?: string;
 }
 
 /**
@@ -91,8 +104,14 @@ export interface LoginData {
  * Response del proceso de autenticación
  */
 export interface AuthResult {
-  user: User;
-  token: string;
+  success: boolean;
+  user?: User;
+  token?: string;
+  refreshToken?: string;
+  error?: {
+    type: AuthErrorType;
+    message: string;
+  };
 }
 
 /**
@@ -153,6 +172,17 @@ export interface UpdatePermissionData {
 }
 
 /**
+ * Tipos de datos para actualizar un usuario
+ */
+export interface UpdateUserData {
+  email?: string;
+  is_active?: boolean;
+  isActive?: boolean;
+  password?: string;
+  lastLoginAt?: Date;
+}
+
+/**
  * Response genérico para operaciones de permisos
  */
 export interface PermissionResult<T = any> {
@@ -204,6 +234,9 @@ export interface UserQueryOptions {
   includeRoles?: boolean;
   includePermissions?: boolean;
   activeOnly?: boolean;
+  search?: string;
+  sortBy?: 'email' | 'created_at' | 'name';
+  sortOrder?: 'asc' | 'desc';
 }
 
 /**
@@ -283,7 +316,10 @@ export enum AuthErrorType {
   ACCOUNT_INACTIVE = 'ACCOUNT_INACTIVE',
   WEAK_PASSWORD = 'WEAK_PASSWORD',
   DATABASE_ERROR = 'DATABASE_ERROR',
-  VALIDATION_ERROR = 'VALIDATION_ERROR'
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  AUTHENTICATION_ERROR = 'AUTHENTICATION_ERROR',
+  NOT_FOUND_ERROR = 'NOT_FOUND_ERROR',
+  SERVER_ERROR = 'SERVER_ERROR'
 }
 
 /**

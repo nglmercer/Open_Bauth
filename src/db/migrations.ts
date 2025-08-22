@@ -196,6 +196,132 @@ const migrations: Migration[] = [
       db.exec("DROP TABLE IF EXISTS migration_history");
       console.log('✅ Tabla migration_history eliminada');
     }
+  },
+  
+  {
+    version: 8,
+    name: 'add_description_fields',
+    up: async (db: Database) => {
+      // Agregar campo description a la tabla roles
+      db.exec(`
+        ALTER TABLE roles ADD COLUMN description TEXT
+      `);
+      
+      // Agregar campo description a la tabla permissions
+      db.exec(`
+        ALTER TABLE permissions ADD COLUMN description TEXT
+      `);
+      
+      console.log('✅ Campos description agregados a roles y permissions');
+    },
+    down: async (db: Database) => {
+      // SQLite no soporta DROP COLUMN, necesitamos recrear las tablas
+      db.exec(`
+        CREATE TABLE roles_backup AS SELECT id, name, created_at FROM roles;
+        DROP TABLE roles;
+        CREATE TABLE roles (
+          id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+          name TEXT UNIQUE NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO roles SELECT * FROM roles_backup;
+        DROP TABLE roles_backup;
+      `);
+      
+      db.exec(`
+        CREATE TABLE permissions_backup AS SELECT id, name, resource, action, created_at FROM permissions;
+        DROP TABLE permissions;
+        CREATE TABLE permissions (
+          id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+          name TEXT UNIQUE NOT NULL,
+          resource TEXT NOT NULL,
+          action TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO permissions SELECT * FROM permissions_backup;
+        DROP TABLE permissions_backup;
+      `);
+      
+      console.log('✅ Campos description removidos de roles y permissions');
+    }
+  },
+
+  {
+    version: 9,
+    name: 'add_user_name_fields',
+    up: async (db: Database) => {
+      // Agregar campos firstName y lastName a la tabla users
+      db.exec(`
+        ALTER TABLE users ADD COLUMN first_name TEXT
+      `);
+      
+      db.exec(`
+        ALTER TABLE users ADD COLUMN last_name TEXT
+      `);
+      
+      console.log('✅ Campos first_name y last_name agregados a users');
+    },
+    down: async (db: Database) => {
+      // SQLite no soporta DROP COLUMN, necesitamos recrear la tabla
+      db.exec(`
+        CREATE TABLE users_backup AS SELECT id, email, password_hash, created_at, updated_at, is_active FROM users;
+        DROP TABLE users;
+        CREATE TABLE users (
+          id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+          email TEXT UNIQUE NOT NULL,
+          password_hash TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          is_active BOOLEAN DEFAULT 1
+        );
+        INSERT INTO users SELECT * FROM users_backup;
+        DROP TABLE users_backup;
+      `);
+      
+      // Recrear índices
+      db.exec("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)");
+      
+      console.log('✅ Campos first_name y last_name removidos de users');
+    }
+  },
+
+  {
+    version: 10,
+    name: 'add_last_login_at_field',
+    up: async (db: Database) => {
+      // Agregar campo last_login_at a la tabla users
+      db.exec(`
+        ALTER TABLE users ADD COLUMN last_login_at DATETIME
+      `);
+      
+      console.log('✅ Campo last_login_at agregado a users');
+    },
+    down: async (db: Database) => {
+      // SQLite no soporta DROP COLUMN, necesitamos recrear la tabla
+      db.exec(`
+        CREATE TABLE users_backup AS SELECT id, email, password_hash, first_name, last_name, created_at, updated_at, is_active FROM users;
+        DROP TABLE users;
+        CREATE TABLE users (
+          id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+          email TEXT UNIQUE NOT NULL,
+          password_hash TEXT NOT NULL,
+          first_name TEXT,
+          last_name TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          is_active BOOLEAN DEFAULT 1
+        );
+        INSERT INTO users SELECT * FROM users_backup;
+        DROP TABLE users_backup;
+      `);
+      
+      // Recrear índices
+      db.exec("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)");
+      
+      console.log('✅ Campo last_login_at removido de users');
+    }
   }
 ];
 

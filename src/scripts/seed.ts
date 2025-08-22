@@ -205,7 +205,6 @@ export async function seedDatabase(): Promise<void> {
               await permissionService.assignPermissionsToRole(result.id, [permissionId]);
             }
           }
-          console.log(`    📋 Permisos asignados al rol ${role.name}`);
         }
       } catch (error:any) {
         console.log(`  ⚠️  Rol ya existe: ${role.name}`);

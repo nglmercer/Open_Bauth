@@ -292,22 +292,31 @@ export class PermissionService {
         }
       }
 
-      // Asignar permisos (ignorar duplicados)
+      // Verificar duplicados y asignar permisos
       for (const permissionId of permissionIds) {
-        try {
-          const query = db.query(
-            "INSERT INTO role_permissions (id, role_id, permission_id, created_at) VALUES (?, ?, ?, datetime('now'))"
-          );
-          query.run(crypto.randomUUID(), roleId, permissionId);
-        } catch (error:any) {
-          // Ignorar errores de duplicados
-          if (!error.message.includes('UNIQUE constraint')) {
-            throw error;
-          }
+        // Verificar si ya existe la asignación
+        const existingQuery = db.query(
+          "SELECT id FROM role_permissions WHERE role_id = ? AND permission_id = ?"
+        );
+        const existing = existingQuery.get(roleId, permissionId);
+        
+        if (existing) {
+          return {
+            success: false,
+            error: {
+              type: 'VALIDATION_ERROR' as AuthErrorType,
+              message: `Permission ${permissionId} is already assigned to role ${roleId}`
+            }
+          };
         }
+        
+        // Insertar nueva asignación
+        const insertQuery = db.query(
+          "INSERT INTO role_permissions (id, role_id, permission_id, created_at) VALUES (?, ?, ?, datetime('now'))"
+        );
+        insertQuery.run(crypto.randomUUID(), roleId, permissionId);
       }
 
-      console.log(`✅ Permisos asignados al rol: ${roleId}`);
       return { success: true };
     } catch (error:any) {
       console.error('Error assigning permissions to role:', error);
@@ -533,6 +542,67 @@ export class PermissionService {
   }
 
   /**
+   * Elimina un rol
+   * @param id ID del rol
+   */
+  async deleteRole(id: string): Promise<RoleResult> {
+    try {
+      const db = getDatabase();
+
+      // Verificar que el rol existe
+      const existingRole = await this.findRoleById(id);
+      if (!existingRole) {
+        return {
+          success: false,
+          error: {
+            type: 'NOT_FOUND_ERROR' as AuthErrorType,
+            message: 'Role not found'
+          }
+        };
+      }
+
+      // Eliminar relaciones con usuarios
+      const deleteUserRolesQuery = db.query(
+        "DELETE FROM user_roles WHERE role_id = ?"
+      );
+      deleteUserRolesQuery.run(id);
+
+      // Eliminar relaciones con permisos
+      const deleteRolePermissionsQuery = db.query(
+        "DELETE FROM role_permissions WHERE role_id = ?"
+      );
+      deleteRolePermissionsQuery.run(id);
+
+      // Eliminar el rol
+      const deleteRoleQuery = db.query(
+        "DELETE FROM roles WHERE id = ?"
+      );
+      deleteRoleQuery.run(id);
+
+      console.log(`✅ Rol eliminado: ${existingRole.name}`);
+      return { success: true };
+    } catch (error:any) {
+      console.error('Error deleting role:', error);
+      return {
+        success: false,
+        error: {
+          type: 'DATABASE_ERROR' as AuthErrorType,
+          message: `Failed to delete role: ${error.message}`
+        }
+      };
+    }
+  }
+
+  /**
+   * Remueve un permiso específico de un rol
+   * @param roleId ID del rol
+   * @param permissionId ID del permiso
+   */
+  async removePermissionFromRole(roleId: string, permissionId: string): Promise<PermissionResult> {
+    return this.removePermissionsFromRole(roleId, [permissionId]);
+  }
+
+  /**
    * Verifica si un usuario tiene un permiso específico
    * @param userId ID del usuario
    * @param permissionName Nombre del permiso
@@ -547,16 +617,31 @@ export class PermissionService {
     try {
       const db = getDatabase();
 
-      const query = db.query(`
+      // Verificar permiso exacto
+      const exactQuery = db.query(`
         SELECT COUNT(*) as count
         FROM permissions p
         INNER JOIN role_permissions rp ON p.id = rp.permission_id
         INNER JOIN user_roles ur ON rp.role_id = ur.role_id
         WHERE ur.user_id = ? AND p.name = ?
       `);
-      const result = query.get(userId, permissionName) as { count: number };
+      const exactResult = exactQuery.get(userId, permissionName) as { count: number };
 
-      return result?.count > 0;
+      if (exactResult?.count > 0) {
+        return true;
+      }
+
+      // Verificar permisos wildcard
+      const wildcardQuery = db.query(`
+        SELECT COUNT(*) as count
+        FROM permissions p
+        INNER JOIN role_permissions rp ON p.id = rp.permission_id
+        INNER JOIN user_roles ur ON rp.role_id = ur.role_id
+        WHERE ur.user_id = ? AND (p.name = '*:*' OR p.name = 'admin:*' OR p.resource = '*' OR p.action = '*')
+      `);
+      const wildcardResult = wildcardQuery.get(userId) as { count: number };
+
+      return wildcardResult?.count > 0;
     } catch (error:any) {
       console.error('Error checking user permission:', error);
       return false;
@@ -585,6 +670,48 @@ export class PermissionService {
       return result?.count > 0;
     } catch (error:any) {
       console.error('Error checking user role:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Verifica si un usuario tiene todos los roles especificados
+   * @param userId ID del usuario
+   * @param roleNames Array de nombres de roles
+   * @returns true si el usuario tiene todos los roles
+   */
+  async userHasAllRoles(userId: string, roleNames: string[]): Promise<boolean> {
+    try {
+      for (const roleName of roleNames) {
+        const hasRole = await this.userHasRole(userId, roleName);
+        if (!hasRole) {
+          return false;
+        }
+      }
+      return true;
+    } catch (error: any) {
+      console.error('Error checking user roles:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Verifica si un usuario tiene al menos uno de los roles especificados
+   * @param userId ID del usuario
+   * @param roleNames Array de nombres de roles
+   * @returns true si el usuario tiene al menos uno de los roles
+   */
+  async userHasAnyRole(userId: string, roleNames: string[]): Promise<boolean> {
+    try {
+      for (const roleName of roleNames) {
+        const hasRole = await this.userHasRole(userId, roleName);
+        if (hasRole) {
+          return true;
+        }
+      }
+      return false;
+    } catch (error: any) {
+      console.error('Error checking user roles:', error);
       return false;
     }
   }
@@ -640,9 +767,42 @@ export class PermissionService {
    */
   async userCanAccessResource(userId: string, resource: string, action: string): Promise<boolean> {
     try {
-      // Construir el nombre del permiso basado en el recurso y la acción
-      const permissionName = `${resource}:${action}`;
-      return await this.userHasPermission(userId, permissionName);
+      const db = getDatabase();
+
+      // Verificar permiso exacto
+      const exactPermissionName = `${resource}:${action}`;
+      const hasExactPermission = await this.userHasPermission(userId, exactPermissionName);
+      
+      if (hasExactPermission) {
+        return true;
+      }
+
+      // Verificar permisos wildcard específicos para el recurso y acción
+      const wildcardQuery = db.query(`
+        SELECT COUNT(*) as count
+        FROM permissions p
+        INNER JOIN role_permissions rp ON p.id = rp.permission_id
+        INNER JOIN user_roles ur ON rp.role_id = ur.role_id
+        WHERE ur.user_id = ? AND (
+          p.name = '*:*' OR 
+          p.name = 'admin:*' OR 
+          p.name = ? OR 
+          p.name = ? OR 
+          (p.resource = '*' AND p.action = '*') OR
+          (p.resource = ? AND p.action = '*') OR
+          (p.resource = '*' AND p.action = ?)
+        )
+      `);
+      
+      const wildcardResult = wildcardQuery.get(
+        userId, 
+        `${resource}:*`, 
+        `*:${action}`, 
+        resource, 
+        action
+      ) as { count: number };
+
+      return wildcardResult?.count > 0;
     } catch (error:any) {
       console.error('Error checking resource access:', error);
       return false;

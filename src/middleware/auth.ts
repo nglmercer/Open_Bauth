@@ -416,5 +416,187 @@ export function extractClientIP(headers: Record<string, string>): string {
  * Función helper para extraer User-Agent del request
  */
 export function extractUserAgent(headers: Record<string, string>): string {
-  return headers['user-agent'] || 'unknown';
+  return headers['user-agent'] || headers['User-Agent'] || 'Unknown';
+}
+
+/**
+ * Crea un middleware de autenticación para frameworks específicos
+ */
+export function createAuthMiddleware(config: AuthMiddlewareConfig = {}) {
+  return async (req: any, res: any, next: any) => {
+    try {
+      const authRequest: AuthRequest = {
+        headers: req.headers || {},
+        url: req.url || '',
+        method: req.method || 'GET'
+      };
+
+      const result = await authenticateRequest(authRequest, config);
+      
+      if (!result.success) {
+        return res.status(result.statusCode || 401).json({
+          success: false,
+          error: result.error
+        });
+      }
+
+      // Agregar contexto de autenticación al request
+      req.authContext = result.context;
+      next();
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error'
+      });
+    }
+  };
+}
+
+/**
+ * Crea un middleware de autenticación opcional
+ */
+export function createOptionalAuthMiddleware(config: AuthMiddlewareConfig = {}) {
+  return createAuthMiddleware({ ...config, required: false });
+}
+
+/**
+ * Crea un middleware de verificación de permisos
+ */
+export function createPermissionMiddleware(permissions: string[], options: PermissionOptions = {}) {
+  return async (req: any, res: any, next: any) => {
+    try {
+      const authContext = req.authContext;
+      if (!authContext) {
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication required'
+        });
+      }
+
+      const result = await authorizeRequest(authContext, permissions, options);
+      
+      if (!result.success) {
+        return res.status(result.statusCode || 403).json({
+          success: false,
+          error: result.error
+        });
+      }
+
+      next();
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error'
+      });
+    }
+  };
+}
+
+/**
+ * Crea un middleware de verificación de roles
+ */
+export function createRoleMiddleware(roles: string[]) {
+  return async (req: any, res: any, next: any) => {
+    try {
+      const authContext = req.authContext;
+      if (!authContext) {
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication required'
+        });
+      }
+
+      const hasRole = roles.some(role => userHasRole(authContext, role));
+      if (!hasRole) {
+        return res.status(403).json({
+          success: false,
+          error: 'Insufficient permissions'
+        });
+      }
+
+      next();
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error'
+      });
+    }
+  };
+}
+
+/**
+ * Crea un middleware de verificación de propiedad de recursos
+ */
+export function createOwnershipMiddleware(resourceIdParam: string = 'id') {
+  return async (req: any, res: any, next: any) => {
+    try {
+      const authContext = req.authContext;
+      if (!authContext) {
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication required'
+        });
+      }
+
+      const resourceId = req.params[resourceIdParam];
+      if (!resourceId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Resource ID required'
+        });
+      }
+
+      if (!isResourceOwner(authContext, resourceId) && !isAdmin(authContext)) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied'
+        });
+      }
+
+      next();
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error'
+      });
+    }
+  };
+}
+
+/**
+ * Crea un middleware de rate limiting (implementación básica)
+ */
+export function createRateLimitMiddleware(maxRequests: number = 100, windowMs: number = 60000) {
+  const requests = new Map<string, { count: number; resetTime: number }>();
+
+  return async (req: any, res: any, next: any) => {
+    try {
+      const clientIP = extractClientIP(req.headers);
+      const now = Date.now();
+      
+      const clientData = requests.get(clientIP) || { count: 0, resetTime: now + windowMs };
+      
+      if (now > clientData.resetTime) {
+        clientData.count = 0;
+        clientData.resetTime = now + windowMs;
+      }
+      
+      clientData.count++;
+      requests.set(clientIP, clientData);
+      
+      if (clientData.count > maxRequests) {
+        return res.status(429).json({
+          success: false,
+          error: 'Too many requests'
+        });
+      }
+      
+      next();
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error'
+      });
+    }
+  };
 }

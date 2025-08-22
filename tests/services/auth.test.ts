@@ -42,11 +42,11 @@ describe('AuthService', () => {
       
       // Verificar que la contraseña está hasheada en la BD
       const db = testUtils.getTestDatabase();
-      const user = db.query('SELECT password FROM users WHERE email = ?').get(userData.email) as any;
+      const user = db.query('SELECT password_hash FROM users WHERE email = ?').get(userData.email) as any;
       
-      expect(user.password).toBeDefined();
-      expect(user.password).not.toBe(userData.password);
-      expect(user.password.startsWith('$2b$')).toBe(true); // bcrypt hash format
+      expect(user.password_hash).toBeDefined();
+      expect(user.password_hash).not.toBe(userData.password);
+      expect(user.password_hash.startsWith('$2b$')).toBe(true); // bcrypt hash format
     });
 
     test('should reject registration with existing email', async () => {

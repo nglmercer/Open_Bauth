@@ -7,6 +7,7 @@ import type {
   LoginData, 
   AuthResult, 
   UserQueryOptions,
+  UpdateUserData,
   AuthError,
   AuthErrorType 
 } from '../types/auth';
@@ -32,7 +33,13 @@ export class AuthService {
       // Verificar si el usuario ya existe
       const existingUser = await this.findUserByEmail(data.email);
       if (existingUser) {
-        throw new Error('User already exists with this email');
+        return {
+          success: false,
+          error: {
+            type: 'VALIDATION_ERROR' as AuthErrorType,
+            message: 'User already exists with this email'
+          }
+        };
       }
 
       // Hash de la contraseña usando Bun
@@ -44,10 +51,10 @@ export class AuthService {
       // Crear usuario en la base de datos
       const userId = crypto.randomUUID();
       const insertQuery = db.query(`
-        INSERT INTO users (id, email, password_hash, created_at, updated_at, is_active)
-        VALUES (?, ?, ?, datetime('now'), datetime('now'), 1)
+        INSERT INTO users (id, email, password_hash, first_name, last_name, created_at, updated_at, is_active)
+        VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'), 1)
       `);
-      insertQuery.run(userId, data.email.toLowerCase(), passwordHash);
+      insertQuery.run(userId, data.email.toLowerCase(), passwordHash, data.firstName || null, data.lastName || null);
 
       // Asignar rol por defecto (user)
       await this.assignDefaultRole(userId);
@@ -58,15 +65,34 @@ export class AuthService {
         throw new Error('Failed to create user');
       }
 
+      // Update lastLoginAt
+      const updateLoginQuery = db.query(
+        "UPDATE users SET last_login_at = datetime('now') WHERE id = ?"
+      );
+      updateLoginQuery.run(user.id);
+
       // Generar token JWT
       const token = await jwtService.generateToken(user);
+      const refreshToken = await jwtService.generateRefreshToken(user.id);
 
-      console.log(`✅ Usuario registrado: ${user.email}`);
+      // Get updated user with lastLoginAt
+      const updatedUser = await this.findUserById(user.id, { includeRoles: true, includePermissions: true });
 
-      return { user, token };
+      return { 
+        success: true, 
+        user: updatedUser || user, 
+        token, 
+        refreshToken 
+      };
     } catch (error:any) {
       console.error('Error registering user:', error);
-      throw new Error(`Registration failed: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: (error.type as AuthErrorType) || 'SERVER_ERROR' as AuthErrorType,
+          message: error.message || 'Registration failed'
+        }
+      };
     }
   }
 
@@ -90,35 +116,77 @@ export class AuthService {
       });
 
       if (!user) {
-        throw new Error('Invalid credentials');
+        return {
+          success: false,
+          error: {
+            type: 'AUTHENTICATION_ERROR' as AuthErrorType,
+            message: 'Invalid credentials'
+          }
+        };
       }
 
       // Verificar si el usuario está activo
       if (!user.is_active) {
-        throw new Error('Account is deactivated');
+        return {
+          success: false,
+          error: {
+            type: 'AUTHENTICATION_ERROR' as AuthErrorType,
+            message: 'Account is inactive'
+          }
+        };
       }
 
       // Verificar contraseña
       const isValidPassword = await Bun.password.verify(data.password, user.password_hash);
       if (!isValidPassword) {
-        throw new Error('Invalid credentials');
+        return {
+          success: false,
+          error: {
+            type: 'AUTHENTICATION_ERROR' as AuthErrorType,
+            message: 'Invalid credentials'
+          }
+        };
       }
 
-      // Actualizar última actividad
+      // Actualizar última actividad y last_login_at
       const updateQuery = db.query(
-        "UPDATE users SET updated_at = datetime('now') WHERE id = ?"
+        "UPDATE users SET updated_at = datetime('now'), last_login_at = datetime('now') WHERE id = ?"
       );
       updateQuery.run(user.id);
 
+      // Obtener usuario actualizado con lastLoginAt
+      const updatedUser = await this.findUserById(user.id, { includeRoles: true, includePermissions: true });
+      if (!updatedUser) {
+        return {
+          success: false,
+          error: {
+            type: 'DATABASE_ERROR' as AuthErrorType,
+            message: 'User not found after update'
+          }
+        };
+      }
+
       // Generar token JWT
-      const token = await jwtService.generateToken(user);
+      const token = await jwtService.generateToken(updatedUser);
+      const refreshToken = await jwtService.generateRefreshToken(updatedUser.id);
 
-      console.log(`✅ Usuario autenticado: ${user.email}`);
+      console.log(`✅ Usuario autenticado: ${updatedUser.email}`);
 
-      return { user, token };
+      return { 
+        success: true, 
+        user: updatedUser, 
+        token, 
+        refreshToken 
+      };
     } catch (error:any) {
       console.error('Error during login:', error);
-      throw new Error(`Login failed: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: (error.type as AuthErrorType) || 'AUTHENTICATION_ERROR' as AuthErrorType,
+          message: error.message || 'Login failed'
+        }
+      };
     }
   }
 
@@ -135,7 +203,7 @@ export class AuthService {
       // Consulta base del usuario
       const activeCondition = options.activeOnly ? ' AND is_active = 1' : '';
       const query = db.query(`
-        SELECT id, email, password_hash, created_at, updated_at, is_active
+        SELECT id, email, password_hash, first_name, last_name, created_at, updated_at, is_active, last_login_at
         FROM users
         WHERE id = ?${activeCondition}
       `);
@@ -150,9 +218,13 @@ export class AuthService {
         id: userData.id,
         email: userData.email,
         password_hash: userData.password_hash,
+        lastLoginAt: userData.last_login_at ? new Date(userData.last_login_at) : undefined,
+        firstName: userData.first_name,
+        lastName: userData.last_name,
         created_at: new Date(userData.created_at),
         updated_at: new Date(userData.updated_at),
         is_active: Boolean(userData.is_active),
+        isActive: Boolean(userData.is_active),
         roles: []
       };
 
@@ -179,7 +251,7 @@ export class AuthService {
       const db = getDatabase();
       
       let query = `
-        SELECT id, email, password_hash, created_at, updated_at, is_active
+        SELECT id, email, password_hash, first_name, last_name, created_at, updated_at, is_active, last_login_at
         FROM users
         WHERE email = ?
       `;
@@ -201,9 +273,13 @@ export class AuthService {
         id: userData.id,
         email: userData.email,
         password_hash: userData.password_hash,
+        lastLoginAt: userData.last_login_at ? new Date(userData.last_login_at) : undefined,
+        firstName: userData.first_name,
+        lastName: userData.last_name,
         created_at: new Date(userData.created_at),
         updated_at: new Date(userData.updated_at),
         is_active: Boolean(userData.is_active),
+        isActive: Boolean(userData.is_active),
         roles: []
       };
 
@@ -282,16 +358,34 @@ export class AuthService {
    * @param userId ID del usuario
    * @param roleName Nombre del rol a asignar
    */
-  async assignRole(userId: string, roleName: string): Promise<void> {
+  async assignRole(userId: string, roleName: string): Promise<{ success: boolean; error?: { type: AuthErrorType; message: string } }> {
     try {
       const db = getDatabase();
+
+      // Verificar que el usuario existe
+      const user = await this.findUserById(userId);
+      if (!user) {
+        return {
+          success: false,
+          error: {
+            type: 'USER_NOT_FOUND' as AuthErrorType,
+            message: 'User not found'
+          }
+        };
+      }
 
       // Buscar el rol por nombre
       const findRoleQuery = db.query("SELECT id FROM roles WHERE name = ?");
       const roleResult = findRoleQuery.get(roleName) as { id: string } | null;
 
       if (!roleResult) {
-        throw new Error(`Role '${roleName}' not found`);
+        return {
+          success: false,
+          error: {
+            type: 'NOT_FOUND_ERROR' as AuthErrorType,
+            message: `Role '${roleName}' not found`
+          }
+        };
       }
 
       // Verificar si el usuario ya tiene este rol
@@ -301,7 +395,13 @@ export class AuthService {
       const existing = existingQuery.get(userId, roleResult.id);
 
       if (existing) {
-        return; // El usuario ya tiene este rol
+        return {
+          success: false,
+          error: {
+            type: 'VALIDATION_ERROR' as AuthErrorType,
+            message: 'User already has this role'
+          }
+        };
       }
 
       // Asignar rol al usuario
@@ -309,9 +409,18 @@ export class AuthService {
         "INSERT INTO user_roles (id, user_id, role_id, created_at) VALUES (?, ?, ?, datetime('now'))"
       );
       assignRoleQuery.run(crypto.randomUUID(), userId, roleResult.id);
+
+      console.log(`✅ Rol ${roleName} asignado al usuario: ${userId}`);
+      return { success: true };
     } catch (error: any) {
       console.error('Error assigning role:', error);
-      throw error;
+      return {
+        success: false,
+        error: {
+          type: 'DATABASE_ERROR' as AuthErrorType,
+          message: error.message || 'Failed to assign role'
+        }
+      };
     }
   }
 
@@ -354,22 +463,30 @@ export class AuthService {
    */
   private validateRegisterData(data: RegisterData): void {
     if (!data.email || !data.password) {
-      throw new Error('Email and password are required');
+      const error = new Error('Email and password are required');
+      (error as any).type = 'VALIDATION_ERROR';
+      throw error;
     }
 
     // Validar formato de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(data.email)) {
-      throw new Error('Invalid email format');
+      const error = new Error('Invalid email format');
+      (error as any).type = 'VALIDATION_ERROR';
+      throw error;
     }
 
     // Validar contraseña
     if (data.password.length < 8) {
-      throw new Error('Password must be at least 8 characters long');
+      const error = new Error('Invalid password strength');
+      (error as any).type = 'VALIDATION_ERROR';
+      throw error;
     }
 
     if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(data.password)) {
-      throw new Error('Password must contain at least one uppercase letter, one lowercase letter, and one number');
+      const error = new Error('Password must contain at least one uppercase letter, one lowercase letter, and one number');
+      (error as any).type = 'VALIDATION_ERROR';
+      throw error;
     }
   }
 
@@ -393,13 +510,19 @@ export class AuthService {
    * @param userId ID del usuario
    * @param newPassword Nueva contraseña
    */
-  async updatePassword(userId: string, newPassword: string): Promise<void> {
+  async updatePassword(userId: string, newPassword: string): Promise<{ success: boolean; error?: { type: AuthErrorType; message: string } }> {
     try {
       const db = getDatabase();
 
       // Validar nueva contraseña
       if (newPassword.length < 8) {
-        throw new Error('Password must be at least 8 characters long');
+        return {
+          success: false,
+          error: {
+            type: 'VALIDATION_ERROR' as AuthErrorType,
+            message: 'Password must be at least 8 characters long'
+          }
+        };
       }
 
       // Hash de la nueva contraseña
@@ -415,9 +538,116 @@ export class AuthService {
       updatePasswordQuery.run(passwordHash, userId);
 
       console.log(`✅ Contraseña actualizada para usuario: ${userId}`);
+      return { success: true };
     } catch (error:any) {
       console.error('Error updating password:', error);
-      throw new Error(`Failed to update password: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: 'DATABASE_ERROR' as AuthErrorType,
+          message: `Failed to update password: ${error.message}`
+        }
+      };
+    }
+  }
+
+  /**
+   * Actualiza los datos de un usuario
+   * @param userId ID del usuario
+   * @param data Datos de actualización
+   */
+  async updateUser(userId: string, data: UpdateUserData): Promise<{ success: boolean; user?: User; error?: { type: AuthErrorType; message: string } }> {
+    try {
+      const db = getDatabase();
+
+      // Verificar que el usuario existe
+      const existingUser = await this.findUserById(userId);
+      if (!existingUser) {
+        return {
+          success: false,
+          error: {
+            type: 'USER_NOT_FOUND' as AuthErrorType,
+            message: 'User not found'
+          }
+        };
+      }
+
+      // Verificar que el email no esté en uso por otro usuario
+      if (data.email && data.email !== existingUser.email) {
+        const existingByEmail = await this.findUserByEmail(data.email);
+        if (existingByEmail && existingByEmail.id !== userId) {
+          return {
+            success: false,
+            error: {
+              type: 'VALIDATION_ERROR' as AuthErrorType,
+              message: 'Email already exists'
+            }
+          };
+        }
+      }
+
+      // Update lastLoginAt if provided
+      let updateFields = [];
+      let updateValues = [];
+      
+      if (data.email) {
+        updateFields.push('email = ?');
+        updateValues.push(data.email);
+      }
+      if (data.is_active !== undefined || data.isActive !== undefined) {
+        updateFields.push('is_active = ?');
+        const activeValue = data.is_active !== undefined ? data.is_active : data.isActive;
+        updateValues.push(activeValue ? 1 : 0);
+      }
+      if (data.password) {
+        const passwordHash = await Bun.password.hash(data.password, {
+          algorithm: 'bcrypt',
+          cost: 12
+        });
+        updateFields.push('password_hash = ?');
+        updateValues.push(passwordHash);
+      }
+      
+      updateFields.push("updated_at = datetime('now')");
+      updateValues.push(userId);
+
+      // Actualizar en la base de datos
+      const updateQuery = db.query(
+        `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`
+      );
+      updateQuery.run(...updateValues);
+
+      // Update lastLoginAt if this is a login update
+      if (data.lastLoginAt) {
+        const loginUpdateQuery = db.query(
+          "UPDATE users SET last_login_at = datetime('now') WHERE id = ?"
+        );
+        loginUpdateQuery.run(userId);
+      }
+
+      // Obtener el usuario actualizado
+      const updatedUser = await this.findUserById(userId, { includeRoles: true, includePermissions: true });
+      if (!updatedUser) {
+        return {
+          success: false,
+          error: {
+            type: 'DATABASE_ERROR' as AuthErrorType,
+            message: 'Failed to retrieve updated user'
+          }
+        };
+      }
+
+      console.log(`✅ Usuario actualizado: ${updatedUser.email}`);
+      return { success: true, user: updatedUser };
+    } catch (error:any) {
+      console.error('Error updating user:', error);
+      return {
+        success: false,
+        error: {
+          type: 'DATABASE_ERROR' as AuthErrorType,
+          message: error.message || 'Failed to update user'
+        }
+      };
     }
   }
 
@@ -425,7 +655,7 @@ export class AuthService {
    * Desactiva un usuario
    * @param userId ID del usuario
    */
-  async deactivateUser(userId: string): Promise<void> {
+  async deactivateUser(userId: string): Promise<{ success: boolean; error?: { type: AuthErrorType; message: string } }> {
     try {
       const db = getDatabase();
 
@@ -435,9 +665,16 @@ export class AuthService {
       deactivateQuery.run(userId);
 
       console.log(`✅ Usuario desactivado: ${userId}`);
+      return { success: true };
     } catch (error:any) {
       console.error('Error deactivating user:', error);
-      throw new Error(`Failed to deactivate user: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: 'DATABASE_ERROR' as AuthErrorType,
+          message: `Failed to deactivate user: ${error.message}`
+        }
+      };
     }
   }
 
@@ -445,7 +682,7 @@ export class AuthService {
    * Activa un usuario
    * @param userId ID del usuario
    */
-  async activateUser(userId: string): Promise<void> {
+  async activateUser(userId: string): Promise<{ success: boolean; error?: { type: AuthErrorType; message: string } }> {
     try {
       const db = getDatabase();
 
@@ -455,9 +692,131 @@ export class AuthService {
       activateQuery.run(userId);
 
       console.log(`✅ Usuario activado: ${userId}`);
+      return { success: true };
     } catch (error:any) {
       console.error('Error activating user:', error);
-      throw new Error(`Failed to activate user: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          type: 'DATABASE_ERROR' as AuthErrorType,
+          message: `Failed to activate user: ${error.message}`
+        }
+      };
+    }
+  }
+
+  /**
+   * Elimina un usuario
+   * @param userId ID del usuario
+   */
+  async deleteUser(userId: string): Promise<{ success: boolean; error?: { type: AuthErrorType; message: string } }> {
+    try {
+      const db = getDatabase();
+
+      // Verificar que el usuario existe
+      const existingUser = await this.findUserById(userId);
+      if (!existingUser) {
+        return {
+          success: false,
+          error: {
+            type: 'USER_NOT_FOUND' as AuthErrorType,
+            message: 'User not found'
+          }
+        };
+      }
+
+      // Eliminar roles del usuario
+      const deleteUserRolesQuery = db.query(
+        "DELETE FROM user_roles WHERE user_id = ?"
+      );
+      deleteUserRolesQuery.run(userId);
+
+      // Eliminar usuario
+      const deleteUserQuery = db.query(
+        "DELETE FROM users WHERE id = ?"
+      );
+      deleteUserQuery.run(userId);
+
+      console.log(`✅ Usuario eliminado: ${userId}`);
+      return { success: true };
+    } catch (error:any) {
+      console.error('Error deleting user:', error);
+      return {
+        success: false,
+        error: {
+          type: 'DATABASE_ERROR' as AuthErrorType,
+          message: error.message || 'Failed to delete user'
+        }
+      };
+    }
+  }
+
+  /**
+   * Remueve un rol de un usuario
+   * @param userId ID del usuario
+   * @param roleName Nombre del rol
+   */
+  async removeRole(userId: string, roleName: string): Promise<{ success: boolean; error?: { type: AuthErrorType; message: string } }> {
+    try {
+      const db = getDatabase();
+
+      // Verificar que el usuario existe
+      const existingUser = await this.findUserById(userId);
+      if (!existingUser) {
+        return {
+          success: false,
+          error: {
+            type: 'USER_NOT_FOUND' as AuthErrorType,
+            message: 'User not found'
+          }
+        };
+      }
+
+      // Verificar que el rol existe
+      const roleQuery = db.query("SELECT id FROM roles WHERE name = ?");
+      const role = roleQuery.get(roleName);
+      if (!role) {
+        return {
+          success: false,
+          error: {
+            type: 'NOT_FOUND_ERROR' as AuthErrorType,
+            message: 'Role not found'
+          }
+        };
+      }
+
+      // Verificar que el usuario tiene el rol
+      const userRoleQuery = db.query(
+        "SELECT id FROM user_roles WHERE user_id = ? AND role_id = ?"
+      );
+      const userRole = userRoleQuery.get(userId, role.id);
+      if (!userRole) {
+        return {
+          success: false,
+          error: {
+            type: 'NOT_FOUND_ERROR' as AuthErrorType,
+            message: 'User does not have this role'
+          }
+        };
+      }
+
+      // Remover el rol
+      const removeRoleQuery = db.query(
+        "DELETE FROM user_roles WHERE user_id = ? AND role_id = ?"
+      );
+      removeRoleQuery.run(userId, role.id);
+
+      console.log(`✅ Rol ${roleName} removido del usuario: ${userId}`);
+      return { success: true };
+    } catch (error:any) {
+      console.error('Error removing role:', error);
+      return {
+        success: false,
+        error: {
+          type: 'DATABASE_ERROR' as AuthErrorType,
+          message: error.message || 'Failed to remove role'
+        }
+      };
     }
   }
 
@@ -477,29 +836,52 @@ export class AuthService {
       const db = getDatabase();
       const offset = (page - 1) * limit;
 
-      // Contar total de usuarios
-      let countQuery;
+      // Build WHERE conditions
+      let whereConditions = [];
+      let queryParams = [];
+      
       if (options.activeOnly) {
-        countQuery = db.query("SELECT COUNT(*) as total FROM users WHERE is_active = 1");
-      } else {
-        countQuery = db.query("SELECT COUNT(*) as total FROM users");
+        whereConditions.push('is_active = ?');
+        queryParams.push(1);
       }
-      const countResult = countQuery.get();
+      
+      if (options.search) {
+        whereConditions.push('(email LIKE ? OR first_name LIKE ? OR last_name LIKE ?)');
+        const searchTerm = `%${options.search}%`;
+        queryParams.push(searchTerm, searchTerm, searchTerm);
+      }
+      
+      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+      
+      // Build ORDER BY clause
+      let orderBy = 'ORDER BY created_at DESC';
+      if (options.sortBy) {
+        const sortDirection = options.sortOrder === 'asc' ? 'ASC' : 'DESC';
+        switch (options.sortBy) {
+          case 'email':
+            orderBy = `ORDER BY email ${sortDirection}`;
+            break;
+          case 'created_at':
+            orderBy = `ORDER BY created_at ${sortDirection}`;
+            break;
+          case 'name':
+            orderBy = `ORDER BY first_name ${sortDirection}, last_name ${sortDirection}`;
+            break;
+          default:
+            orderBy = 'ORDER BY created_at DESC';
+        }
+      }
+
+      // Contar total de usuarios
+      const countQuery = db.query(`SELECT COUNT(*) as total FROM users ${whereClause}`);
+      const countResult = countQuery.get(...queryParams);
       const total = countResult.total;
 
       // Obtener usuarios con paginación
-      let usersResult;
-      if (options.activeOnly) {
-        const usersQuery = db.query(
-          "SELECT id, email, password_hash, created_at, updated_at, is_active FROM users WHERE is_active = 1 ORDER BY created_at DESC LIMIT ? OFFSET ?"
-        );
-        usersResult = usersQuery.all(limit, offset);
-      } else {
-        const usersQuery = db.query(
-          "SELECT id, email, password_hash, created_at, updated_at, is_active FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?"
-        );
-        usersResult = usersQuery.all(limit, offset);
-      }
+      const usersQuery = db.query(
+        `SELECT id, email, password_hash, first_name, last_name, created_at, updated_at, is_active, last_login_at FROM users ${whereClause} ${orderBy} LIMIT ? OFFSET ?`
+      );
+      const usersResult = usersQuery.all(...queryParams, limit, offset);
 
       const users = [];
       for (const userData of usersResult) {
@@ -507,9 +889,13 @@ export class AuthService {
           id: userData.id,
           email: userData.email,
           password_hash: userData.password_hash,
+          firstName: userData.first_name,
+          lastName: userData.last_name,
           created_at: new Date(userData.created_at),
           updated_at: new Date(userData.updated_at),
           is_active: Boolean(userData.is_active),
+          isActive: Boolean(userData.is_active),
+          lastLoginAt: userData.last_login_at ? new Date(userData.last_login_at) : undefined,
           roles: []
         };
 
