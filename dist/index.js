@@ -2,7 +2,7 @@
 // src/db/connection.ts
 import { Database } from "bun:sqlite";
 var db;
-function initDatabase2(dbPath = "./auth.db") {
+function initDatabase(dbPath = "./auth.db") {
   if (!db) {
     try {
       db = new Database(dbPath);
@@ -22,7 +22,7 @@ function initDatabase2(dbPath = "./auth.db") {
 function getDatabase() {
   if (!db) {
     console.log("\u26A0\uFE0F Database not initialized, auto-initializing with test.db");
-    initDatabase2("./test.db");
+    initDatabase("./test.db");
   }
   try {
     if (!db) {
@@ -33,7 +33,7 @@ function getDatabase() {
     if (error.message && error.message.includes("closed database")) {
       console.log("\u26A0\uFE0F Database connection closed, reinitializing...");
       db = null;
-      initDatabase2("./test.db");
+      initDatabase("./test.db");
     } else {
       throw error;
     }
@@ -46,13 +46,13 @@ function getDatabase() {
 function forceReinitDatabase() {
   console.log("\uD83D\uDD04 Force reinitializing database...");
   db = null;
-  initDatabase2("./test.db");
+  initDatabase("./test.db");
   if (!db) {
     throw new Error("Failed to reinitialize database");
   }
   return db;
 }
-async function closeDatabase2() {
+async function closeDatabase() {
   if (db) {
     try {
       db.close();
@@ -98,7 +98,7 @@ async function getDatabaseInfo() {
 }
 
 // src/services/jwt.ts
-class JWTService2 {
+class JWTService {
   secret;
   expiresIn;
   constructor(secret, expiresIn = "24h") {
@@ -294,7 +294,7 @@ function getJWTService() {
 }
 
 // src/services/auth.ts
-class AuthService2 {
+class AuthService {
   async register(data) {
     try {
       const db2 = getDatabase();
@@ -937,7 +937,7 @@ function getAuthService() {
   return authServiceInstance;
 }
 // src/services/permissions.ts
-class PermissionService2 {
+class PermissionService {
   async createPermission(data) {
     try {
       const db2 = getDatabase();
@@ -1758,6 +1758,293 @@ function getPermissionService() {
   }
   return permissionServiceInstance;
 }
+// src/config/auth.ts
+var DEFAULT_AUTH_CONFIG = {
+  jwtSecret: process.env.JWT_SECRET || "change-this-secret-in-production",
+  jwtExpiration: process.env.JWT_EXPIRATION || "1h",
+  refreshTokenExpiration: process.env.REFRESH_TOKEN_EXPIRATION || "7d",
+  database: {
+    path: process.env.DATABASE_PATH || "./data/auth.db",
+    enableWAL: process.env.DATABASE_WAL === "true",
+    enableForeignKeys: true,
+    busyTimeout: 5000
+  },
+  security: {
+    bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS || "12"),
+    maxLoginAttempts: parseInt(process.env.MAX_LOGIN_ATTEMPTS || "5"),
+    lockoutDuration: parseInt(process.env.LOCKOUT_DURATION || "900000"),
+    sessionTimeout: parseInt(process.env.SESSION_TIMEOUT || "3600000"),
+    requireEmailVerification: process.env.REQUIRE_EMAIL_VERIFICATION === "true",
+    allowMultipleSessions: process.env.ALLOW_MULTIPLE_SESSIONS !== "false",
+    passwordMinLength: parseInt(process.env.PASSWORD_MIN_LENGTH || "8"),
+    passwordRequireUppercase: process.env.PASSWORD_REQUIRE_UPPERCASE !== "false",
+    passwordRequireLowercase: process.env.PASSWORD_REQUIRE_LOWERCASE !== "false",
+    passwordRequireNumbers: process.env.PASSWORD_REQUIRE_NUMBERS !== "false",
+    passwordRequireSymbols: process.env.PASSWORD_REQUIRE_SYMBOLS !== "false"
+  },
+  cors: {
+    origins: process.env.CORS_ORIGINS?.split(",") || ["http://localhost:3000"],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    headers: ["Content-Type", "Authorization"]
+  },
+  rateLimit: {
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW || "900000"),
+    maxRequests: parseInt(process.env.RATE_LIMIT_MAX || "100"),
+    skipSuccessfulRequests: false,
+    skipFailedRequests: false
+  },
+  logging: {
+    level: process.env.LOG_LEVEL || "info",
+    enableConsole: process.env.LOG_CONSOLE !== "false",
+    enableFile: process.env.LOG_FILE === "true",
+    filePath: process.env.LOG_FILE_PATH || "./logs/auth.log",
+    enableDatabase: process.env.LOG_DATABASE === "true"
+  }
+};
+var SECURITY_CONFIG = {
+  securityHeaders: {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "X-XSS-Protection": "1; mode=block",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "Referrer-Policy": "strict-origin-when-cross-origin"
+  },
+  cookies: {
+    httpOnly: true,
+    secure: false,
+    sameSite: "strict",
+    maxAge: 24 * 60 * 60 * 1000
+  },
+  validation: {
+    maxEmailLength: 254,
+    maxNameLength: 100,
+    maxPasswordLength: 128,
+    allowedEmailDomains: process.env.ALLOWED_EMAIL_DOMAINS?.split(","),
+    blockedEmailDomains: process.env.BLOCKED_EMAIL_DOMAINS?.split(",") || [
+      "tempmail.org",
+      "10minutemail.com",
+      "guerrillamail.com"
+    ]
+  },
+  ipSecurity: {
+    enableGeoBlocking: process.env.ENABLE_GEO_BLOCKING === "true",
+    blockedCountries: process.env.BLOCKED_COUNTRIES?.split(",") || [],
+    enableIPWhitelist: process.env.ENABLE_IP_WHITELIST === "true",
+    ipWhitelist: process.env.IP_WHITELIST?.split(",") || [],
+    enableIPBlacklist: process.env.ENABLE_IP_BLACKLIST === "true",
+    ipBlacklist: process.env.IP_BLACKLIST?.split(",") || []
+  }
+};
+var DEV_CONFIG = {
+  jwtSecret: "dev-secret-key-not-for-production",
+  jwtExpiration: "24h",
+  refreshTokenExpiration: "30d",
+  security: {
+    bcryptRounds: 4,
+    maxLoginAttempts: 10,
+    lockoutDuration: 60000,
+    sessionTimeout: 24 * 60 * 60 * 1000,
+    requireEmailVerification: false,
+    allowMultipleSessions: true,
+    passwordMinLength: 6,
+    passwordRequireUppercase: false,
+    passwordRequireLowercase: false,
+    passwordRequireNumbers: false,
+    passwordRequireSymbols: false
+  },
+  logging: {
+    level: "debug",
+    enableConsole: true,
+    enableFile: false,
+    filePath: "./logs/auth.log",
+    enableDatabase: false
+  }
+};
+var PROD_CONFIG = {
+  security: {
+    bcryptRounds: 14,
+    maxLoginAttempts: 3,
+    lockoutDuration: 30 * 60 * 1000,
+    sessionTimeout: 60 * 60 * 1000,
+    requireEmailVerification: true,
+    allowMultipleSessions: false,
+    passwordMinLength: 12,
+    passwordRequireUppercase: true,
+    passwordRequireLowercase: true,
+    passwordRequireNumbers: true,
+    passwordRequireSymbols: true
+  },
+  logging: {
+    level: "warn",
+    enableConsole: false,
+    enableFile: true,
+    filePath: "./logs/auth.log",
+    enableDatabase: true
+  }
+};
+function getAuthConfig(environment) {
+  const env = environment || "development";
+  let config = { ...DEFAULT_AUTH_CONFIG };
+  switch (env) {
+    case "development":
+      config = mergeConfig(config, DEV_CONFIG);
+      break;
+    case "production":
+      config = mergeConfig(config, PROD_CONFIG);
+      break;
+    case "test":
+      config = mergeConfig(config, {
+        database: {
+          path: ":memory:",
+          enableWAL: false,
+          enableForeignKeys: true,
+          busyTimeout: 5000
+        },
+        logging: {
+          level: "error",
+          enableConsole: false,
+          enableFile: false,
+          filePath: "./logs/auth.log",
+          enableDatabase: false
+        }
+      });
+      break;
+  }
+  return config;
+}
+function validateAuthConfig(config) {
+  const errors = [];
+  if (!config.jwtSecret || config.jwtSecret === "change-this-secret-in-production") {
+    if (false) {}
+  }
+  if (config.jwtSecret && config.jwtSecret.length < 32) {
+    errors.push("JWT secret debe tener al menos 32 caracteres");
+  }
+  if (!config.database?.path) {
+    errors.push("Ruta de base de datos es requerida");
+  }
+  if (config.security) {
+    if (config.security.bcryptRounds < 4 || config.security.bcryptRounds > 20) {
+      errors.push("bcryptRounds debe estar entre 4 y 20");
+    }
+    if (config.security.passwordMinLength < 6) {
+      errors.push("passwordMinLength debe ser al menos 6");
+    }
+    if (config.security.maxLoginAttempts < 1) {
+      errors.push("maxLoginAttempts debe ser al menos 1");
+    }
+  }
+  if (config.cors?.origins && config.cors.origins.length === 0) {
+    errors.push("Al menos un origen CORS debe ser especificado");
+  }
+  return {
+    valid: errors.length === 0,
+    errors
+  };
+}
+function getRequiredEnvVars() {
+  return {
+    JWT_SECRET: process.env.JWT_SECRET,
+    DATABASE_PATH: process.env.DATABASE_PATH,
+    NODE_ENV: "development",
+    BCRYPT_ROUNDS: process.env.BCRYPT_ROUNDS,
+    MAX_LOGIN_ATTEMPTS: process.env.MAX_LOGIN_ATTEMPTS,
+    CORS_ORIGINS: process.env.CORS_ORIGINS
+  };
+}
+function generateEnvExample() {
+  return `# Configuraci\xF3n de Autenticaci\xF3n
+
+# JWT Configuration
+JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+JWT_EXPIRATION=1h
+REFRESH_TOKEN_EXPIRATION=7d
+
+# Database Configuration
+DATABASE_PATH=./data/auth.db
+DATABASE_WAL=true
+
+# Security Configuration
+BCRYPT_ROUNDS=12
+MAX_LOGIN_ATTEMPTS=5
+LOCKOUT_DURATION=900000
+SESSION_TIMEOUT=3600000
+REQUIRE_EMAIL_VERIFICATION=false
+ALLOW_MULTIPLE_SESSIONS=true
+
+# Password Policy
+PASSWORD_MIN_LENGTH=8
+PASSWORD_REQUIRE_UPPERCASE=true
+PASSWORD_REQUIRE_LOWERCASE=true
+PASSWORD_REQUIRE_NUMBERS=true
+PASSWORD_REQUIRE_SYMBOLS=true
+
+# CORS Configuration
+CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+
+# Rate Limiting
+RATE_LIMIT_WINDOW=900000
+RATE_LIMIT_MAX=100
+
+# Logging
+LOG_LEVEL=info
+LOG_CONSOLE=true
+LOG_FILE=false
+LOG_FILE_PATH=./logs/auth.log
+LOG_DATABASE=false
+
+# Email Validation
+ALLOWED_EMAIL_DOMAINS=
+BLOCKED_EMAIL_DOMAINS=tempmail.org,10minutemail.com
+
+# IP Security
+ENABLE_GEO_BLOCKING=false
+BLOCKED_COUNTRIES=
+ENABLE_IP_WHITELIST=false
+IP_WHITELIST=
+ENABLE_IP_BLACKLIST=false
+IP_BLACKLIST=
+
+# Environment
+NODE_ENV=development
+`;
+}
+function mergeConfig(base, override) {
+  const result = { ...base };
+  Object.keys(override).forEach((key) => {
+    const value = override[key];
+    if (value !== undefined) {
+      if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+        const baseValue = result[key];
+        if (typeof baseValue === "object" && baseValue !== null && !Array.isArray(baseValue)) {
+          result[key] = {
+            ...baseValue,
+            ...value
+          };
+        } else {
+          result[key] = value;
+        }
+      } else {
+        result[key] = value;
+      }
+    }
+  });
+  return result;
+}
+function printConfig(config) {
+  const safeConfig = { ...config };
+  if (safeConfig.jwtSecret) {
+    safeConfig.jwtSecret = "***HIDDEN***";
+  }
+  console.log("\uD83D\uDD27 Configuraci\xF3n de autenticaci\xF3n:");
+  console.log(JSON.stringify(safeConfig, null, 2));
+}
+var auth_default = getAuthConfig();
+
+// src/adapters/websocket.ts
+import { WebSocket } from "ws";
+
 // src/middleware/auth.ts
 async function authenticateRequest(request, config = {}) {
   const {
@@ -1901,482 +2188,11 @@ function extractClientIP(headers) {
 function extractUserAgent(headers) {
   return headers["user-agent"] || headers["User-Agent"] || "Unknown";
 }
-// src/adapters/hono.ts
-function honoAuthMiddleware2(config = {}) {
-  return async (c, next) => {
-    try {
-      if (config.skipPaths && config.skipPaths.includes(c.req.path)) {
-        c.set("auth", createEmptyAuthContext());
-        await next();
-        return;
-      }
-      const authRequest = {
-        headers: Object.fromEntries(c.req.header())
-      };
-      const result = await authenticateRequest(authRequest, config);
-      if (!result.success) {
-        logAuthEvent("auth.failed", undefined, {
-          path: c.req.path,
-          method: c.req.method,
-          ip: extractClientIP(authRequest.headers),
-          userAgent: extractUserAgent(authRequest.headers),
-          error: result.error
-        });
-        return c.json({
-          error: result.error,
-          timestamp: new Date().toISOString()
-        }, result.statusCode || 401);
-      }
-      c.set("auth", result.context);
-      if (result.context?.user) {
-        logAuthEvent("auth.success", result.context.user.id, {
-          path: c.req.path,
-          method: c.req.method,
-          ip: extractClientIP(authRequest.headers),
-          userAgent: extractUserAgent(authRequest.headers)
-        });
-      }
-      await next();
-    } catch (error) {
-      console.error("Hono auth middleware error:", error);
-      return c.json({
-        error: "Internal authentication error",
-        timestamp: new Date().toISOString()
-      }, 500);
-    }
-  };
-}
-function honoOptionalAuth2() {
-  return honoAuthMiddleware2({ required: false });
-}
-function honoRequireAuth2() {
-  return honoAuthMiddleware2({ required: true });
-}
-function honoRequirePermissions2(permissions, requireAll = false) {
-  return honoAuthMiddleware2({
-    required: true,
-    permissions,
-    permissionOptions: { requireAll }
-  });
-}
-function honoRequireRoles2(roles) {
-  return async (c, next) => {
-    const authContext = c.get("auth");
-    if (!authContext?.user) {
-      return c.json({
-        error: "Authentication required",
-        timestamp: new Date().toISOString()
-      }, 401);
-    }
-    const userRoles = authContext.user.roles.map((role) => role.name);
-    const hasRequiredRole = roles.some((role) => userRoles.includes(role));
-    if (!hasRequiredRole) {
-      logAuthEvent("auth.insufficient_roles", authContext.user.id, {
-        requiredRoles: roles,
-        userRoles,
-        path: c.req.path
-      });
-      return c.json({
-        error: `Insufficient roles. Required: ${roles.join(", ")}`,
-        timestamp: new Date().toISOString()
-      }, 403);
-    }
-    await next();
-  };
-}
-function honoRequireAdmin2() {
-  return honoRequireRoles2(["admin", "administrator"]);
-}
-function honoRequireModerator2() {
-  return honoRequireRoles2(["moderator", "admin", "administrator"]);
-}
-function getHonoCurrentUser(c) {
-  const authContext = c.get("auth");
-  return getCurrentUser(authContext);
-}
-function isHonoAuthenticated(c) {
-  const authContext = c.get("auth");
-  return !!authContext?.user;
-}
-function getHonoAuthContext(c) {
-  return c.get("auth") || createEmptyAuthContext();
-}
-function honoRequireOwnership2(getUserIdFromParams) {
-  return async (c, next) => {
-    const authContext = c.get("auth");
-    if (!authContext?.user) {
-      return c.json({
-        error: "Authentication required",
-        timestamp: new Date().toISOString()
-      }, 401);
-    }
-    const resourceUserId = getUserIdFromParams(c);
-    const isOwner = authContext.user.id === resourceUserId;
-    const isAdmin = authContext.user.roles.some((role) => ["admin", "administrator"].includes(role.name));
-    if (!isOwner && !isAdmin) {
-      logAuthEvent("auth.insufficient_ownership", authContext.user.id, {
-        resourceUserId,
-        path: c.req.path
-      });
-      return c.json({
-        error: "Insufficient permissions. You can only access your own resources.",
-        timestamp: new Date().toISOString()
-      }, 403);
-    }
-    await next();
-  };
-}
-function honoRateLimit2(maxRequests = 100, windowMs = 15 * 60 * 1000) {
-  const requests = new Map;
-  return async (c, next) => {
-    const authContext = c.get("auth");
-    const clientId = authContext?.user?.id || extractClientIP(Object.fromEntries(c.req.header()));
-    const now = Date.now();
-    const clientData = requests.get(clientId);
-    if (!clientData || now > clientData.resetTime) {
-      requests.set(clientId, {
-        count: 1,
-        resetTime: now + windowMs
-      });
-    } else {
-      clientData.count++;
-      if (clientData.count > maxRequests) {
-        return c.json({
-          error: "Rate limit exceeded",
-          retryAfter: Math.ceil((clientData.resetTime - now) / 1000),
-          timestamp: new Date().toISOString()
-        }, 429);
-      }
-    }
-    await next();
-  };
-}
-function honoCorsAuth2(origins = ["*"]) {
-  return async (c, next) => {
-    const origin = c.req.header("origin");
-    if (origins.includes("*") || origin && origins.includes(origin)) {
-      c.header("Access-Control-Allow-Origin", origin || "*");
-      c.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-      c.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-      c.header("Access-Control-Allow-Credentials", "true");
-    }
-    if (c.req.method === "OPTIONS") {
-      return c.text("", 204);
-    }
-    await next();
-  };
-}
-function honoErrorResponse(c, error, statusCode = 400) {
-  return c.json({
-    error,
-    timestamp: new Date().toISOString(),
-    path: c.req.path,
-    method: c.req.method
-  }, statusCode);
-}
-function honoSuccessResponse(c, data, message, statusCode = 200) {
-  const response = {
-    success: true,
-    data,
-    timestamp: new Date().toISOString()
-  };
-  if (message) {
-    response.message = message;
-  }
-  return c.json(response, statusCode);
-}
-function honoAuthLogger2() {
-  return async (c, next) => {
-    const start = Date.now();
-    const authContext = c.get("auth");
-    await next();
-    const duration = Date.now() - start;
-    const logData = {
-      method: c.req.method,
-      path: c.req.path,
-      status: c.res.status,
-      duration: `${duration}ms`,
-      userId: authContext?.user?.id,
-      ip: extractClientIP(Object.fromEntries(c.req.header())),
-      userAgent: extractUserAgent(Object.fromEntries(c.req.header()))
-    };
-    console.log(`\uD83D\uDCDD Request: ${JSON.stringify(logData)}`);
-  };
-}
-// src/adapters/express.ts
-function expressAuthMiddleware2(config = {}) {
-  return async (req, res, next) => {
-    try {
-      if (config.skipPaths && config.skipPaths.includes(req.path)) {
-        req.auth = createEmptyAuthContext();
-        return next();
-      }
-      const authRequest = {
-        headers: req.headers
-      };
-      const result = await authenticateRequest(authRequest, config);
-      if (!result.success) {
-        logAuthEvent("auth.failed", undefined, {
-          path: req.path,
-          method: req.method,
-          ip: extractClientIP(authRequest.headers),
-          userAgent: extractUserAgent(authRequest.headers),
-          error: result.error
-        });
-        return res.status(result.statusCode || 401).json({
-          error: result.error,
-          timestamp: new Date().toISOString()
-        });
-      }
-      req.auth = result.context;
-      if (result.context?.user) {
-        logAuthEvent("auth.success", result.context.user.id, {
-          path: req.path,
-          method: req.method,
-          ip: extractClientIP(authRequest.headers),
-          userAgent: extractUserAgent(authRequest.headers)
-        });
-      }
-      next();
-    } catch (error) {
-      console.error("Express auth middleware error:", error);
-      return res.status(500).json({
-        error: "Internal authentication error",
-        timestamp: new Date().toISOString()
-      });
-    }
-  };
-}
-function expressOptionalAuth2() {
-  return expressAuthMiddleware2({ required: false });
-}
-function expressRequireAuth2() {
-  return expressAuthMiddleware2({ required: true });
-}
-function expressRequirePermissions2(permissions, requireAll = false) {
-  return expressAuthMiddleware2({
-    required: true,
-    permissions,
-    permissionOptions: { requireAll }
-  });
-}
-function expressRequireRoles2(roles) {
-  return (req, res, next) => {
-    const authContext = req.auth;
-    if (!authContext?.user) {
-      return res.status(401).json({
-        error: "Authentication required",
-        timestamp: new Date().toISOString()
-      });
-    }
-    const userRoles = authContext.user.roles.map((role) => role.name);
-    const hasRequiredRole = roles.some((role) => userRoles.includes(role));
-    if (!hasRequiredRole) {
-      logAuthEvent("auth.insufficient_roles", authContext.user.id, {
-        requiredRoles: roles,
-        userRoles,
-        path: req.path
-      });
-      return res.status(403).json({
-        error: `Insufficient roles. Required: ${roles.join(", ")}`,
-        timestamp: new Date().toISOString()
-      });
-    }
-    next();
-  };
-}
-function expressRequireAdmin2() {
-  return expressRequireRoles2(["admin", "administrator"]);
-}
-function expressRequireModerator2() {
-  return expressRequireRoles2(["moderator", "admin", "administrator"]);
-}
-function getExpressCurrentUser(req) {
-  return getCurrentUser(req.auth);
-}
-function isExpressAuthenticated(req) {
-  return !!req.auth?.user;
-}
-function getExpressAuthContext(req) {
-  return req.auth || createEmptyAuthContext();
-}
-function expressRequireOwnership2(getUserIdFromParams) {
-  return (req, res, next) => {
-    const authContext = req.auth;
-    if (!authContext?.user) {
-      return res.status(401).json({
-        error: "Authentication required",
-        timestamp: new Date().toISOString()
-      });
-    }
-    const resourceUserId = getUserIdFromParams(req);
-    const isOwner = authContext.user.id === resourceUserId;
-    const isAdmin = authContext.user.roles.some((role) => ["admin", "administrator"].includes(role.name));
-    if (!isOwner && !isAdmin) {
-      logAuthEvent("auth.insufficient_ownership", authContext.user.id, {
-        resourceUserId,
-        path: req.path
-      });
-      return res.status(403).json({
-        error: "Insufficient permissions. You can only access your own resources.",
-        timestamp: new Date().toISOString()
-      });
-    }
-    next();
-  };
-}
-function expressRateLimit2(maxRequests = 100, windowMs = 15 * 60 * 1000) {
-  const requests = new Map;
-  return (req, res, next) => {
-    const authContext = req.auth;
-    const clientId = authContext?.user?.id || extractClientIP(req.headers);
-    const now = Date.now();
-    const clientData = requests.get(clientId);
-    if (!clientData || now > clientData.resetTime) {
-      requests.set(clientId, {
-        count: 1,
-        resetTime: now + windowMs
-      });
-    } else {
-      clientData.count++;
-      if (clientData.count > maxRequests) {
-        return res.status(429).json({
-          error: "Rate limit exceeded",
-          retryAfter: Math.ceil((clientData.resetTime - now) / 1000),
-          timestamp: new Date().toISOString()
-        });
-      }
-    }
-    next();
-  };
-}
-function expressCorsAuth2(origins = ["*"]) {
-  return (req, res, next) => {
-    const origin = req.headers.origin;
-    if (origins.includes("*") || origin && origins.includes(origin)) {
-      res.header("Access-Control-Allow-Origin", origin || "*");
-      res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-      res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-      res.header("Access-Control-Allow-Credentials", "true");
-    }
-    if (req.method === "OPTIONS") {
-      return res.sendStatus(204);
-    }
-    next();
-  };
-}
-function expressErrorResponse(res, error, statusCode = 400) {
-  return res.status(statusCode).json({
-    error,
-    timestamp: new Date().toISOString()
-  });
-}
-function expressSuccessResponse(res, data, message, statusCode = 200) {
-  const response = {
-    success: true,
-    data,
-    timestamp: new Date().toISOString()
-  };
-  if (message) {
-    response.message = message;
-  }
-  return res.status(statusCode).json(response);
-}
-function expressAuthLogger2() {
-  return (req, res, next) => {
-    const start = Date.now();
-    const authContext = req.auth;
-    res.on("finish", () => {
-      const duration = Date.now() - start;
-      const logData = {
-        method: req.method,
-        path: req.path,
-        status: res.statusCode,
-        duration: `${duration}ms`,
-        userId: authContext?.user?.id,
-        ip: extractClientIP(req.headers),
-        userAgent: extractUserAgent(req.headers)
-      };
-      console.log(`\uD83D\uDCDD Request: ${JSON.stringify(logData)}`);
-    });
-    next();
-  };
-}
-function expressAuthErrorHandler2() {
-  return (error, req, res, next) => {
-    console.error("Express auth error:", error);
-    const authContext = req.auth;
-    logAuthEvent("auth.error", authContext?.user?.id, {
-      error: error.message,
-      stack: error.stack,
-      path: req.path,
-      method: req.method
-    });
-    let statusCode = 500;
-    let message = "Internal server error";
-    if (error.name === "ValidationError") {
-      statusCode = 400;
-      message = "Validation error";
-    } else if (error.name === "UnauthorizedError") {
-      statusCode = 401;
-      message = "Unauthorized";
-    } else if (error.name === "ForbiddenError") {
-      statusCode = 403;
-      message = "Forbidden";
-    }
-    res.status(statusCode).json({
-      error: message,
-      timestamp: new Date().toISOString(),
-      ...{ details: error.message }
-    });
-  };
-}
-function expressJsonValidator2() {
-  return (req, res, next) => {
-    if (req.headers["content-type"]?.includes("application/json")) {
-      try {
-        if (req.body && typeof req.body === "string") {
-          req.body = JSON.parse(req.body);
-        }
-      } catch (error) {
-        return res.status(400).json({
-          error: "Invalid JSON format",
-          timestamp: new Date().toISOString()
-        });
-      }
-    }
-    next();
-  };
-}
-function expressSanitizer2() {
-  return (req, res, next) => {
-    if (req.query) {
-      for (const key in req.query) {
-        if (typeof req.query[key] === "string") {
-          req.query[key] = req.query[key].replace(/<script[^>]*>.*?<\/script>/gi, "").replace(/<[^>]*>/g, "").trim();
-        }
-      }
-    }
-    if (req.body && typeof req.body === "object") {
-      sanitizeObject(req.body);
-    }
-    next();
-  };
-}
-function sanitizeObject(obj) {
-  for (const key in obj) {
-    if (typeof obj[key] === "string") {
-      obj[key] = obj[key].replace(/<script[^>]*>.*?<\/script>/gi, "").replace(/<[^>]*>/g, "").trim();
-    } else if (typeof obj[key] === "object" && obj[key] !== null) {
-      sanitizeObject(obj[key]);
-    }
-  }
-}
+
 // src/adapters/websocket.ts
-import { WebSocket } from "ws";
 var activeConnections = new Map;
 var connectionsBySession = new Map;
-async function authenticateWebSocket2(ws, request, config = {}) {
+async function authenticateWebSocket(ws, request, config = {}) {
   try {
     const url = new URL(request.url, "http://localhost");
     let token = url.searchParams.get("token");
@@ -2438,7 +2254,7 @@ async function authenticateWebSocket2(ws, request, config = {}) {
     return false;
   }
 }
-function checkWebSocketPermissions2(ws, permissions, requireAll = false) {
+function checkWebSocketPermissions(ws, permissions, requireAll = false) {
   if (!ws.auth?.user) {
     return false;
   }
@@ -2449,23 +2265,23 @@ function checkWebSocketPermissions2(ws, permissions, requireAll = false) {
     return permissions.some((permission) => userPermissions.includes(permission));
   }
 }
-function checkWebSocketRoles2(ws, roles) {
+function checkWebSocketRoles(ws, roles) {
   if (!ws.auth?.user) {
     return false;
   }
   const userRoles = ws.auth.user.roles.map((role) => role.name);
   return roles.some((role) => userRoles.includes(role));
 }
-function getWebSocketCurrentUser2(ws) {
+function getWebSocketCurrentUser(ws) {
   return getCurrentUser(ws.auth);
 }
-function isWebSocketAuthenticated2(ws) {
+function isWebSocketAuthenticated(ws) {
   return !!ws.auth?.user;
 }
-function getWebSocketAuthContext2(ws) {
+function getWebSocketAuthContext(ws) {
   return ws.auth || createEmptyAuthContext();
 }
-function sendToUser2(userId, message, excludeSession) {
+function sendToUser(userId, message, excludeSession) {
   const userConnections = activeConnections.get(userId);
   if (!userConnections)
     return;
@@ -2478,27 +2294,27 @@ function sendToUser2(userId, message, excludeSession) {
     }
   });
 }
-function sendToUsersWithPermissions2(permissions, message, requireAll = false) {
+function sendToUsersWithPermissions(permissions, message, requireAll = false) {
   const messageStr = typeof message === "string" ? message : JSON.stringify(message);
   activeConnections.forEach((connections, userId) => {
     connections.forEach((ws) => {
-      if (ws.readyState === WebSocket.OPEN && checkWebSocketPermissions2(ws, permissions, requireAll)) {
+      if (ws.readyState === WebSocket.OPEN && checkWebSocketPermissions(ws, permissions, requireAll)) {
         ws.send(messageStr);
       }
     });
   });
 }
-function sendToUsersWithRoles2(roles, message) {
+function sendToUsersWithRoles(roles, message) {
   const messageStr = typeof message === "string" ? message : JSON.stringify(message);
   activeConnections.forEach((connections, userId) => {
     connections.forEach((ws) => {
-      if (ws.readyState === WebSocket.OPEN && checkWebSocketRoles2(ws, roles)) {
+      if (ws.readyState === WebSocket.OPEN && checkWebSocketRoles(ws, roles)) {
         ws.send(messageStr);
       }
     });
   });
 }
-function broadcastToAuthenticated2(message, excludeUser) {
+function broadcastToAuthenticated(message, excludeUser) {
   const messageStr = typeof message === "string" ? message : JSON.stringify(message);
   activeConnections.forEach((connections, userId) => {
     if (excludeUser && userId === excludeUser)
@@ -2510,7 +2326,7 @@ function broadcastToAuthenticated2(message, excludeUser) {
     });
   });
 }
-function getConnectionStats2() {
+function getConnectionStats() {
   let totalConnections = 0;
   const userStats = {};
   activeConnections.forEach((connections, userId) => {
@@ -2524,7 +2340,7 @@ function getConnectionStats2() {
     userStats
   };
 }
-function disconnectUser2(userId, reason = "User disconnected") {
+function disconnectUser(userId, reason = "User disconnected") {
   const userConnections = activeConnections.get(userId);
   if (!userConnections)
     return;
@@ -2535,7 +2351,7 @@ function disconnectUser2(userId, reason = "User disconnected") {
   });
   logAuthEvent("websocket.user_disconnected", userId, { reason });
 }
-function cleanupInactiveConnections2() {
+function cleanupInactiveConnections() {
   const now = new Date;
   const inactiveThreshold = 30 * 60 * 1000;
   activeConnections.forEach((connections, userId) => {
@@ -2606,9 +2422,9 @@ function setupSessionTimeout(ws, timeout) {
 function generateSessionId() {
   return `ws_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
-function handleAuthenticatedMessage2(ws, message, permissions) {
+function handleAuthenticatedMessage(ws, message, permissions) {
   ws.lastActivity = new Date;
-  if (!isWebSocketAuthenticated2(ws)) {
+  if (!isWebSocketAuthenticated(ws)) {
     ws.send(JSON.stringify({
       type: "error",
       message: "Authentication required",
@@ -2616,7 +2432,7 @@ function handleAuthenticatedMessage2(ws, message, permissions) {
     }));
     return false;
   }
-  if (permissions && !checkWebSocketPermissions2(ws, permissions)) {
+  if (permissions && !checkWebSocketPermissions(ws, permissions)) {
     ws.send(JSON.stringify({
       type: "error",
       message: "Insufficient permissions",
@@ -2630,7 +2446,7 @@ function handleAuthenticatedMessage2(ws, message, permissions) {
   }
   return true;
 }
-function createWebSocketResponse2(type, data, message) {
+function createWebSocketResponse(type, data, message) {
   return {
     type,
     data,
@@ -2638,11 +2454,12 @@ function createWebSocketResponse2(type, data, message) {
     timestamp: new Date().toISOString()
   };
 }
-function initializeConnectionCleanup2(interval = 5 * 60 * 1000) {
+function initializeConnectionCleanup(interval = 5 * 60 * 1000) {
   setInterval(() => {
-    cleanupInactiveConnections2();
+    cleanupInactiveConnections();
   }, interval);
 }
+
 // src/db/migrations.ts
 var migrations = [
   {
@@ -2949,7 +2766,7 @@ async function recordMigration(version, name) {
   const db2 = getDatabase();
   db2.query("INSERT INTO migration_history (version, name) VALUES (?, ?)").run(version, name);
 }
-async function runMigrations2() {
+async function runMigrations() {
   console.log("\uD83D\uDD04 Iniciando migraciones...");
   const db2 = getDatabase();
   db2.exec(`
@@ -3024,7 +2841,7 @@ async function getMigrationStatus() {
     executedMigrations
   };
 }
-async function resetDatabase2() {
+async function resetDatabase() {
   console.log("\uD83D\uDD04 Reseteando base de datos...");
   const db2 = getDatabase();
   try {
@@ -3040,296 +2857,14 @@ async function resetDatabase2() {
     db2.exec("DROP TABLE IF EXISTS migration_history");
     db2.exec("COMMIT");
     console.log("\u2705 Base de datos reseteada");
-    await runMigrations2();
+    await runMigrations();
   } catch (error) {
     db2.exec("ROLLBACK");
     console.error("\u274C Error al resetear la base de datos:", error);
     throw error;
   }
 }
-// src/config/auth.ts
-var DEFAULT_AUTH_CONFIG = {
-  jwtSecret: process.env.JWT_SECRET || "change-this-secret-in-production",
-  jwtExpiration: process.env.JWT_EXPIRATION || "1h",
-  refreshTokenExpiration: process.env.REFRESH_TOKEN_EXPIRATION || "7d",
-  database: {
-    path: process.env.DATABASE_PATH || "./data/auth.db",
-    enableWAL: process.env.DATABASE_WAL === "true",
-    enableForeignKeys: true,
-    busyTimeout: 5000
-  },
-  security: {
-    bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS || "12"),
-    maxLoginAttempts: parseInt(process.env.MAX_LOGIN_ATTEMPTS || "5"),
-    lockoutDuration: parseInt(process.env.LOCKOUT_DURATION || "900000"),
-    sessionTimeout: parseInt(process.env.SESSION_TIMEOUT || "3600000"),
-    requireEmailVerification: process.env.REQUIRE_EMAIL_VERIFICATION === "true",
-    allowMultipleSessions: process.env.ALLOW_MULTIPLE_SESSIONS !== "false",
-    passwordMinLength: parseInt(process.env.PASSWORD_MIN_LENGTH || "8"),
-    passwordRequireUppercase: process.env.PASSWORD_REQUIRE_UPPERCASE !== "false",
-    passwordRequireLowercase: process.env.PASSWORD_REQUIRE_LOWERCASE !== "false",
-    passwordRequireNumbers: process.env.PASSWORD_REQUIRE_NUMBERS !== "false",
-    passwordRequireSymbols: process.env.PASSWORD_REQUIRE_SYMBOLS !== "false"
-  },
-  cors: {
-    origins: process.env.CORS_ORIGINS?.split(",") || ["http://localhost:3000"],
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    headers: ["Content-Type", "Authorization"]
-  },
-  rateLimit: {
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW || "900000"),
-    maxRequests: parseInt(process.env.RATE_LIMIT_MAX || "100"),
-    skipSuccessfulRequests: false,
-    skipFailedRequests: false
-  },
-  logging: {
-    level: process.env.LOG_LEVEL || "info",
-    enableConsole: process.env.LOG_CONSOLE !== "false",
-    enableFile: process.env.LOG_FILE === "true",
-    filePath: process.env.LOG_FILE_PATH || "./logs/auth.log",
-    enableDatabase: process.env.LOG_DATABASE === "true"
-  }
-};
-var SECURITY_CONFIG = {
-  securityHeaders: {
-    "X-Content-Type-Options": "nosniff",
-    "X-Frame-Options": "DENY",
-    "X-XSS-Protection": "1; mode=block",
-    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-    "Referrer-Policy": "strict-origin-when-cross-origin"
-  },
-  cookies: {
-    httpOnly: true,
-    secure: false,
-    sameSite: "strict",
-    maxAge: 24 * 60 * 60 * 1000
-  },
-  validation: {
-    maxEmailLength: 254,
-    maxNameLength: 100,
-    maxPasswordLength: 128,
-    allowedEmailDomains: process.env.ALLOWED_EMAIL_DOMAINS?.split(","),
-    blockedEmailDomains: process.env.BLOCKED_EMAIL_DOMAINS?.split(",") || [
-      "tempmail.org",
-      "10minutemail.com",
-      "guerrillamail.com"
-    ]
-  },
-  ipSecurity: {
-    enableGeoBlocking: process.env.ENABLE_GEO_BLOCKING === "true",
-    blockedCountries: process.env.BLOCKED_COUNTRIES?.split(",") || [],
-    enableIPWhitelist: process.env.ENABLE_IP_WHITELIST === "true",
-    ipWhitelist: process.env.IP_WHITELIST?.split(",") || [],
-    enableIPBlacklist: process.env.ENABLE_IP_BLACKLIST === "true",
-    ipBlacklist: process.env.IP_BLACKLIST?.split(",") || []
-  }
-};
-var DEV_CONFIG = {
-  jwtSecret: "dev-secret-key-not-for-production",
-  jwtExpiration: "24h",
-  refreshTokenExpiration: "30d",
-  security: {
-    bcryptRounds: 4,
-    maxLoginAttempts: 10,
-    lockoutDuration: 60000,
-    sessionTimeout: 24 * 60 * 60 * 1000,
-    requireEmailVerification: false,
-    allowMultipleSessions: true,
-    passwordMinLength: 6,
-    passwordRequireUppercase: false,
-    passwordRequireLowercase: false,
-    passwordRequireNumbers: false,
-    passwordRequireSymbols: false
-  },
-  logging: {
-    level: "debug",
-    enableConsole: true,
-    enableFile: false,
-    filePath: "./logs/auth.log",
-    enableDatabase: false
-  }
-};
-var PROD_CONFIG = {
-  security: {
-    bcryptRounds: 14,
-    maxLoginAttempts: 3,
-    lockoutDuration: 30 * 60 * 1000,
-    sessionTimeout: 60 * 60 * 1000,
-    requireEmailVerification: true,
-    allowMultipleSessions: false,
-    passwordMinLength: 12,
-    passwordRequireUppercase: true,
-    passwordRequireLowercase: true,
-    passwordRequireNumbers: true,
-    passwordRequireSymbols: true
-  },
-  logging: {
-    level: "warn",
-    enableConsole: false,
-    enableFile: true,
-    filePath: "./logs/auth.log",
-    enableDatabase: true
-  }
-};
-function getAuthConfig2(environment) {
-  const env = environment || "development";
-  let config = { ...DEFAULT_AUTH_CONFIG };
-  switch (env) {
-    case "development":
-      config = mergeConfig(config, DEV_CONFIG);
-      break;
-    case "production":
-      config = mergeConfig(config, PROD_CONFIG);
-      break;
-    case "test":
-      config = mergeConfig(config, {
-        database: {
-          path: ":memory:",
-          enableWAL: false,
-          enableForeignKeys: true,
-          busyTimeout: 5000
-        },
-        logging: {
-          level: "error",
-          enableConsole: false,
-          enableFile: false,
-          filePath: "./logs/auth.log",
-          enableDatabase: false
-        }
-      });
-      break;
-  }
-  return config;
-}
-function validateAuthConfig2(config) {
-  const errors = [];
-  if (!config.jwtSecret || config.jwtSecret === "change-this-secret-in-production") {
-    if (false) {}
-  }
-  if (config.jwtSecret && config.jwtSecret.length < 32) {
-    errors.push("JWT secret debe tener al menos 32 caracteres");
-  }
-  if (!config.database?.path) {
-    errors.push("Ruta de base de datos es requerida");
-  }
-  if (config.security) {
-    if (config.security.bcryptRounds < 4 || config.security.bcryptRounds > 20) {
-      errors.push("bcryptRounds debe estar entre 4 y 20");
-    }
-    if (config.security.passwordMinLength < 6) {
-      errors.push("passwordMinLength debe ser al menos 6");
-    }
-    if (config.security.maxLoginAttempts < 1) {
-      errors.push("maxLoginAttempts debe ser al menos 1");
-    }
-  }
-  if (config.cors?.origins && config.cors.origins.length === 0) {
-    errors.push("Al menos un origen CORS debe ser especificado");
-  }
-  return {
-    valid: errors.length === 0,
-    errors
-  };
-}
-function getRequiredEnvVars() {
-  return {
-    JWT_SECRET: process.env.JWT_SECRET,
-    DATABASE_PATH: process.env.DATABASE_PATH,
-    NODE_ENV: "development",
-    BCRYPT_ROUNDS: process.env.BCRYPT_ROUNDS,
-    MAX_LOGIN_ATTEMPTS: process.env.MAX_LOGIN_ATTEMPTS,
-    CORS_ORIGINS: process.env.CORS_ORIGINS
-  };
-}
-function generateEnvExample() {
-  return `# Configuraci\xF3n de Autenticaci\xF3n
 
-# JWT Configuration
-JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
-JWT_EXPIRATION=1h
-REFRESH_TOKEN_EXPIRATION=7d
-
-# Database Configuration
-DATABASE_PATH=./data/auth.db
-DATABASE_WAL=true
-
-# Security Configuration
-BCRYPT_ROUNDS=12
-MAX_LOGIN_ATTEMPTS=5
-LOCKOUT_DURATION=900000
-SESSION_TIMEOUT=3600000
-REQUIRE_EMAIL_VERIFICATION=false
-ALLOW_MULTIPLE_SESSIONS=true
-
-# Password Policy
-PASSWORD_MIN_LENGTH=8
-PASSWORD_REQUIRE_UPPERCASE=true
-PASSWORD_REQUIRE_LOWERCASE=true
-PASSWORD_REQUIRE_NUMBERS=true
-PASSWORD_REQUIRE_SYMBOLS=true
-
-# CORS Configuration
-CORS_ORIGINS=http://localhost:3000,http://localhost:3001
-
-# Rate Limiting
-RATE_LIMIT_WINDOW=900000
-RATE_LIMIT_MAX=100
-
-# Logging
-LOG_LEVEL=info
-LOG_CONSOLE=true
-LOG_FILE=false
-LOG_FILE_PATH=./logs/auth.log
-LOG_DATABASE=false
-
-# Email Validation
-ALLOWED_EMAIL_DOMAINS=
-BLOCKED_EMAIL_DOMAINS=tempmail.org,10minutemail.com
-
-# IP Security
-ENABLE_GEO_BLOCKING=false
-BLOCKED_COUNTRIES=
-ENABLE_IP_WHITELIST=false
-IP_WHITELIST=
-ENABLE_IP_BLACKLIST=false
-IP_BLACKLIST=
-
-# Environment
-NODE_ENV=development
-`;
-}
-function mergeConfig(base, override) {
-  const result = { ...base };
-  Object.keys(override).forEach((key) => {
-    const value = override[key];
-    if (value !== undefined) {
-      if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-        const baseValue = result[key];
-        if (typeof baseValue === "object" && baseValue !== null && !Array.isArray(baseValue)) {
-          result[key] = {
-            ...baseValue,
-            ...value
-          };
-        } else {
-          result[key] = value;
-        }
-      } else {
-        result[key] = value;
-      }
-    }
-  });
-  return result;
-}
-function printConfig(config) {
-  const safeConfig = { ...config };
-  if (safeConfig.jwtSecret) {
-    safeConfig.jwtSecret = "***HIDDEN***";
-  }
-  console.log("\uD83D\uDD27 Configuraci\xF3n de autenticaci\xF3n:");
-  console.log(JSON.stringify(safeConfig, null, 2));
-}
-var auth_default = getAuthConfig2();
 // src/scripts/seed.ts
 var initialPermissions = [
   { name: "users.read", resource: "users", action: "read" },
@@ -3481,13 +3016,13 @@ var initialUsers = [
     roles: ["user"]
   }
 ];
-async function seedDatabase2() {
+async function seedDatabase() {
   try {
     console.log("\uD83C\uDF31 Iniciando seeding de la base de datos...");
-    initDatabase2();
-    await runMigrations2();
-    const permissionService = new PermissionService2;
-    const authService = new AuthService2;
+    initDatabase();
+    await runMigrations();
+    const permissionService = new PermissionService;
+    const authService = new AuthService;
     console.log("\uD83D\uDCDD Creando permisos iniciales...");
     const createdPermissions = new Map;
     for (const permission of initialPermissions) {
@@ -3563,10 +3098,10 @@ async function seedDatabase2() {
     throw error;
   }
 }
-async function cleanDatabase2() {
+async function cleanDatabase() {
   try {
     if (!isDatabaseInitialized()) {
-      initDatabase2("./test.db");
+      initDatabase("./test.db");
     }
     let db2 = getDatabase();
     try {
@@ -3601,18 +3136,18 @@ async function cleanDatabase2() {
     throw error;
   }
 }
-async function resetDatabase3() {
+async function resetDatabase2() {
   try {
     console.log("\uD83D\uDD04 Reseteando base de datos...");
-    await cleanDatabase2();
-    await seedDatabase2();
+    await cleanDatabase();
+    await seedDatabase();
     console.log("\u2728 Base de datos reseteada exitosamente!");
   } catch (error) {
     console.error("\u274C Error durante el reseteo:", error);
     throw error;
   }
 }
-async function checkDatabaseStatus2() {
+async function checkDatabaseStatus() {
   try {
     console.log("\uD83D\uDD0D Verificando estado de la base de datos...");
     const db2 = getDatabase();
@@ -3660,6 +3195,491 @@ if (false) {
     default:
   }
 }
+
+// src/adapters/hono.ts
+function honoAuthMiddleware(config = {}) {
+  return async (c, next) => {
+    try {
+      if (config.skipPaths && config.skipPaths.includes(c.req.path)) {
+        c.set("auth", createEmptyAuthContext());
+        await next();
+        return;
+      }
+      const headers = {};
+      c.req.raw.headers.forEach((value, key) => {
+        headers[key] = value;
+      });
+      const authRequest = {
+        headers
+      };
+      const result = await authenticateRequest(authRequest, config);
+      if (!result.success) {
+        logAuthEvent("auth.failed", undefined, {
+          path: c.req.path,
+          method: c.req.method,
+          ip: extractClientIP(authRequest.headers),
+          userAgent: extractUserAgent(authRequest.headers),
+          error: result.error
+        });
+        return c.json({
+          error: result.error,
+          timestamp: new Date().toISOString()
+        }, result.statusCode || 401);
+      }
+      c.set("auth", result.context);
+      if (result.context?.user) {
+        logAuthEvent("auth.success", result.context.user.id, {
+          path: c.req.path,
+          method: c.req.method,
+          ip: extractClientIP(authRequest.headers),
+          userAgent: extractUserAgent(authRequest.headers)
+        });
+      }
+      await next();
+    } catch (error) {
+      console.error("Hono auth middleware error:", error);
+      return c.json({
+        error: "Internal authentication error",
+        timestamp: new Date().toISOString()
+      }, 500);
+    }
+  };
+}
+function honoOptionalAuth() {
+  return honoAuthMiddleware({ required: false });
+}
+function honoRequireAuth() {
+  return honoAuthMiddleware({ required: true });
+}
+function honoRequirePermissions(permissions, requireAll = false) {
+  return honoAuthMiddleware({
+    required: true,
+    permissions,
+    permissionOptions: { requireAll }
+  });
+}
+function honoRequireRoles(roles) {
+  return async (c, next) => {
+    const authContext = c.get("auth");
+    if (!authContext?.user) {
+      return c.json({
+        error: "Authentication required",
+        timestamp: new Date().toISOString()
+      }, 401);
+    }
+    const userRoles = authContext.user.roles.map((role) => role.name);
+    const hasRequiredRole = roles.some((role) => userRoles.includes(role));
+    if (!hasRequiredRole) {
+      logAuthEvent("auth.insufficient_roles", authContext.user.id, {
+        requiredRoles: roles,
+        userRoles,
+        path: c.req.path
+      });
+      return c.json({
+        error: `Insufficient roles. Required: ${roles.join(", ")}`,
+        timestamp: new Date().toISOString()
+      }, 403);
+    }
+    await next();
+  };
+}
+function honoRequireAdmin() {
+  return honoRequireRoles(["admin", "administrator"]);
+}
+function honoRequireModerator() {
+  return honoRequireRoles(["moderator", "admin", "administrator"]);
+}
+function getHonoCurrentUser(c) {
+  const authContext = c.get("auth");
+  return getCurrentUser(authContext);
+}
+function isHonoAuthenticated(c) {
+  const authContext = c.get("auth");
+  return !!authContext?.user;
+}
+function getHonoAuthContext(c) {
+  return c.get("auth") || createEmptyAuthContext();
+}
+function honoRequireOwnership(getUserIdFromParams) {
+  return async (c, next) => {
+    const authContext = c.get("auth");
+    if (!authContext?.user) {
+      return c.json({
+        error: "Authentication required",
+        timestamp: new Date().toISOString()
+      }, 401);
+    }
+    const resourceUserId = getUserIdFromParams(c);
+    const isOwner = authContext.user.id === resourceUserId;
+    const isAdmin = authContext.user.roles.some((role) => ["admin", "administrator"].includes(role.name));
+    if (!isOwner && !isAdmin) {
+      logAuthEvent("auth.insufficient_ownership", authContext.user.id, {
+        resourceUserId,
+        path: c.req.path
+      });
+      return c.json({
+        error: "Insufficient permissions. You can only access your own resources.",
+        timestamp: new Date().toISOString()
+      }, 403);
+    }
+    await next();
+  };
+}
+function honoRateLimit(maxRequests = 100, windowMs = 15 * 60 * 1000) {
+  const requests = new Map;
+  return async (c, next) => {
+    const authContext = c.get("auth");
+    const headers = {};
+    c.req.raw.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+    const clientId = authContext?.user?.id || extractClientIP(headers);
+    const now = Date.now();
+    const clientData = requests.get(clientId);
+    if (!clientData || now > clientData.resetTime) {
+      requests.set(clientId, {
+        count: 1,
+        resetTime: now + windowMs
+      });
+    } else {
+      clientData.count++;
+      if (clientData.count > maxRequests) {
+        return c.json({
+          error: "Rate limit exceeded",
+          retryAfter: Math.ceil((clientData.resetTime - now) / 1000),
+          timestamp: new Date().toISOString()
+        }, 429);
+      }
+    }
+    await next();
+  };
+}
+function honoCorsAuth(origins = ["*"]) {
+  return async (c, next) => {
+    const origin = c.req.header("origin");
+    if (origins.includes("*") || origin && origins.includes(origin)) {
+      c.header("Access-Control-Allow-Origin", origin || "*");
+      c.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+      c.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      c.header("Access-Control-Allow-Credentials", "true");
+    }
+    if (c.req.method === "OPTIONS") {
+      return c.text("", 204);
+    }
+    await next();
+  };
+}
+function honoErrorResponse(c, error, statusCode = 400) {
+  return c.json({
+    error,
+    timestamp: new Date().toISOString(),
+    path: c.req.path,
+    method: c.req.method
+  }, statusCode);
+}
+function honoSuccessResponse(c, data, message, statusCode = 200) {
+  const response = {
+    success: true,
+    data,
+    timestamp: new Date().toISOString()
+  };
+  if (message) {
+    response.message = message;
+  }
+  return c.json(response, statusCode);
+}
+function honoAuthLogger() {
+  return async (c, next) => {
+    const start = Date.now();
+    const authContext = c.get("auth");
+    await next();
+    const duration = Date.now() - start;
+    const headers = {};
+    c.req.raw.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+    const logData = {
+      method: c.req.method,
+      path: c.req.path,
+      status: c.res.status,
+      duration: `${duration}ms`,
+      userId: authContext?.user?.id,
+      ip: extractClientIP(headers),
+      userAgent: extractUserAgent(headers)
+    };
+    console.log(`\uD83D\uDCDD Request: ${JSON.stringify(logData)}`);
+  };
+}
+
+// src/adapters/express.ts
+function expressAuthMiddleware(config = {}) {
+  return async (req, res, next) => {
+    try {
+      if (config.skipPaths && config.skipPaths.includes(req.path)) {
+        req.auth = createEmptyAuthContext();
+        return next();
+      }
+      const authRequest = {
+        headers: req.headers
+      };
+      const result = await authenticateRequest(authRequest, config);
+      if (!result.success) {
+        logAuthEvent("auth.failed", undefined, {
+          path: req.path,
+          method: req.method,
+          ip: extractClientIP(authRequest.headers),
+          userAgent: extractUserAgent(authRequest.headers),
+          error: result.error
+        });
+        return res.status(result.statusCode || 401).json({
+          error: result.error,
+          timestamp: new Date().toISOString()
+        });
+      }
+      req.auth = result.context;
+      if (result.context?.user) {
+        logAuthEvent("auth.success", result.context.user.id, {
+          path: req.path,
+          method: req.method,
+          ip: extractClientIP(authRequest.headers),
+          userAgent: extractUserAgent(authRequest.headers)
+        });
+      }
+      next();
+    } catch (error) {
+      console.error("Express auth middleware error:", error);
+      return res.status(500).json({
+        error: "Internal authentication error",
+        timestamp: new Date().toISOString()
+      });
+    }
+  };
+}
+function expressOptionalAuth() {
+  return expressAuthMiddleware({ required: false });
+}
+function expressRequireAuth() {
+  return expressAuthMiddleware({ required: true });
+}
+function expressRequirePermissions(permissions, requireAll = false) {
+  return expressAuthMiddleware({
+    required: true,
+    permissions,
+    permissionOptions: { requireAll }
+  });
+}
+function expressRequireRoles(roles) {
+  return (req, res, next) => {
+    const authContext = req.auth;
+    if (!authContext?.user) {
+      return res.status(401).json({
+        error: "Authentication required",
+        timestamp: new Date().toISOString()
+      });
+    }
+    const userRoles = authContext.user.roles.map((role) => role.name);
+    const hasRequiredRole = roles.some((role) => userRoles.includes(role));
+    if (!hasRequiredRole) {
+      logAuthEvent("auth.insufficient_roles", authContext.user.id, {
+        requiredRoles: roles,
+        userRoles,
+        path: req.path
+      });
+      return res.status(403).json({
+        error: `Insufficient roles. Required: ${roles.join(", ")}`,
+        timestamp: new Date().toISOString()
+      });
+    }
+    next();
+  };
+}
+function expressRequireAdmin() {
+  return expressRequireRoles(["admin", "administrator"]);
+}
+function expressRequireModerator() {
+  return expressRequireRoles(["moderator", "admin", "administrator"]);
+}
+function getExpressCurrentUser(req) {
+  return getCurrentUser(req.auth);
+}
+function isExpressAuthenticated(req) {
+  return !!req.auth?.user;
+}
+function getExpressAuthContext(req) {
+  return req.auth || createEmptyAuthContext();
+}
+function expressRequireOwnership(getUserIdFromParams) {
+  return (req, res, next) => {
+    const authContext = req.auth;
+    if (!authContext?.user) {
+      return res.status(401).json({
+        error: "Authentication required",
+        timestamp: new Date().toISOString()
+      });
+    }
+    const resourceUserId = getUserIdFromParams(req);
+    const isOwner = authContext.user.id === resourceUserId;
+    const isAdmin = authContext.user.roles.some((role) => ["admin", "administrator"].includes(role.name));
+    if (!isOwner && !isAdmin) {
+      logAuthEvent("auth.insufficient_ownership", authContext.user.id, {
+        resourceUserId,
+        path: req.path
+      });
+      return res.status(403).json({
+        error: "Insufficient permissions. You can only access your own resources.",
+        timestamp: new Date().toISOString()
+      });
+    }
+    next();
+  };
+}
+function expressRateLimit(maxRequests = 100, windowMs = 15 * 60 * 1000) {
+  const requests = new Map;
+  return (req, res, next) => {
+    const authContext = req.auth;
+    const clientId = authContext?.user?.id || extractClientIP(req.headers);
+    const now = Date.now();
+    const clientData = requests.get(clientId);
+    if (!clientData || now > clientData.resetTime) {
+      requests.set(clientId, {
+        count: 1,
+        resetTime: now + windowMs
+      });
+    } else {
+      clientData.count++;
+      if (clientData.count > maxRequests) {
+        return res.status(429).json({
+          error: "Rate limit exceeded",
+          retryAfter: Math.ceil((clientData.resetTime - now) / 1000),
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+    next();
+  };
+}
+function expressCorsAuth(origins = ["*"]) {
+  return (req, res, next) => {
+    const origin = req.headers.origin;
+    if (origins.includes("*") || origin && origins.includes(origin)) {
+      res.header("Access-Control-Allow-Origin", origin || "*");
+      res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+      res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      res.header("Access-Control-Allow-Credentials", "true");
+    }
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(204);
+    }
+    next();
+  };
+}
+function expressErrorResponse(res, error, statusCode = 400) {
+  return res.status(statusCode).json({
+    error,
+    timestamp: new Date().toISOString()
+  });
+}
+function expressSuccessResponse(res, data, message, statusCode = 200) {
+  const response = {
+    success: true,
+    data,
+    timestamp: new Date().toISOString()
+  };
+  if (message) {
+    response.message = message;
+  }
+  return res.status(statusCode).json(response);
+}
+function expressAuthLogger() {
+  return (req, res, next) => {
+    const start = Date.now();
+    const authContext = req.auth;
+    res.on("finish", () => {
+      const duration = Date.now() - start;
+      const logData = {
+        method: req.method,
+        path: req.path,
+        status: res.statusCode,
+        duration: `${duration}ms`,
+        userId: authContext?.user?.id,
+        ip: extractClientIP(req.headers),
+        userAgent: extractUserAgent(req.headers)
+      };
+      console.log(`\uD83D\uDCDD Request: ${JSON.stringify(logData)}`);
+    });
+    next();
+  };
+}
+function expressAuthErrorHandler() {
+  return (error, req, res, next) => {
+    console.error("Express auth error:", error);
+    const authContext = req.auth;
+    logAuthEvent("auth.error", authContext?.user?.id, {
+      error: error.message,
+      stack: error.stack,
+      path: req.path,
+      method: req.method
+    });
+    let statusCode = 500;
+    let message = "Internal server error";
+    if (error.name === "ValidationError") {
+      statusCode = 400;
+      message = "Validation error";
+    } else if (error.name === "UnauthorizedError") {
+      statusCode = 401;
+      message = "Unauthorized";
+    } else if (error.name === "ForbiddenError") {
+      statusCode = 403;
+      message = "Forbidden";
+    }
+    res.status(statusCode).json({
+      error: message,
+      timestamp: new Date().toISOString(),
+      ...{ details: error.message }
+    });
+  };
+}
+function expressJsonValidator() {
+  return (req, res, next) => {
+    if (req.headers["content-type"]?.includes("application/json")) {
+      try {
+        if (req.body && typeof req.body === "string") {
+          req.body = JSON.parse(req.body);
+        }
+      } catch (error) {
+        return res.status(400).json({
+          error: "Invalid JSON format",
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+    next();
+  };
+}
+function expressSanitizer() {
+  return (req, res, next) => {
+    if (req.query) {
+      for (const key in req.query) {
+        if (typeof req.query[key] === "string") {
+          req.query[key] = req.query[key].replace(/<script[^>]*>.*?<\/script>/gi, "").replace(/<[^>]*>/g, "").trim();
+        }
+      }
+    }
+    if (req.body && typeof req.body === "object") {
+      sanitizeObject(req.body);
+    }
+    next();
+  };
+}
+function sanitizeObject(obj) {
+  for (const key in obj) {
+    if (typeof obj[key] === "string") {
+      obj[key] = obj[key].replace(/<script[^>]*>.*?<\/script>/gi, "").replace(/<[^>]*>/g, "").trim();
+    } else if (typeof obj[key] === "object" && obj[key] !== null) {
+      sanitizeObject(obj[key]);
+    }
+  }
+}
 // src/scripts/dev.ts
 var DEV_CONFIG2 = {
   jwtSecret: "dev-secret-key-change-in-production",
@@ -3695,11 +3715,11 @@ async function runDevCommand(command, ...args) {
     console.log(`\uD83D\uDE80 Ejecutando comando: ${command}`);
     switch (command) {
       case "db:init":
-        initDatabase2();
+        initDatabase();
         console.log("\u2705 Base de datos inicializada");
         break;
       case "db:migrate":
-        await runMigrations2();
+        await runMigrations();
         console.log("\u2705 Migraciones ejecutadas");
         break;
       case "db:rollback":
@@ -3716,16 +3736,16 @@ async function runDevCommand(command, ...args) {
         });
         break;
       case "db:seed":
-        await seedDatabase2();
+        await seedDatabase();
         break;
       case "db:clean":
-        await cleanDatabase2();
+        await cleanDatabase();
         break;
       case "db:reset":
-        await resetDatabase3();
+        await resetDatabase2();
         break;
       case "db:check":
-        await checkDatabaseStatus2();
+        await checkDatabaseStatus();
         break;
       case "user:create":
         await createUser(args);
@@ -3782,8 +3802,8 @@ async function createUser(args) {
     return;
   }
   const [email, password, firstName, lastName, ...roles] = args;
-  const authService = new AuthService2;
-  const permissionService = new PermissionService2;
+  const authService = new AuthService;
+  const permissionService = new PermissionService;
   const result = await authService.register({
     email,
     password,
@@ -3846,8 +3866,8 @@ async function assignUserRoles(args) {
     return;
   }
   const [email, ...roles] = args;
-  const authService = new AuthService2;
-  const permissionService = new PermissionService2;
+  const authService = new AuthService;
+  const permissionService = new PermissionService;
   const user = await authService.findUserByEmail(email);
   if (!user) {
     console.error(`\u274C Usuario no encontrado: ${email}`);
@@ -3873,7 +3893,7 @@ async function deleteUser(email) {
     console.log("Uso: user:delete <email>");
     return;
   }
-  const authService = new AuthService2;
+  const authService = new AuthService;
   const user = await authService.findUserByEmail(email);
   if (!user) {
     console.error(`\u274C Usuario no encontrado: ${email}`);
@@ -3891,7 +3911,7 @@ async function createRole(args) {
     return;
   }
   const [name, description, ...permissions] = args;
-  const permissionService = new PermissionService2;
+  const permissionService = new PermissionService;
   const result = await permissionService.createRole({ name, description });
   if (!result.success || !result) {
     console.error("\u274C Error creando rol:", result.error);
@@ -3917,7 +3937,7 @@ async function getRoleByName(args) {
     return;
   }
   const [name] = args;
-  const permissionService = new PermissionService2;
+  const permissionService = new PermissionService;
   try {
     const role = await permissionService.findRoleByName(name, true);
     if (!role) {
@@ -3974,7 +3994,7 @@ async function createPermission(args) {
     return;
   }
   const [name, description] = args;
-  const permissionService = new PermissionService2;
+  const permissionService = new PermissionService;
   const result = await permissionService.createPermission({ name, description });
   if (!result.success || !result) {
     console.error("\u274C Error creando permiso:", result.error);
@@ -4006,13 +4026,13 @@ async function generateJWT(args) {
     return;
   }
   const email = args[0];
-  const authService = new AuthService2;
+  const authService = new AuthService;
   const user = await authService.findUserByEmail(email, { includeRoles: true });
   if (!user) {
     console.error(`\u274C Usuario no encontrado: ${email}`);
     return;
   }
-  const jwtService = new JWTService2(DEV_CONFIG2.jwtSecret);
+  const jwtService = new JWTService(DEV_CONFIG2.jwtSecret);
   const token = await jwtService.generateToken(user);
   const refreshToken = await jwtService.generateRefreshToken(Number(user.id));
   const payload = {
@@ -4031,7 +4051,7 @@ async function verifyJWT(token) {
     console.log("Uso: jwt:verify <token>");
     return;
   }
-  const jwtService = new JWTService2(DEV_CONFIG2.jwtSecret);
+  const jwtService = new JWTService(DEV_CONFIG2.jwtSecret);
   try {
     const payload = jwtService.verifyToken(token);
     console.log("\u2705 Token v\xE1lido");
@@ -4042,7 +4062,7 @@ async function verifyJWT(token) {
 }
 async function testAuthentication() {
   console.log("\uD83E\uDDEA Probando sistema de autenticaci\xF3n...");
-  const authService = new AuthService2;
+  const authService = new AuthService;
   console.log(`
 1. Probando registro...`);
   const registerResult = await authService.register({
@@ -4082,7 +4102,7 @@ async function testAuthentication() {
 }
 async function testPermissions() {
   console.log("\uD83E\uDDEA Probando sistema de permisos...");
-  const permissionService = new PermissionService2;
+  const permissionService = new PermissionService;
   console.log(`
 1. Creando permiso de prueba...`);
   const permResult = await permissionService.createPermission({
@@ -4181,7 +4201,7 @@ class AuthLibrary {
     await cleanDatabase();
   }
   async reset() {
-    await resetDatabase();
+    await resetDatabase2();
   }
   async checkStatus() {
     await checkDatabaseStatus();
@@ -4288,41 +4308,41 @@ var AUTH_LIBRARY_INFO = {
 };
 console.log(`\uD83D\uDCDA ${AUTH_LIBRARY_INFO.name} v${AUTH_LIBRARY_INFO.version} cargada`);
 export {
-  validateAuthConfig2 as validateAuthConfig,
+  validateAuthConfig,
   testConnection,
-  sendToUsersWithRoles2 as sendToUsersWithRoles,
-  sendToUsersWithPermissions2 as sendToUsersWithPermissions,
-  sendToUser2 as sendToUser,
-  seedDatabase2 as seedDatabase,
-  runMigrations2 as runMigrations,
+  sendToUsersWithRoles,
+  sendToUsersWithPermissions,
+  sendToUser,
+  seedDatabase,
+  runMigrations,
   runDevCommand,
   rollbackMigrations,
-  resetDatabase2 as resetDatabaseMigrations,
-  resetDatabase3 as resetDatabase,
+  resetDatabase as resetDatabaseMigrations,
+  resetDatabase2 as resetDatabase,
   printConfig,
   logAuthEvent,
-  isWebSocketAuthenticated2 as isWebSocketAuthenticated,
+  isWebSocketAuthenticated,
   isHonoAuthenticated,
   isExpressAuthenticated,
-  initializeConnectionCleanup2 as initializeConnectionCleanup,
+  initializeConnectionCleanup,
   initializeAuth,
-  initDatabase2 as initDatabase,
+  initDatabase,
   honoSuccessResponse,
-  honoRequireRoles2 as honoRequireRoles,
-  honoRequirePermissions2 as honoRequirePermissions,
-  honoRequireOwnership2 as honoRequireOwnership,
-  honoRequireModerator2 as honoRequireModerator,
-  honoRequireAuth2 as honoRequireAuth,
-  honoRequireAdmin2 as honoRequireAdmin,
-  honoRateLimit2 as honoRateLimit,
-  honoOptionalAuth2 as honoOptionalAuth,
+  honoRequireRoles,
+  honoRequirePermissions,
+  honoRequireOwnership,
+  honoRequireModerator,
+  honoRequireAuth,
+  honoRequireAdmin,
+  honoRateLimit,
+  honoOptionalAuth,
   honoErrorResponse,
-  honoCorsAuth2 as honoCorsAuth,
-  honoAuthMiddleware2 as honoAuthMiddleware,
-  honoAuthLogger2 as honoAuthLogger,
-  handleAuthenticatedMessage2 as handleAuthenticatedMessage,
-  getWebSocketCurrentUser2 as getWebSocketCurrentUser,
-  getWebSocketAuthContext2 as getWebSocketAuthContext,
+  honoCorsAuth,
+  honoAuthMiddleware,
+  honoAuthLogger,
+  handleAuthenticatedMessage,
+  getWebSocketCurrentUser,
+  getWebSocketAuthContext,
   getRequiredEnvVars,
   getMigrationStatus,
   getHonoCurrentUser,
@@ -4332,55 +4352,55 @@ export {
   getDatabaseInfo,
   getDatabase,
   getCurrentUser,
-  getConnectionStats2 as getConnectionStats,
+  getConnectionStats,
   getAuthLibrary,
-  getAuthConfig2 as getAuthConfig,
+  getAuthConfig,
   generateEnvExample,
   extractUserAgent,
   extractClientIP,
   expressSuccessResponse,
-  expressSanitizer2 as expressSanitizer,
-  expressRequireRoles2 as expressRequireRoles,
-  expressRequirePermissions2 as expressRequirePermissions,
-  expressRequireOwnership2 as expressRequireOwnership,
-  expressRequireModerator2 as expressRequireModerator,
-  expressRequireAuth2 as expressRequireAuth,
-  expressRequireAdmin2 as expressRequireAdmin,
-  expressRateLimit2 as expressRateLimit,
-  expressOptionalAuth2 as expressOptionalAuth,
-  expressJsonValidator2 as expressJsonValidator,
+  expressSanitizer,
+  expressRequireRoles,
+  expressRequirePermissions,
+  expressRequireOwnership,
+  expressRequireModerator,
+  expressRequireAuth,
+  expressRequireAdmin,
+  expressRateLimit,
+  expressOptionalAuth,
+  expressJsonValidator,
   expressErrorResponse,
-  expressCorsAuth2 as expressCorsAuth,
-  expressAuthMiddleware2 as expressAuthMiddleware,
-  expressAuthLogger2 as expressAuthLogger,
-  expressAuthErrorHandler2 as expressAuthErrorHandler,
-  disconnectUser2 as disconnectUser,
+  expressCorsAuth,
+  expressAuthMiddleware,
+  expressAuthLogger,
+  expressAuthErrorHandler,
+  disconnectUser,
   src_default as default,
-  createWebSocketResponse2 as createWebSocketResponse,
+  createWebSocketResponse,
   createWebSocketAuth,
   createHonoAuth,
   createExpressAuth,
   createEmptyAuthContext,
-  closeDatabase2 as closeDatabase,
-  cleanupInactiveConnections2 as cleanupInactiveConnections,
-  cleanDatabase2 as cleanDatabase,
-  checkWebSocketRoles2 as checkWebSocketRoles,
-  checkWebSocketPermissions2 as checkWebSocketPermissions,
-  checkDatabaseStatus2 as checkDatabaseStatus,
-  broadcastToAuthenticated2 as broadcastToAuthenticated,
+  closeDatabase,
+  cleanupInactiveConnections,
+  cleanDatabase,
+  checkWebSocketRoles,
+  checkWebSocketPermissions,
+  checkDatabaseStatus,
+  broadcastToAuthenticated,
   authorizeRequest,
-  authenticateWebSocket2 as authenticateWebSocket,
+  authenticateWebSocket,
   authenticateRequest,
   SECURITY_CONFIG,
-  PermissionService2 as PermissionService,
+  PermissionService,
   PROD_CONFIG,
-  JWTService2 as JWTService,
+  JWTService,
   DEV_CONFIG,
   DEFAULT_AUTH_CONFIG,
-  AuthService2 as AuthService,
+  AuthService,
   AuthLibrary,
   AUTH_LIBRARY_INFO
 };
 
-//# debugId=04605040B768157964756E2164756E21
+//# debugId=D8CEBF68316F6F5364756E2164756E21
 //# sourceMappingURL=index.js.map

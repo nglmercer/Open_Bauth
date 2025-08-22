@@ -164,7 +164,7 @@ describe('Auth Middleware', () => {
 
     test('should reject token for inactive user', async () => {
       // Desactivar usuario
-      await authService.updateUser(testUserId, { isActive: false });
+      await authService.updateUser(String(testUserId), { isActive: false });
       
       const middleware = createAuthMiddleware({
         jwtSecret: TEST_JWT_SECRET,

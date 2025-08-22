@@ -467,7 +467,7 @@ describe('AuthService', () => {
     });
   });
 
-  describe('s', () => {
+  describe('Performance Tests', () => {
     test('should handle multiple concurrent registrations', async () => {
       const promises = [];
       

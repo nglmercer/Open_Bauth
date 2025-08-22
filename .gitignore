@@ -1,2 +1,11 @@
 # deps
 node_modules/
+# bun
+bun.lockb
+.env
+.env.*
+!.env.example
+
+# build
+dist/
+build/
