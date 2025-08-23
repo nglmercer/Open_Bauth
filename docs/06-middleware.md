@@ -28,7 +28,7 @@ La librería incluye middleware que funciona independientemente del framework we
 Crea middleware de autenticación personalizable para cualquier framework.
 
 ```typescript
-import { createAuthMiddleware, AuthLibrary } from '@Open_Bauth/core';
+import { createAuthMiddleware, AuthLibrary } from '@open-bauth/core';
 
 // Configurar AuthLibrary
 const authLib = new AuthLibrary({
@@ -227,7 +227,7 @@ const authLib = new AuthLibrary({
     jwt: {
       accessTokenExpiry: '15m',
       refreshTokenExpiry: '7d',
-      issuer: 'Open_Bauth',
+      issuer: 'open-bauth',
       audience: 'api-users',
       algorithm: 'HS256'
     },
@@ -452,7 +452,7 @@ const authLib = new AuthLibrary(config);
 ### Utilidades de Token
 
 ```typescript
-import { TokenUtils } from '@Open_Bauth/core';
+import { TokenUtils } from '@open-bauth/core';
 
 // Generar token personalizado
 const customToken = TokenUtils.generateCustomToken({
@@ -487,7 +487,7 @@ const oneTimeToken = TokenUtils.generateOneTimeToken({
 ### Utilidades de Validación
 
 ```typescript
-import { ValidationUtils } from '@Open_Bauth/core';
+import { ValidationUtils } from '@open-bauth/core';
 
 // Validar email
 const emailValidation = ValidationUtils.validateEmail('user@example.com');
@@ -526,7 +526,7 @@ const permissionValidation = ValidationUtils.validatePermissions([
 ### Utilidades de Hash
 
 ```typescript
-import { HashUtils } from '@Open_Bauth/core';
+import { HashUtils } from '@open-bauth/core';
 
 // Hash de contraseña con salt personalizado
 const hashedPassword = await HashUtils.hashPassword('password123', 12);
@@ -550,7 +550,7 @@ const isIntact = HashUtils.verifyIntegrity('data', sha256Hash, 'sha256');
 ### Utilidades de Tiempo
 
 ```typescript
-import { TimeUtils } from '@Open_Bauth/core';
+import { TimeUtils } from '@open-bauth/core';
 
 // Convertir duración a milisegundos
 const ms = TimeUtils.parseTimeString('15m'); // 900000
@@ -584,7 +584,7 @@ const isInRange = TimeUtils.isDateInRange(
 ### Rate Limiting Básico
 
 ```typescript
-import { createRateLimitMiddleware } from '@Open_Bauth/core';
+import { createRateLimitMiddleware } from '@open-bauth/core';
 
 // Rate limiting global
 const globalRateLimit = createRateLimitMiddleware({
@@ -746,7 +746,7 @@ const distributedRateLimit = createDistributedRateLimitMiddleware({
 ### Sistema de Logging
 
 ```typescript
-import { createAuditLogger, LogLevel } from '@Open_Bauth/core';
+import { createAuditLogger, LogLevel } from '@open-bauth/core';
 
 // Configurar logger de auditoría
 const auditLogger = createAuditLogger({
@@ -1017,7 +1017,7 @@ class AuditAnalyzer {
 ### Validación de Entrada
 
 ```typescript
-import { createValidationMiddleware, ValidationSchema } from '@Open_Bauth/core';
+import { createValidationMiddleware, ValidationSchema } from '@open-bauth/core';
 
 // Esquemas de validación
 const userRegistrationSchema: ValidationSchema = {
@@ -1131,7 +1131,7 @@ app.post('/auth/register', validateRegistration, async (req, res) => {
 ### Sanitización Avanzada
 
 ```typescript
-import { createSanitizationMiddleware, SanitizationRules } from '@Open_Bauth/core';
+import { createSanitizationMiddleware, SanitizationRules } from '@open-bauth/core';
 
 // Reglas de sanitización
 const sanitizationRules: SanitizationRules = {
@@ -1208,7 +1208,7 @@ app.use(sanitizeInput);
 ### Validación de Archivos
 
 ```typescript
-import { createFileValidationMiddleware } from '@Open_Bauth/core';
+import { createFileValidationMiddleware } from '@open-bauth/core';
 
 // Validación de archivos subidos
 const validateFileUpload = createFileValidationMiddleware({
@@ -1262,7 +1262,7 @@ app.post('/upload/avatar',
 ### Sistema de Cache
 
 ```typescript
-import { createCacheMiddleware, CacheProvider } from '@Open_Bauth/core';
+import { createCacheMiddleware, CacheProvider } from '@open-bauth/core';
 
 // Configurar proveedor de cache
 const cacheProvider: CacheProvider = {
@@ -1465,7 +1465,7 @@ app.use(optimizeQueries);
 ### Protección CSRF
 
 ```typescript
-import { createCSRFProtection } from '@Open_Bauth/core';
+import { createCSRFProtection } from '@open-bauth/core';
 
 // Protección CSRF
 const csrfProtection = createCSRFProtection({
@@ -1502,7 +1502,7 @@ app.use(csrfProtection);
 ### Protección XSS
 
 ```typescript
-import { createXSSProtection } from '@Open_Bauth/core';
+import { createXSSProtection } from '@open-bauth/core';
 
 // Protección XSS
 const xssProtection = createXSSProtection({
@@ -1707,7 +1707,7 @@ app.use(auth.required, anomalyDetection);
 ### Sistema de Métricas
 
 ```typescript
-import { createMetricsMiddleware, MetricsCollector } from '@Open_Bauth/core';
+import { createMetricsMiddleware, MetricsCollector } from '@open-bauth/core';
 
 // Configurar colector de métricas
 const metricsCollector = new MetricsCollector({

@@ -737,21 +737,21 @@ Para mantenerte actualizado:
 
 ```bash
 # Verificar versión actual
-npm list @Open_Bauth/core
+npm list @open-bauth/core
 
 # Verificar actualizaciones
-npm outdated @Open_Bauth/core
+npm outdated @open-bauth/core
 
 # Actualizar
-npm update @Open_Bauth/core
+npm update @open-bauth/core
 ```
 
 ### 📚 Recursos Adicionales
 
-- **[Ejemplos en GitHub](https://github.com/Open_Bauth/examples)**
-- **[Blog con tutoriales](https://Open_Bauth.dev/blog)**
-- **[Changelog](https://github.com/Open_Bauth/core/CHANGELOG.md)**
-- **[Roadmap](https://github.com/Open_Bauth/core/projects)**
+- **[Ejemplos en GitHub](https://github.com/open-bauth/examples)**
+- **[Blog con tutoriales](https://open-bauth.dev/blog)**
+- **[Changelog](https://github.com/open-bauth/core/CHANGELOG.md)**
+- **[Roadmap](https://github.com/open-bauth/core/projects)**
 
 ---
 

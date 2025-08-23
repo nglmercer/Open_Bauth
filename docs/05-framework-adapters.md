@@ -58,7 +58,7 @@ El adaptador para Hono proporciona middleware nativo y funciones de utilidad opt
 
 ```typescript
 import { Hono } from 'hono';
-import { AuthLibrary, createHonoAuth } from '@Open_Bauth/core';
+import { AuthLibrary, createHonoAuth } from '@open-bauth/core';
 
 // Configurar AuthLibrary
 const authLib = new AuthLibrary({
@@ -403,7 +403,7 @@ const auth = createHonoAuth(authLib, {
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-import { AuthLibrary, createHonoAuth } from '@Open_Bauth/core';
+import { AuthLibrary, createHonoAuth } from '@open-bauth/core';
 
 // Configurar AuthLibrary
 const authLib = new AuthLibrary({
@@ -520,7 +520,7 @@ El adaptador para Express proporciona middleware compatible con el ecosistema Ex
 
 ```typescript
 import express from 'express';
-import { AuthLibrary, createExpressAuth } from '@Open_Bauth/core';
+import { AuthLibrary, createExpressAuth } from '@open-bauth/core';
 
 // Configurar AuthLibrary
 const authLib = new AuthLibrary({
@@ -748,7 +748,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { AuthLibrary, createExpressAuth } from '@Open_Bauth/core';
+import { AuthLibrary, createExpressAuth } from '@open-bauth/core';
 
 // Configurar AuthLibrary
 const authLib = new AuthLibrary({
@@ -883,7 +883,7 @@ El adaptador WebSocket permite autenticación en tiempo real para conexiones Web
 
 ```typescript
 import { WebSocketServer } from 'ws';
-import { AuthLibrary, createWebSocketAuth } from '@Open_Bauth/core';
+import { AuthLibrary, createWebSocketAuth } from '@open-bauth/core';
 
 // Configurar AuthLibrary
 const authLib = new AuthLibrary({
@@ -1208,7 +1208,7 @@ Puedes crear adaptadores personalizados para otros frameworks o casos de uso esp
 ### Estructura Base
 
 ```typescript
-import { AuthLibrary, User, Permission, Role } from '@Open_Bauth/core';
+import { AuthLibrary, User, Permission, Role } from '@open-bauth/core';
 
 interface CustomAdapterOptions {
   tokenExtraction?: {

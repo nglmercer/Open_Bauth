@@ -1,12 +1,12 @@
 {
-  "name": "Open_Bauth",
-  "version": "1.0.0",
+  "name": "open-bauth",
+  "version": "1.0.1",
   "description": "Framework-agnostic authentication library built with Bun, TypeScript, and SQLite",
   "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "types": "dist/src/index.d.ts",
   "scripts": {
     "dev": "bun run --hot src/index.ts",
-    "build": "bun build src/index.ts --outdir dist --target bun --format esm --sourcemap",
+    "build": "tsc && bun build src/index.ts --outdir dist --target bun --format esm --sourcemap",
     "test": "bun test --preload ./tests/setup.ts",
     "test:watch": "bun test --watch --preload ./tests/setup.ts",
     "test:coverage": "bun test --coverage --preload ./tests/setup.ts",
@@ -82,12 +82,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/Open_Bauth.git"
+    "url": "https://github.com/yourusername/open-bauth.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/Open_Bauth/issues"
+    "url": "https://github.com/yourusername/open-bauth/issues"
   },
-  "homepage": "https://github.com/yourusername/Open_Bauth#readme",
+  "homepage": "https://github.com/yourusername/open-bauth#readme",
   "files": [
     "dist",
     "README.md",
@@ -104,19 +104,19 @@
   "exports": {
     ".": {
       "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/src/index.d.ts"
     },
     "./adapters/hono": {
       "import": "./dist/adapters/hono.js",
-      "types": "./dist/adapters/hono.d.ts"
+      "types": "./dist/src/adapters/hono.d.ts"
     },
     "./adapters/express": {
       "import": "./dist/adapters/express.js",
-      "types": "./dist/adapters/express.d.ts"
+      "types": "./dist/src/adapters/express.d.ts"
     },
     "./adapters/websocket": {
       "import": "./dist/adapters/websocket.js",
-      "types": "./dist/adapters/websocket.d.ts"
+      "types": "./dist/src/adapters/websocket.d.ts"
     }
   },
   "trustedDependencies": [

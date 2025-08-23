@@ -29,7 +29,7 @@ Guía completa para instalar y configurar la Librería de Autenticación en tu p
 curl -fsSL https://bun.sh/install | bash
 
 # Instalar la librería
-bun add @Open_Bauth/core
+bun add @open-bauth/core
 
 # Instalar dependencias de desarrollo (opcional)
 bun add -d @types/node
@@ -39,7 +39,7 @@ bun add -d @types/node
 
 ```bash
 # Instalar la librería
-npm install @Open_Bauth/core
+npm install @open-bauth/core
 
 # Instalar dependencias adicionales para Node.js
 npm install sqlite3
@@ -50,7 +50,7 @@ npm install -D @types/node
 
 ```bash
 # Instalar la librería
-yarn add @Open_Bauth/core
+yarn add @open-bauth/core
 
 # Instalar dependencias adicionales
 yarn add sqlite3
@@ -61,7 +61,7 @@ yarn add -D @types/node
 
 ```bash
 # Instalar la librería
-pnpm add @Open_Bauth/core
+pnpm add @open-bauth/core
 
 # Instalar dependencias adicionales
 pnpm add sqlite3
@@ -127,7 +127,7 @@ Crea `src/config/auth.config.ts`:
 
 ```typescript
 // src/config/auth.config.ts
-import { AuthConfig } from '@Open_Bauth/core';
+import { AuthConfig } from '@open-bauth/core';
 
 /**
  * Configuración de autenticación para desarrollo
@@ -289,7 +289,7 @@ Crea `src/app.ts`:
 
 ```typescript
 // src/app.ts
-import { initializeAuth, AuthLibrary } from '@Open_Bauth/core';
+import { initializeAuth, AuthLibrary } from '@open-bauth/core';
 import { getAuthConfig, validateEnvironment } from './config/auth.config';
 
 /**
@@ -357,7 +357,7 @@ process.on('SIGTERM', async () => {
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-import { createHonoAuth } from '@Open_Bauth/core';
+import { createHonoAuth } from '@open-bauth/core';
 import { initializeApp } from './app';
 
 const app = new Hono();
@@ -395,7 +395,7 @@ export default app;
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { createExpressAuth } from '@Open_Bauth/core';
+import { createExpressAuth } from '@open-bauth/core';
 import { initializeApp } from './app';
 
 const app = express();
@@ -476,7 +476,7 @@ Crea `scripts/verify-installation.ts`:
 
 ```typescript
 // scripts/verify-installation.ts
-import { initializeAuth } from '@Open_Bauth/core';
+import { initializeAuth } from '@open-bauth/core';
 import { getAuthConfig } from '../src/config/auth.config';
 
 async function verifyInstallation() {
@@ -600,7 +600,7 @@ services:
 
 ## 🚨 Problemas Comunes
 
-### Error: "Cannot find module '@Open_Bauth/core'"
+### Error: "Cannot find module '@open-bauth/core'"
 
 ```bash
 # Reinstalar dependencias
@@ -633,10 +633,10 @@ chmod 664 auth.db
 
 Ahora que tienes la instalación completa:
 
-1. **[Clase AuthLibrary](./03-Open_Bauth.md)** - Explora la clase principal
+1. **[Clase AuthLibrary](./03-auth-library.md)** - Explora la clase principal
 2. **[Servicios Principales](./04-services.md)** - Aprende sobre los servicios
 3. **[Ejemplos Prácticos](./07-examples.md)** - Ve implementaciones completas
 
 ---
 
-[⬅️ Inicio Rápido](./01-quick-start.md) | [🏠 Índice](./README.md) | [➡️ Clase AuthLibrary](./03-Open_Bauth.md)
+[⬅️ Inicio Rápido](./01-quick-start.md) | [🏠 Índice](./README.md) | [➡️ Clase AuthLibrary](./03-auth-library.md)

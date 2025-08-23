@@ -16,7 +16,7 @@ Bienvenido a la documentación completa de la **Librería de Autenticación Fram
 ## 📖 Documentación Principal
 
 ### Conceptos Fundamentales
-- **[Clase Principal AuthLibrary](./03-Open_Bauth.md)** - Punto de entrada y gestión principal
+- **[Clase Principal AuthLibrary](./03-auth-library.md)** - Punto de entrada y gestión principal
 - **[Servicios Principales](./04-services.md)** - AuthService, JWTService y PermissionService
 - **[Adaptadores de Frameworks](./05-framework-adapters.md)** - Integración con Hono, Express y WebSockets
 
@@ -43,14 +43,14 @@ Toda la documentación está organizada en los archivos numerados del 01 al 09, 
 4. [Troubleshooting](./09-troubleshooting.md)
 
 ### 🟡 Intermedio
-1. [Clase Principal AuthLibrary](./03-Open_Bauth.md)
+1. [Clase Principal AuthLibrary](./03-auth-library.md)
 2. [Servicios Principales](./04-services.md)
 3. [Adaptadores de Frameworks](./05-framework-adapters.md)
 4. [Middleware Agnóstico](./06-middleware.md)
 
 ### 🔴 Avanzado
 1. [Referencia de API](./08-api-reference.md)
-2. [Configuración Avanzada y Personalización](./03-Open_Bauth.md)
+2. [Configuración Avanzada y Personalización](./03-auth-library.md)
 3. [Integración Completa](./05-framework-adapters.md)
 4. [Resolución de Problemas Avanzados](./09-troubleshooting.md)
 
@@ -87,7 +87,7 @@ Toda la documentación está organizada en los archivos numerados del 01 al 09, 
 
 ## 🔗 Enlaces Útiles
 
-- **[Repositorio GitHub](https://github.com/Open_Bauth/framework-agnostic-auth)**
+- **[Repositorio GitHub](https://github.com/open-bauth/framework-agnostic-auth)**
 
 ---
 
@@ -95,8 +95,8 @@ Toda la documentación está organizada en los archivos numerados del 01 al 09, 
 
 Esta documentación es un proyecto vivo. Si encuentras errores, tienes sugerencias o quieres contribuir:
 
-1. **[Reportar Issues](https://github.com/Open_Bauth/docs/issues)**
-2. **[Proponer Mejoras](https://github.com/Open_Bauth/docs/pulls)**
+1. **[Reportar Issues](https://github.com/open-bauth/docs/issues)**
+2. **[Proponer Mejoras](https://github.com/open-bauth/docs/pulls)**
 
 ---
 
