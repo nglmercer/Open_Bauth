@@ -9,5 +9,6 @@ bun.lockb
 # build
 dist/
 build/
-.db-shm
-.db-wal
+*.db-shm
+*.db-wal
+*.db

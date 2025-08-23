@@ -678,7 +678,6 @@ async function initializeApp() {
     
   } catch (error) {
     console.error('❌ Failed to initialize app:', error)
-    process.exit(1)
   }
 }
 

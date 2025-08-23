@@ -17,7 +17,6 @@ async function main() {
     
   } catch (error) {
     console.error('❌ Error durante la migración:', error);
-    process.exit(1);
   }
 }
 

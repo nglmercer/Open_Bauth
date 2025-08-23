@@ -167,7 +167,6 @@ export async function runDevCommand(command: string, ...args: string[]): Promise
     
   } catch (error:any) {
     console.error(`❌ Error ejecutando comando ${command}:`, error);
-    process.exit(1);
   }
 }
 
@@ -648,5 +647,4 @@ if (import.meta.main) {
   // Cerrar conexión a la base de datos
   closeDatabase();
   
-  process.exit(0);
 }

@@ -27,7 +27,7 @@
     "format:check": "echo 'Format check not configured yet'",
     "clean": "rm -rf dist coverage test-results.xml reports logs tmp",
     "prepare": "bun run build",
-    "prepublishOnly": "bun run test && bun run build",
+    "prepublishOnly": "bun test --preload ./tests/setup.ts && bun run build",
     "migration:create": "bun run scripts/migrations.ts create",
     "migration:run": "bun run scripts/migrations.ts run",
     "migration:rollback": "bun run scripts/migrations.ts rollback",

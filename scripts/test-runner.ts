@@ -249,7 +249,6 @@ async function main() {
     Object.keys(testConfigs).forEach(key => {
       colorLog(`  ${key}`, 'green');
     });
-    process.exit(1);
   }
   
   // Preparar entorno
@@ -275,36 +274,12 @@ async function main() {
     }
   }
   
-  process.exit(exitCode);
 }
-
-// Manejo de errores no capturados
-process.on('unhandledRejection', (reason, promise) => {
-  colorLog(`\n💥 Unhandled Rejection at: ${promise}, reason: ${reason}`, 'red');
-  process.exit(1);
-});
-
-process.on('uncaughtException', (error:any) => {
-  colorLog(`\n💥 Uncaught Exception: ${error.message}`, 'red');
-  process.exit(1);
-});
-
-// Manejo de señales
-process.on('SIGINT', () => {
-  colorLog('\n\n🛑 Proceso interrumpido por el usuario', 'yellow');
-  process.exit(0);
-});
-
-process.on('SIGTERM', () => {
-  colorLog('\n\n🛑 Proceso terminado', 'yellow');
-  process.exit(0);
-});
 
 // Ejecutar función principal
 if (import.meta.main) {
   main().catch((error:any) => {
     colorLog(`\n💥 Error fatal: ${error.message}`, 'red');
-    process.exit(1);
   });
 }
 

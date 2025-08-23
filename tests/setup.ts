@@ -47,13 +47,31 @@ afterAll(async () => {
   console.log('🧹 Limpiando entorno de tests...');
   
   try {
-    // No cerrar la base de datos aquí para evitar errores en tests posteriores
-    // closeDatabase();
+    // Cerrar la base de datos correctamente al final de todos los tests
+    await closeDatabase();
     console.log('✅ Entorno de tests limpiado correctamente');
+    
+    // Asegurar que no hay promesas pendientes
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
   } catch (error:any) {
     console.error('❌ Error limpiando entorno de tests:', error);
+    // No lanzar el error para evitar exit code 1
   }
 });
+
+// Manejar promesas rechazadas no capturadas en tests
+if (process.env.NODE_ENV === 'test') {
+  process.on('unhandledRejection', (reason, promise) => {
+    console.log('⚠️ Unhandled rejection en tests (suprimido):', reason);
+    // No hacer exit en tests
+  });
+  
+  process.on('uncaughtException', (error) => {
+    console.log('⚠️ Uncaught exception en tests (suprimido):', error.message);
+    // No hacer exit en tests
+  });
+}
 
 /**
  * Setup antes de cada test

@@ -119,10 +119,6 @@ class JWTService {
         iat: now,
         exp: now + expirationTime
       };
-      const token = await Bun.password.hash(JSON.stringify(payload), {
-        algorithm: "bcrypt",
-        cost: 10
-      });
       const header = {
         alg: "HS256",
         typ: "JWT"
@@ -286,6 +282,10 @@ class JWTService {
   }
 }
 var jwtServiceInstance = null;
+function initJWTService(secret, expiresIn) {
+  jwtServiceInstance = new JWTService(secret, expiresIn);
+  return jwtServiceInstance;
+}
 function getJWTService() {
   if (!jwtServiceInstance) {
     throw new Error("JWT Service not initialized. Call initJWTService() first.");
@@ -930,6 +930,10 @@ class AuthService {
   }
 }
 var authServiceInstance = null;
+function initAuthService() {
+  authServiceInstance = new AuthService;
+  return authServiceInstance;
+}
 function getAuthService() {
   if (!authServiceInstance) {
     throw new Error("Auth Service not initialized. Call initAuthService() first.");
@@ -1752,6 +1756,10 @@ class PermissionService {
   }
 }
 var permissionServiceInstance = null;
+function initPermissionService() {
+  permissionServiceInstance = new PermissionService;
+  return permissionServiceInstance;
+}
 function getPermissionService() {
   if (!permissionServiceInstance) {
     throw new Error("Permission Service not initialized. Call initPermissionService() first.");
@@ -3078,6 +3086,7 @@ async function seedDatabase() {
         }
       } catch (error) {
         console.log(`  \u26A0\uFE0F  Usuario ya existe: ${user.email}`);
+        if (true) {}
       }
     }
     console.log("\u2728 Seeding completado exitosamente!");
@@ -3095,10 +3104,13 @@ async function seedDatabase() {
     console.log("  User: user@example.com / User123!");
   } catch (error) {
     console.error("\u274C Error durante el seeding:", error);
-    throw error;
+    if (true) {
+      throw error;
+    }
   }
 }
 async function cleanDatabase() {
+  console.log("\uD83E\uDDF9 Limpiando base de datos...");
   try {
     if (!isDatabaseInitialized()) {
       initDatabase("./test.db");
@@ -3131,9 +3143,12 @@ async function cleanDatabase() {
       }
     }
     db2.exec("PRAGMA foreign_keys = ON");
+    console.log("\u2705 Base de datos limpiada correctamente");
   } catch (error) {
     console.error("\u274C Error durante la limpieza:", error);
-    throw error;
+    if (true) {
+      throw error;
+    }
   }
 }
 async function resetDatabase2() {
@@ -3186,14 +3201,31 @@ async function checkDatabaseStatus() {
     throw error;
   }
 }
-if (false) {
+async function main() {
+  const command = process.argv[2];
   switch (command) {
     case "seed":
+      await seedDatabase();
+      break;
     case "clean":
+      await cleanDatabase();
+      break;
     case "reset":
+      await resetDatabase2();
+      break;
     case "status":
+      await checkDatabaseStatus();
+      break;
     default:
+      console.log("Uso: bun run src/scripts/seed.ts [seed|clean|reset|status]");
+      console.log("  seed   - Poblar base de datos con datos iniciales");
+      console.log("  clean  - Limpiar todos los datos");
+      console.log("  reset  - Limpiar y volver a poblar");
+      console.log("  status - Verificar estado actual");
   }
+}
+if (process.argv[1] && process.argv[1].endsWith("seed.ts") && true) {
+  main().catch(console.error);
 }
 
 // src/adapters/hono.ts
@@ -3793,7 +3825,6 @@ async function runDevCommand(command, ...args) {
     }
   } catch (error) {
     console.error(`\u274C Error ejecutando comando ${command}:`, error);
-    process.exit(1);
   }
 }
 async function createUser(args) {
@@ -4293,7 +4324,7 @@ var AUTH_LIBRARY_INFO = {
     "Framework-agnostic",
     "TypeScript nativo",
     "SQLite con Bun",
-    "JWT + bcrypt",
+    "JWT + Bun.password",
     "RBAC (Role-Based Access Control)",
     "Middlewares reutilizables",
     "Migraciones autom\xE1ticas",
@@ -4326,7 +4357,10 @@ export {
   isExpressAuthenticated,
   initializeConnectionCleanup,
   initializeAuth,
+  initPermissionService,
+  initJWTService,
   initDatabase,
+  initAuthService,
   honoSuccessResponse,
   honoRequireRoles,
   honoRequirePermissions,
@@ -4353,6 +4387,7 @@ export {
   getDatabase,
   getCurrentUser,
   getConnectionStats,
+  getAuthService,
   getAuthLibrary,
   getAuthConfig,
   generateEnvExample,
@@ -4402,5 +4437,5 @@ export {
   AUTH_LIBRARY_INFO
 };
 
-//# debugId=D8CEBF68316F6F5364756E2164756E21
+//# debugId=53C77BDBBFF273A664756E2164756E21
 //# sourceMappingURL=index.js.map
