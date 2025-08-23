@@ -1,5 +1,22 @@
 // src/adapters/websocket.ts
-import { WebSocket } from 'ws';
+// Type-safe conditional imports for WebSocket
+
+// Define WebSocket-compatible interface
+export interface WSWebSocket {
+  send(data: string | Buffer): void;
+  close(code?: number, reason?: string): void;
+  on(event: string, listener: (...args: any[]) => void): void;
+  off(event: string, listener: (...args: any[]) => void): void;
+  ping(data?: Buffer): void;
+  readyState: number;
+  CONNECTING: number;
+  OPEN: number;
+  CLOSING: number;
+  CLOSED: number;
+}
+
+// Use our interface as the WebSocket type
+type WebSocket = WSWebSocket;
 import { 
   authenticateRequest, 
   AuthMiddlewareConfig, 
@@ -14,7 +31,7 @@ import type { AuthContext, AuthRequest, User } from '../types/auth';
 /**
  * Interfaz para WebSocket con autenticación
  */
-export interface AuthenticatedWebSocket extends WebSocket {
+export interface AuthenticatedWebSocket extends WSWebSocket {
   auth?: AuthContext;
   userId?: string;
   sessionId?: string;

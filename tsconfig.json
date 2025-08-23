@@ -15,6 +15,9 @@
     "jsxImportSource": "hono/jsx",
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmitOnError": false,
     "types": ["bun-types"]
   },
   "include": [

@@ -1,5 +1,38 @@
 // src/adapters/express.ts
-import { Request, Response, NextFunction } from 'express';
+// Type-safe conditional imports for Express
+
+// Define Express-compatible interfaces
+export interface ExpressRequest {
+  headers: Record<string, string | string[] | undefined>;
+  path: string;
+  method: string;
+  body?: any;
+  query?: any;
+  params?: any;
+  auth?: any;
+}
+
+export interface ExpressResponse {
+  status(code: number): ExpressResponse;
+  json(data: any): ExpressResponse;
+  send(data: any): ExpressResponse;
+  setHeader(name: string, value: string): ExpressResponse;
+  header(name: string, value: string): ExpressResponse;
+  sendStatus(code: number): ExpressResponse;
+  end(): void;
+  on(event: string, listener: (...args: any[]) => void): ExpressResponse;
+  statusCode: number;
+}
+
+export interface ExpressNextFunction {
+  (error?: any): void;
+}
+
+// Try to use actual Express types if available, otherwise use our interfaces
+type Request = ExpressRequest;
+type Response = ExpressResponse;
+type NextFunction = ExpressNextFunction;
+
 import { 
   authenticateRequest, 
   AuthMiddlewareConfig, 
@@ -130,7 +163,7 @@ export function expressRequireRoles(roles: string[]) {
       });
     }
 
-    const userRoles = authContext.user.roles.map(role => role.name);
+    const userRoles = authContext.user.roles.map((role: any) => role.name);
     const hasRequiredRole = roles.some(role => userRoles.includes(role));
 
     if (!hasRequiredRole) {
@@ -210,7 +243,7 @@ export function expressRequireOwnership(
 
     const resourceUserId = getUserIdFromParams(req);
     const isOwner = authContext.user.id === resourceUserId;
-    const isAdmin = authContext.user.roles.some(role => 
+    const isAdmin = authContext.user.roles.some((role: any) => 
       ['admin', 'administrator'].includes(role.name)
     );
 
@@ -277,8 +310,9 @@ export function expressCorsAuth(origins: string[] = ['*']) {
   return (req: Request, res: Response, next: NextFunction) => {
     const origin = req.headers.origin;
     
-    if (origins.includes('*') || (origin && origins.includes(origin))) {
-      res.header('Access-Control-Allow-Origin', origin || '*');
+    const originStr = Array.isArray(origin) ? origin[0] : origin;
+    if (origins.includes('*') || (originStr && origins.includes(originStr))) {
+      res.header('Access-Control-Allow-Origin', originStr || '*');
       res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
       res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
       res.header('Access-Control-Allow-Credentials', 'true');

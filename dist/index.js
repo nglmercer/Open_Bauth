@@ -2050,9 +2050,6 @@ function printConfig(config) {
 }
 var auth_default = getAuthConfig();
 
-// src/adapters/websocket.ts
-import { WebSocket } from "ws";
-
 // src/middleware/auth.ts
 async function authenticateRequest(request, config = {}) {
   const {
@@ -3593,8 +3590,9 @@ function expressRateLimit(maxRequests = 100, windowMs = 15 * 60 * 1000) {
 function expressCorsAuth(origins = ["*"]) {
   return (req, res, next) => {
     const origin = req.headers.origin;
-    if (origins.includes("*") || origin && origins.includes(origin)) {
-      res.header("Access-Control-Allow-Origin", origin || "*");
+    const originStr = Array.isArray(origin) ? origin[0] : origin;
+    if (origins.includes("*") || originStr && origins.includes(originStr)) {
+      res.header("Access-Control-Allow-Origin", originStr || "*");
       res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
       res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
       res.header("Access-Control-Allow-Credentials", "true");
@@ -4437,5 +4435,5 @@ export {
   AUTH_LIBRARY_INFO
 };
 
-//# debugId=53C77BDBBFF273A664756E2164756E21
+//# debugId=3BCE83FB3D30827E64756E2164756E21
 //# sourceMappingURL=index.js.map
