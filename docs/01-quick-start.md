@@ -12,10 +12,10 @@
 
 ```bash
 # Instalar la librería
-bun add @auth-library/core
+bun add @Open_Bauth/core
 
 # O con npm
-npm install @auth-library/core
+npm install @Open_Bauth/core
 ```
 
 ## 🎯 Configuración Básica (2 minutos)
@@ -24,7 +24,7 @@ npm install @auth-library/core
 
 ```typescript
 // auth.config.ts
-import { AuthConfig } from '@auth-library/core';
+import { AuthConfig } from '@Open_Bauth/core';
 
 export const authConfig: Partial<AuthConfig> = {
   jwtSecret: process.env.JWT_SECRET || 'your-super-secret-key',
@@ -39,7 +39,7 @@ export const authConfig: Partial<AuthConfig> = {
 
 ```typescript
 // app.ts
-import { initializeAuth } from '@auth-library/core';
+import { initializeAuth } from '@Open_Bauth/core';
 import { authConfig } from './auth.config';
 
 // Inicializar la librería
@@ -54,7 +54,7 @@ import { Hono } from 'hono';
 import { 
   createHonoAuth,
   initializeAuth 
-} from '@auth-library/core';
+} from '@Open_Bauth/core';
 
 const app = new Hono();
 
@@ -132,7 +132,7 @@ import express from 'express';
 import { 
   createExpressAuth,
   initializeAuth 
-} from '@auth-library/core';
+} from '@Open_Bauth/core';
 
 const app = express();
 app.use(express.json());
@@ -261,13 +261,13 @@ Si encuentras algún problema:
 
 1. **[Troubleshooting](./09-troubleshooting.md)** - Soluciones comunes
 2. **[API Reference](./08-api-reference.md)** - Referencia completa
-3. **[GitHub Issues](https://github.com/auth-library/core/issues)** - Reportar bugs
+3. **[GitHub Issues](https://github.com/Open_Bauth/core/issues)** - Reportar bugs
 
 ## 📚 Recursos Adicionales
 
 - **[Documentación Completa](./README.md)** - Índice principal
-- **[Ejemplos en GitHub](https://github.com/auth-library/examples)**
-- **[Playground Interactivo](https://auth-library-playground.vercel.app)**
+- **[Ejemplos en GitHub](https://github.com/Open_Bauth/examples)**
+- **[Playground Interactivo](https://Open_Bauth-playground.vercel.app)**
 
 ---
 

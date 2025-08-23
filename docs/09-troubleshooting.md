@@ -737,21 +737,21 @@ Para mantenerte actualizado:
 
 ```bash
 # Verificar versión actual
-npm list @auth-library/core
+npm list @Open_Bauth/core
 
 # Verificar actualizaciones
-npm outdated @auth-library/core
+npm outdated @Open_Bauth/core
 
 # Actualizar
-npm update @auth-library/core
+npm update @Open_Bauth/core
 ```
 
 ### 📚 Recursos Adicionales
 
-- **[Ejemplos en GitHub](https://github.com/auth-library/examples)**
-- **[Blog con tutoriales](https://auth-library.dev/blog)**
-- **[Changelog](https://github.com/auth-library/core/CHANGELOG.md)**
-- **[Roadmap](https://github.com/auth-library/core/projects)**
+- **[Ejemplos en GitHub](https://github.com/Open_Bauth/examples)**
+- **[Blog con tutoriales](https://Open_Bauth.dev/blog)**
+- **[Changelog](https://github.com/Open_Bauth/core/CHANGELOG.md)**
+- **[Roadmap](https://github.com/Open_Bauth/core/projects)**
 
 ---
 

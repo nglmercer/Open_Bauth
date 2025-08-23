@@ -47,8 +47,8 @@ basic-web-app/
 
 ```typescript
 import express from 'express';
-import { AuthLibrary } from '@auth-library/core';
-import { createExpressAdapter } from '@auth-library/express';
+import { AuthLibrary } from '@Open_Bauth/core';
+import { createExpressAdapter } from '@Open_Bauth/express';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
 import protectedRoutes from './routes/protected';
@@ -116,7 +116,7 @@ app.listen(PORT, () => {
 
 ```typescript
 import { Router } from 'express';
-import { ExpressAuthAdapter } from '@auth-library/express';
+import { ExpressAuthAdapter } from '@Open_Bauth/express';
 
 export default function createAuthRoutes(auth: ExpressAuthAdapter) {
   const router = Router();
@@ -238,7 +238,7 @@ export default function createAuthRoutes(auth: ExpressAuthAdapter) {
 
 ```typescript
 import { Router } from 'express';
-import { ExpressAuthAdapter } from '@auth-library/express';
+import { ExpressAuthAdapter } from '@Open_Bauth/express';
 
 export default function createProtectedRoutes(auth: ExpressAuthAdapter) {
   const router = Router();
@@ -402,7 +402,7 @@ export const ROLES = {
 ```typescript
 // middleware/authorization.ts
 import { Request, Response, NextFunction } from 'express';
-import { ExpressAuthAdapter } from '@auth-library/express';
+import { ExpressAuthAdapter } from '@Open_Bauth/express';
 
 interface AuthorizedRequest extends Request {
   user: any;
@@ -522,7 +522,7 @@ export function createAdvancedAuthMiddleware(auth: ExpressAuthAdapter) {
 ```typescript
 // routes/admin/users.ts
 import { Router } from 'express';
-import { ExpressAuthAdapter } from '@auth-library/express';
+import { ExpressAuthAdapter } from '@Open_Bauth/express';
 import { PERMISSIONS } from '../../config/permissions';
 import { createAdvancedAuthMiddleware } from '../../middleware/authorization';
 
@@ -744,8 +744,8 @@ Arquitectura de microservicios con autenticación centralizada y comunicación e
 
 ```typescript
 import express from 'express';
-import { AuthLibrary } from '@auth-library/core';
-import { createExpressAdapter } from '@auth-library/express';
+import { AuthLibrary } from '@Open_Bauth/core';
+import { createExpressAdapter } from '@Open_Bauth/express';
 
 const app = express();
 

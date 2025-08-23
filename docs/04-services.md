@@ -1387,7 +1387,7 @@ class RateLimitedAuthService {
 
 ## 🔗 Enlaces Relacionados
 
-- **[Clase AuthLibrary](./03-auth-library.md)** - Documentación de la clase principal
+- **[Clase AuthLibrary](./03-Open_Bauth.md)** - Documentación de la clase principal
 - **[Adaptadores de Framework](./05-framework-adapters.md)** - Integración con frameworks
 - **[Middleware](./06-middleware.md)** - Middleware y utilidades
 - **[Ejemplos Prácticos](./07-examples.md)** - Implementaciones completas
@@ -1395,4 +1395,4 @@ class RateLimitedAuthService {
 
 ---
 
-[⬅️ AuthLibrary](./03-auth-library.md) | [🏠 Índice](./README.md) | [➡️ Adaptadores](./05-framework-adapters.md)
+[⬅️ AuthLibrary](./03-Open_Bauth.md) | [🏠 Índice](./README.md) | [➡️ Adaptadores](./05-framework-adapters.md)

@@ -23,7 +23,7 @@ La clase `AuthLibrary` actúa como:
 - **Gestor de ciclo de vida** de la aplicación
 
 ```typescript
-import { AuthLibrary } from '@auth-library/core';
+import { AuthLibrary } from '@Open_Bauth/core';
 
 // Instancia única de la librería
 const authLib = new AuthLibrary(config);
@@ -50,7 +50,7 @@ constructor(config?: Partial<AuthConfig>)
 ### Ejemplo de Configuración
 
 ```typescript
-import { AuthLibrary, AuthConfig } from '@auth-library/core';
+import { AuthLibrary, AuthConfig } from '@Open_Bauth/core';
 
 // Configuración básica
 const authLib = new AuthLibrary({
@@ -303,7 +303,7 @@ await authLib.close();
 ### Inicialización Completa
 
 ```typescript
-import { AuthLibrary } from '@auth-library/core';
+import { AuthLibrary } from '@Open_Bauth/core';
 
 async function setupAuth() {
   // 1. Crear instancia
@@ -350,7 +350,7 @@ process.on('SIGINT', async () => {
 
 ```typescript
 // auth-singleton.ts
-import { AuthLibrary, AuthConfig } from '@auth-library/core';
+import { AuthLibrary, AuthConfig } from '@Open_Bauth/core';
 
 class AuthManager {
   private static instance: AuthLibrary | null = null;
@@ -439,7 +439,7 @@ if (registerResult.success) {
 ```typescript
 // server.ts
 import { Hono } from 'hono';
-import { AuthLibrary, createHonoAuth } from '@auth-library/core';
+import { AuthLibrary, createHonoAuth } from '@Open_Bauth/core';
 
 const app = new Hono();
 
@@ -510,7 +510,7 @@ export default app;
 
 ```typescript
 // auth-microservice.ts
-import { AuthLibrary } from '@auth-library/core';
+import { AuthLibrary } from '@Open_Bauth/core';
 import { createServer } from 'http';
 
 class AuthMicroservice {

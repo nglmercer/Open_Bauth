@@ -1,5 +1,5 @@
 {
-  "name": "bun-auth-library",
+  "name": "Open_Bauth",
   "version": "1.0.0",
   "description": "Framework-agnostic authentication library built with Bun, TypeScript, and SQLite",
   "main": "dist/index.js",
@@ -82,12 +82,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/bun-auth-library.git"
+    "url": "https://github.com/yourusername/Open_Bauth.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/bun-auth-library/issues"
+    "url": "https://github.com/yourusername/Open_Bauth/issues"
   },
-  "homepage": "https://github.com/yourusername/bun-auth-library#readme",
+  "homepage": "https://github.com/yourusername/Open_Bauth#readme",
   "files": [
     "dist",
     "README.md",

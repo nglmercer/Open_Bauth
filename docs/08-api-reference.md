@@ -675,7 +675,7 @@ const activity = await auditService.getUserActivity('user-id-123', {
 Crea un adaptador para Express.js.
 
 ```typescript
-import { createExpressAdapter } from '@auth-library/express';
+import { createExpressAdapter } from '@Open_Bauth/express';
 
 const auth = createExpressAdapter(authLib);
 ```
@@ -749,7 +749,7 @@ app.get('/manager', auth.roles(['manager', 'admin']), (req, res) => {
 Crea un adaptador para Hono.
 
 ```typescript
-import { createHonoAdapter } from '@auth-library/hono';
+import { createHonoAdapter } from '@Open_Bauth/hono';
 
 const auth = createHonoAdapter(authLib);
 ```
