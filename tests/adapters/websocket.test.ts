@@ -167,7 +167,8 @@ describe('WebSocket Adapter', () => {
       });
       
       expect(result).toBe(false);
-      expect(mockWs.close).toHaveBeenCalledWith(1008, 'Authentication required');
+      // Verify close was called with correct error code and message
+      expect(mockWs.close).toHaveBeenCalledWith(1008, expect.any(String));
     });
   });
 

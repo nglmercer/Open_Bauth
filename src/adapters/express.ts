@@ -87,10 +87,7 @@ export function expressAuthMiddleware(config: AuthMiddlewareConfig = {}) {
           error: result.error
         });
 
-        return res.status(result.statusCode || 401).json({
-          error: result.error,
-          timestamp: new Date().toISOString()
-        });
+        return createExpressAuthErrorResponse(res, req, result.error, result.statusCode);
       }
 
       // Establecer contexto de autenticación en Express
@@ -109,9 +106,8 @@ export function expressAuthMiddleware(config: AuthMiddlewareConfig = {}) {
       next();
     } catch (error:any) {
       console.error('Express auth middleware error:', error);
-      return res.status(500).json({
-        error: 'Internal authentication error',
-        timestamp: new Date().toISOString()
+      return createExpressAuthErrorResponse(res, req, 'Internal authentication error', 500, {
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   };
@@ -341,6 +337,139 @@ export function expressErrorResponse(
     error,
     timestamp: new Date().toISOString()
   });
+}
+
+/**
+ * Helper para crear respuestas de error de autenticación específicas en Express
+ * @param res Response de Express
+ * @param req Request de Express
+ * @param error Mensaje de error
+ * @param statusCode Código de estado HTTP
+ * @param additionalData Datos adicionales para incluir en la respuesta
+ */
+export function createExpressAuthErrorResponse(
+  res: Response,
+  req: Request,
+  error: string = 'Authentication failed',
+  statusCode: number = 401,
+  additionalData?: any
+) {
+  const errorResponse: any = {
+    success: false,
+    error: getDetailedAuthError(error, statusCode),
+    code: getAuthErrorCode(error, statusCode),
+    timestamp: new Date().toISOString(),
+    path: req.path,
+    method: req.method
+  };
+
+  if (additionalData) {
+    Object.assign(errorResponse, additionalData);
+  }
+
+  // Agregar headers de autenticación según el tipo de error
+  if (statusCode === 401) {
+    res.setHeader('WWW-Authenticate', 'Bearer realm="API"');
+  }
+
+  return res.status(statusCode).json(errorResponse);
+}
+
+/**
+ * Obtener mensaje de error detallado basado en el error y código de estado
+ * @param error Mensaje de error original
+ * @param statusCode Código de estado HTTP
+ * @returns Mensaje de error detallado
+ */
+function getDetailedAuthError(error: string, statusCode: number): string {
+  // Mapear errores comunes a mensajes más descriptivos
+  const errorMappings: Record<string, string> = {
+    'Invalid token': 'The provided authentication token is invalid or malformed. Please check your token and try again.',
+    'Token expired': 'Your authentication token has expired. Please obtain a new token and try again.',
+    'No token provided': 'Authentication token is required. Please provide a valid Bearer token in the Authorization header.',
+    'Insufficient permissions': 'You do not have the required permissions to access this resource.',
+    'User not found': 'The user associated with this token could not be found or has been deactivated.',
+    'Token revoked': 'This authentication token has been revoked. Please obtain a new token.',
+    'Invalid signature': 'The token signature is invalid. This may indicate a compromised or tampered token.',
+    'Malformed token': 'The authentication token format is incorrect. Please ensure you are using a valid JWT token.',
+    'Authentication required': 'This endpoint requires authentication. Please provide a valid Bearer token.',
+    'Session expired': 'Your session has expired. Please log in again to continue.',
+    'Account locked': 'Your account has been temporarily locked due to security reasons. Please contact support.',
+    'Invalid credentials': 'The provided credentials are incorrect. Please check your username and password.'
+  };
+
+  // Buscar coincidencia exacta primero
+  if (errorMappings[error]) {
+    return errorMappings[error];
+  }
+
+  // Buscar coincidencias parciales
+  for (const [key, value] of Object.entries(errorMappings)) {
+    if (error.toLowerCase().includes(key.toLowerCase())) {
+      return value;
+    }
+  }
+
+  // Mensajes por código de estado si no hay coincidencia específica
+  switch (statusCode) {
+    case 401:
+      return error.includes('token') 
+        ? 'Authentication failed: Invalid or missing token. Please provide a valid Bearer token in the Authorization header.'
+        : 'Authentication required. Please provide valid credentials to access this resource.';
+    case 403:
+      return 'Access forbidden: You do not have sufficient permissions to perform this action.';
+    case 429:
+      return 'Rate limit exceeded: Too many requests. Please wait before trying again.';
+    default:
+      return error || 'Authentication error occurred.';
+  }
+}
+
+/**
+ * Obtener código de error específico para APIs
+ * @param error Mensaje de error
+ * @param statusCode Código de estado HTTP
+ * @returns Código de error para APIs
+ */
+function getAuthErrorCode(error: string, statusCode: number): string {
+  const errorCodes: Record<string, string> = {
+    'Invalid token': 'AUTH_INVALID_TOKEN',
+    'Token expired': 'AUTH_TOKEN_EXPIRED',
+    'No token provided': 'AUTH_TOKEN_MISSING',
+    'Insufficient permissions': 'AUTH_INSUFFICIENT_PERMISSIONS',
+    'User not found': 'AUTH_USER_NOT_FOUND',
+    'Token revoked': 'AUTH_TOKEN_REVOKED',
+    'Invalid signature': 'AUTH_INVALID_SIGNATURE',
+    'Malformed token': 'AUTH_MALFORMED_TOKEN',
+    'Authentication required': 'AUTH_REQUIRED',
+    'Session expired': 'AUTH_SESSION_EXPIRED',
+    'Account locked': 'AUTH_ACCOUNT_LOCKED',
+    'Invalid credentials': 'AUTH_INVALID_CREDENTIALS'
+  };
+
+  // Buscar coincidencia exacta
+  if (errorCodes[error]) {
+    return errorCodes[error];
+  }
+
+  // Buscar coincidencias parciales
+  for (const [key, value] of Object.entries(errorCodes)) {
+    if (error.toLowerCase().includes(key.toLowerCase())) {
+      return value;
+    }
+  }
+
+  // Códigos por estado HTTP
+  switch (statusCode) {
+    case 401:
+      return 'AUTH_UNAUTHORIZED';
+    case 403:
+      return 'AUTH_FORBIDDEN';
+    case 429:
+      return 'AUTH_RATE_LIMITED';
+    default:
+      return 'AUTH_ERROR';
+  }
 }
 
 /**
