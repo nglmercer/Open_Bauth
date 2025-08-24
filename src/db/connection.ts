@@ -38,10 +38,10 @@ export function initDatabase(dbPath: string = "./auth.db"): Database {
  * @returns Instancia de la base de datos
  * @throws Error si la base de datos no ha sido inicializada
  */
-export function getDatabase(): Database {
+export function getDatabase(dbPath?: string): Database {
   if (!db) {
-    console.log("⚠️ Database not initialized, auto-initializing with test.db");
-    initDatabase('./test.db');
+    console.log("⚠️ Database not initialized, auto-initializing with auth.db");
+    initDatabase(dbPath);
   }
   
   // Check if database is still open, if not reinitialize
@@ -56,7 +56,7 @@ export function getDatabase(): Database {
     if (error.message && error.message.includes('closed database')) {
       console.log("⚠️ Database connection closed, reinitializing...");
       db = null as any;
-      initDatabase('./test.db');
+      initDatabase(dbPath);
     } else {
       throw error;
     }
@@ -69,10 +69,10 @@ export function getDatabase(): Database {
   return db;
 }
 
-export function forceReinitDatabase(): Database {
+export function forceReinitDatabase(dbPath?: string): Database {
   console.log("🔄 Force reinitializing database...");
   db = null;
-  initDatabase('./test.db');
+  initDatabase(dbPath);
   if (!db) {
     throw new Error("Failed to reinitialize database");
   }

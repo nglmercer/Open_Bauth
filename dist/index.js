@@ -161,8 +161,8 @@ class JWTService {
     if (!authHeader) {
       return null;
     }
-    const parts = authHeader.split(" ");
-    if (parts.length !== 2 || parts[0] !== "Bearer") {
+    const parts = authHeader.trim().split(" ");
+    if (parts.length !== 2 || parts[0].toLowerCase() !== "bearer") {
       return null;
     }
     return parts[1];
@@ -2063,23 +2063,7 @@ async function authenticateRequest(request, config = {}) {
   if (extractToken) {
     token = extractToken(request);
   } else {
-    const authHeader = request.headers[tokenHeader] || request.headers[tokenHeader.toLowerCase()];
-    if (!authHeader) {
-      if (!required) {
-        return { success: true, context: { permissions: [], isAuthenticated: false } };
-      }
-      return {
-        success: false,
-        error: "Authorization header is required",
-        statusCode: 401
-      };
-    }
-    const jwtService2 = config.jwtService || getJWTService();
-    if (tokenHeader === "authorization") {
-      token = jwtService2.extractTokenFromHeader(authHeader);
-    } else {
-      token = authHeader;
-    }
+    token = extractTokenFromRequest(request, tokenHeader, config);
   }
   if (!token) {
     if (!required) {
@@ -2087,7 +2071,7 @@ async function authenticateRequest(request, config = {}) {
     }
     return {
       success: false,
-      error: extractToken ? "Token not found" : "Invalid authorization header format. Use: Bearer <token>",
+      error: extractToken ? "Token not found" : "Authentication token required. Provide token via Authorization header (Bearer <token>) or query parameter.",
       statusCode: 401
     };
   }
@@ -2192,6 +2176,34 @@ function extractClientIP(headers) {
 }
 function extractUserAgent(headers) {
   return headers["user-agent"] || headers["User-Agent"] || "Unknown";
+}
+function extractTokenFromRequest(request, tokenHeader, config) {
+  const jwtService = config.jwtService || getJWTService();
+  const authHeader = request.headers[tokenHeader] || request.headers[tokenHeader.toLowerCase()] || request.headers[tokenHeader.toUpperCase()];
+  if (authHeader) {
+    if (tokenHeader.toLowerCase() === "authorization") {
+      const token = jwtService.extractTokenFromHeader(authHeader);
+      if (token)
+        return token;
+    } else {
+      return authHeader;
+    }
+  }
+  if (request.query) {
+    const queryToken = request.query.token || request.query.access_token || request.query.auth_token;
+    if (queryToken) {
+      return Array.isArray(queryToken) ? queryToken[0] : queryToken;
+    }
+  }
+  if (request.url) {
+    try {
+      const url = new URL(request.url, "http://localhost");
+      const urlToken = url.searchParams.get("token") || url.searchParams.get("access_token") || url.searchParams.get("auth_token");
+      if (urlToken)
+        return urlToken;
+    } catch (error) {}
+  }
+  return null;
 }
 
 // src/adapters/websocket.ts
@@ -3353,8 +3365,23 @@ function honoAuthMiddleware(config = {}) {
       c.req.raw.headers.forEach((value, key) => {
         headers[key] = value;
       });
+      const query = {};
+      const url = new URL(c.req.url);
+      url.searchParams.forEach((value, key) => {
+        if (query[key]) {
+          if (Array.isArray(query[key])) {
+            query[key].push(value);
+          } else {
+            query[key] = [query[key], value];
+          }
+        } else {
+          query[key] = value;
+        }
+      });
       const authRequest = {
-        headers
+        headers,
+        query,
+        url: c.req.url
       };
       const result = await authenticateRequest(authRequest, config);
       if (!result.success) {
@@ -3645,7 +3672,11 @@ function expressAuthMiddleware(config = {}) {
         return next();
       }
       const authRequest = {
-        headers: req.headers
+        headers: req.headers,
+        url: req.path,
+        method: req.method,
+        query: req.query || {},
+        params: req.params || {}
       };
       const result = await authenticateRequest(authRequest, config);
       if (!result.success) {
@@ -4712,5 +4743,5 @@ export {
   AUTH_LIBRARY_INFO
 };
 
-//# debugId=D296465AC81D36F064756E2164756E21
+//# debugId=94C168A0978247EF64756E2164756E21
 //# sourceMappingURL=index.js.map

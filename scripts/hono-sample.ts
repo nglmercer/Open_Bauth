@@ -575,7 +575,7 @@ function setupProtectedRoutes() {
   app.route('/posts', postsRoutes)
 
   // Get all users (admin only)
-  adminRoutes.get('/users', auth.admin(), async (c) => {
+  adminRoutes.get('/users', auth.required(), auth.admin(), async (c) => {
     try {
       const result = await authService.getUsers(1, 50, { includeRoles: true })
       
@@ -604,7 +604,7 @@ function setupProtectedRoutes() {
   })
 
   // Get all posts (admin only - includes unpublished)
-  adminRoutes.get('/posts', auth.admin(), (c) => {
+  adminRoutes.get('/posts', auth.required(), auth.admin(), (c) => {
     return c.json({
       success: true,
       posts: blogPosts.map(post => ({
@@ -683,5 +683,16 @@ async function initializeApp() {
 
 // Initialize on startup
 initializeApp()
+
+// Start the server
+const port = process.env.PORT || 3001
+
+Bun.serve({
+  port,
+  fetch: app.fetch,
+})
+
+console.log(`🚀 Blog API server running on http://localhost:${port}`)
+console.log(`📖 API Documentation available at http://localhost:${port}/`)
 
 export default app

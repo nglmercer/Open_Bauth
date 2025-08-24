@@ -124,7 +124,7 @@ describe('Auth Middleware', () => {
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: false,
-          error: expect.stringContaining('Authorization header is required')
+          error: expect.stringContaining('Authentication token required')
         })
       );
     });

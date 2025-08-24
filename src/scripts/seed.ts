@@ -158,12 +158,12 @@ const initialUsers = [
 /**
  * Función principal de seeding
  */
-export async function seedDatabase(): Promise<void> {
+export async function seedDatabase(dbPath?: string): Promise<void> {
   try {
     console.log('🌱 Iniciando seeding de la base de datos...');
     
     // Inicializar base de datos y ejecutar migraciones
-    initDatabase();
+    initDatabase(dbPath);
     await runMigrations();
     
     const permissionService = new PermissionService();
@@ -199,7 +199,7 @@ export async function seedDatabase(): Promise<void> {
           createdRoles.set(role.name, result.role?.id);
           
           // Asignar permisos al rol
-          for (const permissionName of role.permissionIds || []) {
+          for (const permissionName of role.permissions || []) {
             const permissionId = createdPermissions.get(permissionName);
             if (permissionId) {
               await permissionService.assignPermissionsToRole(result.role?.id, [permissionId]);
@@ -226,12 +226,13 @@ export async function seedDatabase(): Promise<void> {
           
           // Asignar roles al usuario
           for (const roleName of user.roles) {
-            const roleId = createdRoles.get(roleName);
-            if (roleId && result.user) {
-              await permissionService.assignRoleToUser({
-                roleId: roleId,
-                userId: result.user?.id,
-              });
+            if (result.user) {
+              const assignResult = await authService.assignRole(result.user.id, roleName);
+              if (assignResult.success) {
+                console.log(`    ✅ Rol ${roleName} asignado a ${user.email}`);
+              } else {
+                console.log(`    ❌ Error asignando rol ${roleName} a ${user.email}:`, assignResult.error?.message);
+              }
             }
           }
           console.log(`    🎭 Roles asignados al usuario ${user.email}`);
@@ -269,13 +270,13 @@ export async function seedDatabase(): Promise<void> {
 /**
  * Función para limpiar la base de datos
  */
-export async function cleanDatabase(): Promise<void> {
+export async function cleanDatabase(dbPath?: string): Promise<void> {
   console.log('🧹 Limpiando base de datos...');
   
   try {
     // Verificar si la base de datos está inicializada
     if (!isDatabaseInitialized()) {
-      initDatabase('./test.db');
+      initDatabase(dbPath);
     }
     
     let db = getDatabase();
