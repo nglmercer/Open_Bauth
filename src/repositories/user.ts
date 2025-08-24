@@ -356,7 +356,6 @@ export class UserRepository {
           updatedAt: new Date(roleData.created_at), // Use created_at as fallback since updated_at is not available
           created_at: new Date(roleData.created_at), // For test compatibility
           isActive: Boolean(roleData.is_active), // For test compatibility
-          isDefault: false, // Default value
           description: undefined,
           permissions: [],
           metadata: undefined

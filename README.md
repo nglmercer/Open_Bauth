@@ -424,3 +424,7 @@ console.log('User registered:', result.success);
 ## License
 
 MIT License - see LICENSE file for details.
+
+#### changes:
+- isDefault [] optional, not included on database,
+  - default ever is user, implement change default userRole. only exist one(?)

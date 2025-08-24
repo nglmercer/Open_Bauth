@@ -199,7 +199,6 @@ describe('WebSocket Adapter', () => {
             isActive: true,
             createdAt: new Date(),
             updatedAt: new Date(),
-            isDefault: false
           }]
         },
         isAuthenticated: true,
@@ -232,7 +231,6 @@ describe('WebSocket Adapter', () => {
             id: 'role1',
             name: 'user',
             permissions: [],
-            isDefault: false,
             isActive: true,
             createdAt: new Date(),
             updatedAt: new Date()

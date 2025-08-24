@@ -986,7 +986,6 @@ export class PermissionService {
         description: result.description,
         createdAt: new Date(result.created_at),
         updatedAt: new Date(result.created_at),
-        isDefault: Boolean(result.is_active),
         isActive: Boolean(result.is_active),
         permissions: []
       };
@@ -1027,7 +1026,6 @@ export class PermissionService {
         description: result.description,
         createdAt: new Date(result.created_at),
         updatedAt: new Date(result.created_at),
-        isDefault: Boolean(result.is_active),
         isActive: Boolean(result.is_active),
         permissions: []
       };
@@ -1099,7 +1097,6 @@ export class PermissionService {
           description: row.description,
           createdAt: new Date(row.created_at),
           updatedAt: new Date(row.created_at),
-          isDefault: Boolean(row.is_active),
           isActive: Boolean(row.is_active),
           permissions: []
         };

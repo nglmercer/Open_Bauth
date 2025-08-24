@@ -15,7 +15,7 @@ describe('JWTService', () => {
     firstName: 'Test',
     lastName: 'User',
     isActive: true,
-    roles: [{ id: '1', name: 'user', permissions: [], isDefault: false, isActive: true, createdAt: new Date(), updatedAt: new Date() }],
+    roles: [{ id: '1', name: 'user', permissions: [], isActive: true, createdAt: new Date(), updatedAt: new Date() }],
     createdAt: new Date(),
     updatedAt: new Date()
   };
