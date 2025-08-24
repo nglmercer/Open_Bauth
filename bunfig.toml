@@ -38,7 +38,7 @@ LOG_LEVEL = "error"
 [install]
 # Configuración de instalación de dependencias
 cache = true
-frozenLockfile = true
+frozenLockfile = false
 
 # Configuración de desarrollo
 [run]
