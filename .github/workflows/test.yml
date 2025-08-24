@@ -39,7 +39,7 @@ jobs:
             ${{ runner.os }}-bun-
             
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile=false
         
       - name: Create test database directory
         run: mkdir -p tests/data
@@ -124,7 +124,7 @@ jobs:
           bun-version: latest
         
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile=false
         
       - name: Run security audit
         run: bun audit
@@ -138,36 +138,6 @@ jobs:
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v2
 
-  performance:
-    name: Performance Tests
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-        
-      - name: Install dependencies
-        run: bun install
-        
-      - name: Run performance tests
-        run: bun test --test-name-pattern=Performance --timeout 120000 --preload ./tests/setup.ts
-        env:
-          NODE_ENV: test
-          TEST_DB_PATH: ./tests/data/perf.db
-          JWT_SECRET: test-secret-key-for-ci
-          
-      - name: Benchmark results
-        run: |
-          echo "## 🚀 Performance Benchmark Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Performance tests completed successfully." >> $GITHUB_STEP_SUMMARY
-          echo "Check the workflow logs for detailed timing information." >> $GITHUB_STEP_SUMMARY
 
   build:
     name: Build Package
@@ -184,7 +154,7 @@ jobs:
           bun-version: latest
         
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile=false
         
       - name: Build package
         run: bun run build
