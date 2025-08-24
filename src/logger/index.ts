@@ -31,7 +31,7 @@ export const log = {
   error: (event: string, logData?: LogData) => defaultLogger.error(event, logData),
   fatal: (event: string, logData?: LogData) => defaultLogger.fatal(event, logData),
   
-  // Métodos de control
+  // Control methods
   silence: () => defaultLogger.silence(),
   unsilence: (level?: LogLevel) => defaultLogger.unsilence(level),
   enableConsoleOnly: () => defaultLogger.enableConsoleOnly(),

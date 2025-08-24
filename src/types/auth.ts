@@ -271,7 +271,7 @@ export interface LegacyPermission {
 }
 
 /**
- * Interface para el contexto de autenticación
+ * Interface for authentication context
  * Se adjunta a las requests autenticadas
  */
 export interface AuthContext {
@@ -283,7 +283,7 @@ export interface AuthContext {
 }
 
 /**
- * Interface para la configuración del sistema de autenticación
+ * Interface for authentication system configuration
  */
 export interface AuthConfig {
   jwtSecret: string;
@@ -330,7 +330,7 @@ export interface AuthConfig {
 }
 
 /**
- * Interface para requests de autenticación (framework agnóstico)
+ * Interface for authentication requests (framework agnostic)
  */
 export interface AuthRequest {
   headers: Record<string, string>;
@@ -349,7 +349,7 @@ export interface AuthRequest {
 export type NextFunction = () => void;
 
 /**
- * Interface para responses de autenticación (framework agnóstico)
+ * Interface for authentication responses (framework agnostic)
  */
 export interface AuthResponse {
   status: (code: number) => AuthResponse;
@@ -357,7 +357,7 @@ export interface AuthResponse {
 }
 
 /**
- * Tipos de datos para registro de usuario
+ * Data types for user registration
  */
 export interface RegisterData {
   email: string;
@@ -368,7 +368,7 @@ export interface RegisterData {
 }
 
 /**
- * Tipos de datos para login de usuario
+ * Data types for user login
  */
 export interface LoginData {
   email: string;
@@ -376,7 +376,7 @@ export interface LoginData {
 }
 
 /**
- * Response del proceso de autenticación
+ * Authentication process response
  */
 export interface AuthResult {
   success: boolean;
@@ -401,15 +401,15 @@ export interface JWTPayload {
 }
 
 /**
- * Opciones para verificación de permisos
+ * Options for permission verification
  */
 export interface PermissionOptions {
-  requireAll?: boolean; // Si se requieren todos los permisos (AND) o solo uno (OR)
-  strict?: boolean; // Si se debe verificar exactamente o permitir permisos superiores
+  requireAll?: boolean; // Whether all permissions are required (AND) or just one (OR)
+  strict?: boolean; // Whether to verify exactly or allow superior permissions
 }
 
 /**
- * Datos para asignar rol a usuario
+ * Data for assigning role to user
  */
 export interface AssignRoleData {
   userId: string;
@@ -417,7 +417,7 @@ export interface AssignRoleData {
 }
 
 /**
- * Response genérico para operaciones de permisos
+ * Generic response for permission operations
  */
 export interface PermissionResult<T = any> {
   success: boolean;
@@ -431,7 +431,7 @@ export interface PermissionResult<T = any> {
 }
 
 /**
- * Response para operaciones de roles
+ * Response for role operations
  */
 export interface RoleResult<T = any> {
   success: boolean;
@@ -444,7 +444,7 @@ export interface RoleResult<T = any> {
 }
 
 /**
- * Configuración para adaptadores de framework
+ * Configuration for framework adapters
  */
 export interface AdapterConfig extends AuthConfig {
   corsEnabled?: boolean;
@@ -464,7 +464,7 @@ export interface DatabaseResult {
 // Note: UserQueryOptions is already defined above, removing duplicate
 
 /**
- * Estadísticas del sistema de autenticación
+ * Authentication system statistics
  */
 export interface AuthStats {
   totalUsers: number;
@@ -475,7 +475,7 @@ export interface AuthStats {
 }
 
 /**
- * Eventos del sistema de autenticación
+ * Authentication system events
  */
 export type AuthEvent = 
   | 'user.registered'
@@ -489,7 +489,7 @@ export type AuthEvent =
   | 'permission.updated';
 
 /**
- * Datos del evento de autenticación
+ * Authentication event data
  */
 export interface AuthEventData {
   event: AuthEvent;
@@ -499,15 +499,15 @@ export interface AuthEventData {
 }
 
 /**
- * Configuración de seguridad
+ * Security configuration
  */
 export interface SecurityConfig {
-  // Configuración de headers de seguridad
+  // Security headers configuration
   securityHeaders: {
     [key: string]: string;
   };
   
-  // Configuración de cookies
+  // Cookie configuration
   cookies: {
     httpOnly: boolean;
     secure: boolean;
@@ -515,7 +515,7 @@ export interface SecurityConfig {
     maxAge: number;
   };
   
-  // Configuración de validación de entrada
+  // Input validation configuration
   validation: {
     maxEmailLength: number;
     maxNameLength: number;
@@ -524,7 +524,7 @@ export interface SecurityConfig {
     blockedEmailDomains: string[];
   };
   
-  // Configuración de IP y geolocalización
+  // IP and geolocation configuration
   ipSecurity: {
     enableGeoBlocking: boolean;
     blockedCountries: string[];
@@ -536,7 +536,7 @@ export interface SecurityConfig {
 }
 
 /**
- * Información de sesión
+ * Session information
  */
 export interface SessionInfo {
   id: string;
@@ -550,7 +550,7 @@ export interface SessionInfo {
 }
 
 /**
- * Tipos de error del sistema de autenticación
+ * Authentication system error types
  */
 export enum AuthErrorType {
   INVALID_CREDENTIALS = 'INVALID_CREDENTIALS',

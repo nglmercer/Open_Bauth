@@ -15,13 +15,13 @@ import type {
 } from '../types/auth';
 
 /**
- * Servicio de permisos y gestión de roles
- * Maneja la creación, asignación y verificación de roles y permisos
+ * Permissions and role management service
+ * Handles creation, assignment and verification of roles and permissions
  */
 export class PermissionService {
   /**
-   * Crea un nuevo permiso
-   * @param data Datos del permiso
+   * Creates a new permission
+   * @param data Permission data
    * @returns Resultado de la operación
    */
   async createPermission(data: CreatePermissionData): Promise<PermissionResult> {
@@ -40,7 +40,7 @@ export class PermissionService {
         };
       }
 
-      // Verificar si el permiso ya existe
+      // Check if permission already exists
       const existingPermission = await this.findPermissionByName(data.name);
       if (existingPermission) {
         return {
@@ -52,14 +52,14 @@ export class PermissionService {
         };
       }
 
-      // Crear permiso
+      // Create permission
       const permissionId = crypto.randomUUID();
       const query = db.query(
         "INSERT INTO permissions (id, name, resource, action, description, created_at) VALUES (?, ?, ?, ?, ?, datetime('now'))"
       );
       query.run(permissionId, data.name, data.resource || 'default', data.action || 'read', data.description || null);
 
-      // Obtener el permiso creado
+      // Get the created permission
       const permission = await this.findPermissionById(permissionId);
       if (!permission) {
         return {
@@ -88,8 +88,8 @@ export class PermissionService {
   }
 
   /**
-   * Crea un nuevo rol
-   * @param data Datos del rol
+   * Creates a new role
+   * @param data Role data
    * @returns Resultado de la operación
    */
   async createRole(data: CreateRoleData): Promise<RoleResult> {
@@ -108,7 +108,7 @@ export class PermissionService {
         };
       }
 
-      // Verificar si el rol ya existe
+      // Check if role already exists
       const existingRole = await this.findRoleByName(data.name);
       if (existingRole) {
         return {
@@ -120,14 +120,14 @@ export class PermissionService {
         };
       }
 
-      // Crear rol
+      // Create role
       const roleId = crypto.randomUUID();
       const query = db.query(
         "INSERT INTO roles (id, name, description, is_active, created_at) VALUES (?, ?, ?, ?, datetime('now'))"
       );
       query.run(roleId, data.name, data.description || null, 1);
 
-      // Asignar permisos si se proporcionan
+      // Assign permissions if provided
       if (data.permissions && data.permissions.length > 0) {
         const assignResult = await this.assignPermissionsToRole(roleId, data.permissions);
         if (!assignResult.success) {
@@ -135,7 +135,7 @@ export class PermissionService {
         }
       }
 
-      // Obtener el rol creado con permisos
+      // Get the created role with permissions
       const role = await this.findRoleById(roleId, true);
       if (!role) {
         return {
@@ -164,14 +164,14 @@ export class PermissionService {
   }
 
   /**
-   * Asigna un rol a un usuario
+   * Assigns a role to a user
    * @param data Datos de asignación
    */
   async assignRoleToUser(data: AssignRoleData): Promise<PermissionResult> {
     try {
       const db = getDatabase();
 
-      // Verificar que el usuario y el rol existen
+      // Verify that user and role exist
       const userExists = await this.checkUserExists(data.userId);
       if (!userExists) {
         return {
@@ -194,7 +194,7 @@ export class PermissionService {
         };
       }
 
-      // Verificar si la asignación ya existe
+      // Check if assignment already exists
       const existingQuery = db.query(
         "SELECT id FROM user_roles WHERE user_id = ? AND role_id = ?"
       );
@@ -210,13 +210,13 @@ export class PermissionService {
         };
       }
 
-      // Crear asignación
+      // Create assignment
       const insertQuery = db.query(
         "INSERT INTO user_roles (id, user_id, role_id, created_at) VALUES (?, ?, ?, datetime('now'))"
       );
       insertQuery.run(crypto.randomUUID(), data.userId, data.roleId);
 
-      console.log(`✅ Rol asignado al usuario: ${data.userId} -> ${data.roleId}`);
+      console.log(`✅ Role assigned to user: ${data.userId} -> ${data.roleId}`);
       return { success: true };
     } catch (error:any) {
       console.error('Error assigning role to user:', error);
@@ -231,9 +231,9 @@ export class PermissionService {
   }
 
   /**
-   * Remueve un rol de un usuario
-   * @param userId ID del usuario
-   * @param roleId ID del rol
+   * Removes a role from a user
+   * @param userId User ID
+   * @param roleId Role ID
    */
   async removeRoleFromUser(userId: string, roleId: string): Promise<PermissionResult> {
     try {
@@ -244,7 +244,7 @@ export class PermissionService {
       );
       query.run(userId, roleId);
 
-      console.log(`✅ Rol removido del usuario: ${userId} -> ${roleId}`);
+      console.log(`✅ Role removed from user: ${userId} -> ${roleId}`);
       return { success: true };
     } catch (error:any) {
       console.error('Error removing role from user:', error);
@@ -259,15 +259,15 @@ export class PermissionService {
   }
 
   /**
-   * Asigna permisos a un rol
-   * @param roleId ID del rol
-   * @param permissionIds Array de IDs de permisos
+   * Assigns permissions to a role
+   * @param roleId Role ID
+   * @param permissionIds Array of permission IDs
    */
   async assignPermissionsToRole(roleId: string, permissionIds: string[]): Promise<PermissionResult> {
     try {
       const db = getDatabase();
 
-      // Verificar que el rol existe
+      // Verify that role exists
       const roleExists = await this.checkRoleExists(roleId);
       if (!roleExists) {
         return {
@@ -279,7 +279,7 @@ export class PermissionService {
         };
       }
 
-      // Verificar que todos los permisos existen
+      // Verify that all permissions exist
       for (const permissionId of permissionIds) {
         const permissionExists = await this.checkPermissionExists(permissionId);
         if (!permissionExists) {
@@ -293,9 +293,9 @@ export class PermissionService {
         }
       }
 
-      // Verificar duplicados y asignar permisos
+      // Check duplicates and assign permissions
       for (const permissionId of permissionIds) {
-        // Verificar si ya existe la asignación
+        // Check if assignment already exists
         const existingQuery = db.query(
           "SELECT id FROM role_permissions WHERE role_id = ? AND permission_id = ?"
         );
@@ -311,7 +311,7 @@ export class PermissionService {
           };
         }
         
-        // Insertar nueva asignación
+        // Insert new assignment
         const insertQuery = db.query(
           "INSERT INTO role_permissions (id, role_id, permission_id, created_at) VALUES (?, ?, ?, datetime('now'))"
         );
@@ -332,18 +332,18 @@ export class PermissionService {
   }
 
   /**
-   * Asigna un permiso específico a un rol (método individual)
-   * @param roleId ID del rol
-   * @param permissionId ID del permiso
+   * Assigns a specific permission to a role (individual method)
+   * @param roleId Role ID
+   * @param permissionId Permission ID
    */
   async assignPermissionToRole(roleId: string, permissionId: string): Promise<PermissionResult> {
     return this.assignPermissionsToRole(roleId, [permissionId]);
   }
 
   /**
-   * Remueve permisos de un rol
-   * @param roleId ID del rol
-   * @param permissionIds Array de IDs de permisos
+   * Removes permissions from a role
+   * @param roleId Role ID
+   * @param permissionIds Array of permission IDs
    */
   async removePermissionsFromRole(roleId: string, permissionIds: string[]): Promise<PermissionResult> {
     try {
@@ -356,7 +356,7 @@ export class PermissionService {
         query.run(roleId, permissionId);
       }
 
-      console.log(`✅ Permisos removidos del rol: ${roleId}`);
+      console.log(`✅ Permissions removed from role: ${roleId}`);
       return { success: true };
     } catch (error:any) {
       console.error('Error removing permissions from role:', error);
@@ -371,15 +371,15 @@ export class PermissionService {
   }
 
   /**
-   * Actualiza un permiso existente
-   * @param id ID del permiso
-   * @param data Datos de actualización
+   * Updates an existing permission
+   * @param id Permission ID
+   * @param data Update data
    */
   async updatePermission(id: string, data: UpdatePermissionData): Promise<PermissionResult> {
     try {
       const db = getDatabase();
 
-      // Verificar que el permiso existe
+      // Verify that permission exists
       const existingPermission = await this.findPermissionById(id);
       if (!existingPermission) {
         return {
@@ -391,7 +391,7 @@ export class PermissionService {
         };
       }
 
-      // Verificar que el nombre no esté en uso por otro permiso
+      // Verify that name is not in use by another permission
       if (data.name && data.name !== existingPermission.name) {
         const existingByName = await this.findPermissionByName(data.name);
         if (existingByName && existingByName.id !== id) {
@@ -417,7 +417,7 @@ export class PermissionService {
       );
 
       const updatedPermission = await this.findPermissionById(id);
-      console.log(`✅ Permiso actualizado: ${updatedPermission?.name}`);
+      console.log(`✅ Permission updated: ${updatedPermission?.name}`);
       
       return {
         success: true,
@@ -436,14 +436,14 @@ export class PermissionService {
   }
 
   /**
-   * Elimina un permiso
-   * @param id ID del permiso
+   * Deletes a permission
+   * @param id Permission ID
    */
   async deletePermission(id: string): Promise<PermissionResult> {
     try {
       const db = getDatabase();
 
-      // Verificar que el permiso existe
+      // Verify that permission exists
       const existingPermission = await this.findPermissionById(id);
       if (!existingPermission) {
         return {
@@ -455,19 +455,19 @@ export class PermissionService {
         };
       }
 
-      // Eliminar relaciones primero
+      // Delete relationships first
       const deleteRelationsQuery = db.query(
         "DELETE FROM role_permissions WHERE permission_id = ?"
       );
       deleteRelationsQuery.run(id);
 
-      // Eliminar el permiso
+      // Delete the permission
       const deletePermissionQuery = db.query(
         "DELETE FROM permissions WHERE id = ?"
       );
       deletePermissionQuery.run(id);
 
-      console.log(`✅ Permiso eliminado: ${existingPermission.name}`);
+      console.log(`✅ Permission deleted: ${existingPermission.name}`);
       return { success: true };
     } catch (error:any) {
       console.error('Error deleting permission:', error);
@@ -482,15 +482,15 @@ export class PermissionService {
   }
 
   /**
-   * Actualiza un rol existente
-   * @param id ID del rol
-   * @param data Datos de actualización
+   * Updates an existing role
+   * @param id Role ID
+   * @param data Update data
    */
   async updateRole(id: string, data: UpdateRoleData): Promise<RoleResult> {
     try {
       const db = getDatabase();
 
-      // Verificar que el rol existe
+      // Verify that role exists
       const existingRole = await this.findRoleById(id);
       if (!existingRole) {
         return {
@@ -502,7 +502,7 @@ export class PermissionService {
         };
       }
 
-      // Verificar que el nombre no esté en uso por otro rol
+      // Verify that name is not in use by another role
       if (data.name && data.name !== existingRole.name) {
         const existingByName = await this.findRoleByName(data.name);
         if (existingByName && existingByName.id !== id) {
@@ -527,7 +527,7 @@ export class PermissionService {
       );
 
       const updatedRole = await this.findRoleById(id);
-      console.log(`✅ Rol actualizado: ${updatedRole?.name}`);
+      console.log(`✅ Role updated: ${updatedRole?.name}`);
       
       return {
         success: true,
@@ -546,14 +546,14 @@ export class PermissionService {
   }
 
   /**
-   * Elimina un rol
-   * @param id ID del rol
+   * Deletes a role
+   * @param id Role ID
    */
   async deleteRole(id: string): Promise<RoleResult> {
     try {
       const db = getDatabase();
 
-      // Verificar que el rol existe
+      // Verify that role exists
       const existingRole = await this.findRoleById(id);
       if (!existingRole) {
         return {
@@ -565,25 +565,25 @@ export class PermissionService {
         };
       }
 
-      // Eliminar relaciones con usuarios
+      // Delete relationships with users
       const deleteUserRolesQuery = db.query(
         "DELETE FROM user_roles WHERE role_id = ?"
       );
       deleteUserRolesQuery.run(id);
 
-      // Eliminar relaciones con permisos
+      // Delete relationships with permissions
       const deleteRolePermissionsQuery = db.query(
         "DELETE FROM role_permissions WHERE role_id = ?"
       );
       deleteRolePermissionsQuery.run(id);
 
-      // Eliminar el rol
+      // Delete the role
       const deleteRoleQuery = db.query(
         "DELETE FROM roles WHERE id = ?"
       );
       deleteRoleQuery.run(id);
 
-      console.log(`✅ Rol eliminado: ${existingRole.name}`);
+      console.log(`✅ Role deleted: ${existingRole.name}`);
       return { success: true };
     } catch (error:any) {
       console.error('Error deleting role:', error);
@@ -598,20 +598,20 @@ export class PermissionService {
   }
 
   /**
-   * Remueve un permiso específico de un rol
-   * @param roleId ID del rol
-   * @param permissionId ID del permiso
+   * Removes a specific permission from a role
+   * @param roleId Role ID
+   * @param permissionId Permission ID
    */
   async removePermissionFromRole(roleId: string, permissionId: string): Promise<PermissionResult> {
     return this.removePermissionsFromRole(roleId, [permissionId]);
   }
 
   /**
-   * Verifica si un usuario tiene un permiso específico
-   * @param userId ID del usuario
-   * @param permissionName Nombre del permiso
-   * @param options Opciones de verificación
-   * @returns true si el usuario tiene el permiso
+   * Verifies if a user has a specific permission
+   * @param userId User ID
+   * @param permissionName Permission name
+   * @param options Verification options
+   * @returns true if user has the permission
    */
   async userHasPermission(
     userId: string, 
@@ -633,7 +633,7 @@ export class PermissionService {
         return false;
       }
 
-      // Verificar permiso exacto
+      // Check exact permission
       const exactQuery = db.query(`
         SELECT COUNT(*) as count
         FROM permissions p
@@ -647,7 +647,7 @@ export class PermissionService {
         return true;
       }
 
-      // Verificar permisos wildcard
+      // Check wildcard permissions
       const wildcardQuery = db.query(`
         SELECT COUNT(*) as count
         FROM permissions p
@@ -665,10 +665,10 @@ export class PermissionService {
   }
 
   /**
-   * Verifica si un usuario tiene un rol específico
-   * @param userId ID del usuario
-   * @param roleName Nombre del rol
-   * @returns true si el usuario tiene el rol
+   * Verifies if a user has a specific role
+   * @param userId User ID
+   * @param roleName Role name
+   * @returns true if user has the role
    */
   async userHasRole(userId: string, roleName: string): Promise<boolean> {
     try {
@@ -691,10 +691,10 @@ export class PermissionService {
   }
 
   /**
-   * Verifica si un usuario tiene todos los roles especificados
-   * @param userId ID del usuario
-   * @param roleNames Array de nombres de roles
-   * @returns true si el usuario tiene todos los roles
+   * Verifies if a user has all specified roles
+   * @param userId User ID
+   * @param roleNames Array of role names
+   * @returns true if user has all roles
    */
   async userHasAllRoles(userId: string, roleNames: string[]): Promise<boolean> {
     try {
@@ -712,10 +712,10 @@ export class PermissionService {
   }
 
   /**
-   * Verifica si un usuario tiene al menos uno de los roles especificados
-   * @param userId ID del usuario
-   * @param roleNames Array de nombres de roles
-   * @returns true si el usuario tiene al menos uno de los roles
+   * Verifies if a user has at least one of the specified roles
+   * @param userId User ID
+   * @param roleNames Array of role names
+   * @returns true if user has at least one role
    */
   async userHasAnyRole(userId: string, roleNames: string[]): Promise<boolean> {
     try {
@@ -733,10 +733,10 @@ export class PermissionService {
   }
 
   /**
-   * Verifica si un usuario tiene todos los permisos especificados
-   * @param userId ID del usuario
-   * @param permissionNames Array de nombres de permisos
-   * @returns true si el usuario tiene todos los permisos
+   * Verifies if a user has all specified permissions
+   * @param userId User ID
+   * @param permissionNames Array of permission names
+   * @returns true if user has all permissions
    */
   async userHasAllPermissions(userId: string, permissionNames: string[]): Promise<boolean> {
     try {
@@ -754,10 +754,10 @@ export class PermissionService {
   }
 
   /**
-   * Verifica si un usuario tiene al menos uno de los permisos especificados
-   * @param userId ID del usuario
-   * @param permissionNames Array de nombres de permisos
-   * @returns true si el usuario tiene al menos uno de los permisos
+   * Verifies if a user has at least one of the specified permissions
+   * @param userId User ID
+   * @param permissionNames Array of permission names
+   * @returns true if user has at least one permission
    */
   async userHasAnyPermission(userId: string, permissionNames: string[]): Promise<boolean> {
     try {
@@ -775,17 +775,17 @@ export class PermissionService {
   }
 
   /**
-   * Verifica si un usuario puede acceder a un recurso específico
-   * @param userId ID del usuario
-   * @param resource Nombre del recurso
-   * @param action Acción a realizar (read, write, delete, etc.)
-   * @returns true si el usuario puede acceder al recurso
+   * Verifies if a user can access a specific resource
+   * @param userId User ID
+   * @param resource Resource name
+   * @param action Action to perform (read, write, delete, etc.)
+   * @returns true if user can access the resource
    */
   async userCanAccessResource(userId: string, resource: string, action: string): Promise<boolean> {
     try {
       const db = getDatabase();
 
-      // Verificar permiso exacto
+      // Check exact permission
       const exactPermissionName = `${resource}:${action}`;
       const hasExactPermission = await this.userHasPermission(userId, exactPermissionName);
       
@@ -793,7 +793,7 @@ export class PermissionService {
         return true;
       }
 
-      // Verificar permisos wildcard específicos para el recurso y acción
+      // Check specific wildcard permissions for resource and action
       const wildcardQuery = db.query(`
         SELECT COUNT(*) as count
         FROM permissions p
@@ -826,11 +826,11 @@ export class PermissionService {
   }
 
   /**
-   * Verifica si un usuario tiene múltiples permisos
-   * @param userId ID del usuario
-   * @param permissionNames Array de nombres de permisos
-   * @param options Opciones de verificación
-   * @returns true si cumple con los criterios
+   * Verifies if a user has multiple permissions
+   * @param userId User ID
+   * @param permissionNames Array of permission names
+   * @param options Verification options
+   * @returns true if meets the criteria
    */
   async userHasPermissions(
     userId: string, 
@@ -848,12 +848,12 @@ export class PermissionService {
         )
       );
 
-      // Si requireAll es true, todos los permisos deben estar presentes
+      // If requireAll is true, all permissions must be present
       if (options.requireAll) {
         return results.every(result => result);
       }
 
-      // Por defecto, solo se requiere uno (OR)
+      // By default, only one is required (OR)
       return results.some(result => result);
     } catch (error:any) {
       console.error('Error checking user permissions:', error);
@@ -862,9 +862,9 @@ export class PermissionService {
   }
 
   /**
-   * Obtiene todos los permisos de un usuario
-   * @param userId ID del usuario
-   * @returns Array de permisos
+   * Gets all permissions for a user
+   * @param userId User ID
+   * @returns Array of permissions
    */
   async getUserPermissions(userId: string): Promise<Permission[]> {
     try {
@@ -896,9 +896,9 @@ export class PermissionService {
   }
 
   /**
-   * Busca un permiso por ID
-   * @param id ID del permiso
-   * @returns Permiso o null
+   * Finds a permission by ID
+   * @param id Permission ID
+   * @returns Permission or null
    */
   async findPermissionById(id: string): Promise<Permission | null> {
     try {
@@ -929,9 +929,9 @@ export class PermissionService {
   }
 
   /**
-   * Busca un permiso por nombre
-   * @param name Nombre del permiso
-   * @returns Permiso o null
+   * Finds a permission by name
+   * @param name Permission name
+   * @returns Permission or null
    */
   async findPermissionByName(name: string): Promise<Permission | null> {
     try {
@@ -962,10 +962,10 @@ export class PermissionService {
   }
 
   /**
-   * Busca un rol por ID
-   * @param id ID del rol
-   * @param includePermissions Si incluir permisos
-   * @returns Rol o null
+   * Finds a role by ID
+   * @param id Role ID
+   * @param includePermissions Whether to include permissions
+   * @returns Role or null
    */
   async findRoleById(id: string, includePermissions: boolean = false): Promise<Role | null> {
     try {
@@ -1003,10 +1003,10 @@ export class PermissionService {
   }
 
   /**
-   * Busca un rol por nombre
-   * @param name Nombre del rol
-   * @param includePermissions Si incluir permisos
-   * @returns Rol o null
+   * Finds a role by name
+   * @param name Role name
+   * @param includePermissions Whether to include permissions
+   * @returns Role or null
    */
   async findRoleByName(name: string, includePermissions: boolean = false): Promise<Role | null> {
     try {
@@ -1044,9 +1044,9 @@ export class PermissionService {
   }
 
   /**
-   * Obtiene los permisos de un rol
-   * @param roleId ID del rol
-   * @returns Array de permisos
+   * Gets permissions for a role
+   * @param roleId Role ID
+   * @returns Array of permissions
    */
   async getRolePermissions(roleId: string): Promise<Permission[]> {
     try {
@@ -1076,9 +1076,9 @@ export class PermissionService {
   }
 
   /**
-   * Obtiene todos los roles
-   * @param includePermissions Si incluir permisos
-   * @returns Array de roles
+   * Gets all roles
+   * @param includePermissions Whether to include permissions
+   * @returns Array of roles
    */
   async getAllRoles(includePermissions: boolean = false): Promise<Role[]> {
     try {
@@ -1119,8 +1119,8 @@ export class PermissionService {
   }
 
   /**
-   * Obtiene todos los permisos
-   * @returns Array de permisos
+   * Gets all permissions
+   * @returns Array of permissions
    */
   async getAllPermissions(): Promise<Permission[]> {
     try {
@@ -1148,7 +1148,7 @@ export class PermissionService {
     }
   }
 
-  // Métodos de validación y utilidad privados
+  // Private validation and utility methods
 
   private validatePermissionData(data: CreatePermissionData): { isValid: boolean; error?: string } {
     if (!data.name || !data.resource || !data.action) {
@@ -1224,13 +1224,13 @@ export class PermissionService {
 }
 
 /**
- * Instancia singleton del servicio de permisos
+ * Singleton instance of the permission service
  */
 let permissionServiceInstance: PermissionService | null = null;
 
 /**
- * Inicializa el servicio de permisos
- * @returns Instancia del servicio de permisos
+ * Initializes the permission service
+ * @returns Permission service instance
  */
 export function initPermissionService(): PermissionService {
   permissionServiceInstance = new PermissionService();
@@ -1238,9 +1238,9 @@ export function initPermissionService(): PermissionService {
 }
 
 /**
- * Obtiene la instancia del servicio de permisos
- * @returns Instancia del servicio de permisos
- * @throws Error si no ha sido inicializado
+ * Gets the permission service instance
+ * @returns Permission service instance
+ * @throws Error if not initialized
  */
 export function getPermissionService(): PermissionService {
   if (!permissionServiceInstance) {

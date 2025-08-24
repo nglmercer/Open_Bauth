@@ -1,5 +1,5 @@
 // src/adapters/hono.ts
-import { Context, Next } from 'hono';
+import { Context, Next, MiddlewareHandler } from 'hono';
 import { 
   authenticateRequest, 
   AuthMiddlewareConfig, 
@@ -9,7 +9,7 @@ import {
   extractClientIP,
   extractUserAgent
 } from '../middleware/auth';
-import type { AuthContext, AuthRequest } from '../types/auth';
+import type { AuthContext, AuthRequest, User } from '../types/auth';
 
 /**
  * Extiende el contexto de Hono para incluir autenticación
@@ -25,7 +25,7 @@ declare module 'hono' {
  * @param config Configuración del middleware
  * @returns Middleware de Hono
  */
-export function honoAuthMiddleware(config: AuthMiddlewareConfig = {}) {
+export function honoAuthMiddleware(config: AuthMiddlewareConfig = {}): MiddlewareHandler {
   return async (c: Context, next: Next) => {
     try {
       // Verificar si la ruta debe ser saltada
@@ -106,14 +106,14 @@ export function honoAuthMiddleware(config: AuthMiddlewareConfig = {}) {
  * Middleware de autenticación opcional para Hono
  * No falla si no hay token, pero lo procesa si está presente
  */
-export function honoOptionalAuth() {
+export function honoOptionalAuth(): MiddlewareHandler {
   return honoAuthMiddleware({ required: false });
 }
 
 /**
  * Middleware que requiere autenticación para Hono
  */
-export function honoRequireAuth() {
+export function honoRequireAuth(): MiddlewareHandler {
   return honoAuthMiddleware({ required: true });
 }
 
@@ -125,7 +125,7 @@ export function honoRequireAuth() {
 export function honoRequirePermissions(
   permissions: string[],
   requireAll: boolean = false
-) {
+): MiddlewareHandler {
   return honoAuthMiddleware({
     required: true,
     permissions,
@@ -137,7 +137,7 @@ export function honoRequirePermissions(
  * Middleware que requiere roles específicos para Hono
  * @param roles Array de roles requeridos
  */
-export function honoRequireRoles(roles: string[]) {
+export function honoRequireRoles(roles: string[]): MiddlewareHandler {
   return async (c: Context, next: Next) => {
     const authContext = c.get('auth');
     
@@ -177,14 +177,14 @@ export function honoRequireRoles(roles: string[]) {
 /**
  * Middleware que requiere ser admin para Hono
  */
-export function honoRequireAdmin() {
+export function honoRequireAdmin(): MiddlewareHandler {
   return honoRequireRoles(['admin', 'administrator']);
 }
 
 /**
  * Middleware que requiere ser moderador o admin para Hono
  */
-export function honoRequireModerator() {
+export function honoRequireModerator(): MiddlewareHandler {
   return honoRequireRoles(['moderator', 'admin', 'administrator']);
 }
 
@@ -193,7 +193,7 @@ export function honoRequireModerator() {
  * @param c Contexto de Hono
  * @returns Usuario actual o null
  */
-export function getHonoCurrentUser(c: Context) {
+export function getHonoCurrentUser(c: Context): User | null {
   const authContext = c.get('auth');
   return getCurrentUser(authContext);
 }
@@ -223,7 +223,7 @@ export function getHonoAuthContext(c: Context): AuthContext {
  */
 export function honoRequireOwnership(
   getUserIdFromParams: (c: Context) => string
-) {
+): MiddlewareHandler {
   return async (c: Context, next: Next) => {
     const authContext = c.get('auth');
     
@@ -270,7 +270,7 @@ export function honoRequireOwnership(
 export function honoRateLimit(
   maxRequests: number = 100,
   windowMs: number = 15 * 60 * 1000 // 15 minutos
-) {
+): MiddlewareHandler {
   const requests = new Map<string, { count: number; resetTime: number }>();
 
   return async (c: Context, next: Next) => {
@@ -312,7 +312,7 @@ export function honoRateLimit(
  * Middleware para CORS en Hono con autenticación
  * @param origins Orígenes permitidos
  */
-export function honoCorsAuth(origins: string[] = ['*']) {
+export function honoCorsAuth(origins: string[] = ['*']): MiddlewareHandler {
   return async (c: Context, next: Next) => {
     const origin = c.req.header('origin');
     
@@ -513,7 +513,7 @@ export function honoSuccessResponse(
 /**
  * Middleware para logging de requests autenticados en Hono
  */
-export function honoAuthLogger() {
+export function honoAuthLogger(): MiddlewareHandler {
   return async (c: Context, next: Next) => {
     const start = Date.now();
     const authContext = c.get('auth');

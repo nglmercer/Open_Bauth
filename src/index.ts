@@ -214,10 +214,184 @@ export type {
   AuthEventData,
   SecurityConfig,
   SessionInfo,
-  AuthErrorType
+  AuthErrorType,
+  // Additional auth types
+  CreateUserData,
+  UpdateUserData,
+  UserMetadata,
+  RoleMetadata,
+  PermissionMetadata
 } from './types/auth';
 
-export { AuthError } from './errors/auth';
+// Common types
+export type {
+  ApiResponse,
+  PaginatedResponse,
+  BaseEntity,
+  SoftDeleteEntity,
+  AuditFields,
+  QueryOptions,
+  DatabaseTransaction,
+  Repository,
+  ValidationResult,
+  Optional,
+  RequiredFields,
+  Nullable,
+  Maybe,
+  DeepPartial,
+  DeepRequired,
+  AsyncFunction,
+  Callback,
+  EventHandler,
+  DateString,
+  Timestamp,
+  EntityId,
+  UserId,
+  RoleId,
+  PermissionId,
+  Email,
+  HashedPassword,
+  JWT,
+  RefreshToken,
+  Result,
+  Option,
+  DomainEvent,
+  Command,
+  Query,
+  HttpStatusCode,
+  Environment
+} from './types/common';
+
+// Service types
+export type {
+  BaseService,
+  ServiceHealthStatus,
+  ServiceConfig,
+  AuthServiceInterface,
+  RegisterServiceData,
+  AuthServiceResult,
+  TokenServiceResult
+} from './types/service';
+
+// Middleware types
+export type {
+  ExtendedRequest,
+  ExtendedResponse,
+  MiddlewareFunction,
+  ErrorMiddlewareFunction,
+  JwtPayload,
+  AuthMiddlewareOptions,
+  AuthorizationOptions
+} from './types/middleware';
+
+// Database types
+export type {
+  DatabaseConfig,
+  ConnectionPoolConfig,
+  DatabaseConnection,
+  QueryParams,
+  QueryMetadata,
+  QueryExecutionOptions,
+  PreparedStatement,
+  ColumnType,
+  ColumnDefinition,
+  IndexDefinition,
+  TableDefinition,
+  DatabaseSchema,
+  ViewDefinition,
+  TriggerDefinition,
+  FunctionDefinition,
+  Migration,
+  MigrationStatus,
+  MigrationOptions,
+  BaseRepository,
+  SoftDeleteRepository
+} from './types/database';
+
+// Logger types
+export type {
+  LogLevel,
+  LoggerConfig,
+  LogEntry,
+  LogData
+} from './logger/types';
+
+// Optional dependency types
+export type {
+  ExpressRequest,
+  ExpressResponse,
+  ExpressNextFunction,
+  WSWebSocket,
+  ConditionalExpress,
+  ConditionalWebSocket
+} from './types/optional-deps';
+
+// API types
+export type {
+  BaseRequest,
+  RegisterRequest,
+  LoginRequest,
+  RefreshTokenRequest,
+  ForgotPasswordRequest,
+  ResetPasswordRequest,
+  ChangePasswordRequest,
+  UpdateUserProfileRequest,
+  CreateUserRequest,
+  UpdateUserRequest,
+  CreateRoleRequest,
+  UpdateRoleRequest,
+  AssignRoleRequest,
+  LoginResponse,
+  RegisterResponse,
+  RefreshTokenResponse,
+  LogoutResponse,
+  ForgotPasswordResponse,
+  ResetPasswordResponse,
+  ChangePasswordResponse,
+  GetUserResponse,
+  GetUsersResponse,
+  CreateUserResponse,
+  UpdateUserResponse,
+  DeleteUserResponse,
+  GetUserProfileResponse,
+  UpdateUserProfileResponse,
+  GetRoleResponse,
+  GetRolesResponse,
+  CreateRoleResponse,
+  UpdateRoleResponse,
+  DeleteRoleResponse,
+  AssignRoleResponse,
+  RemoveRoleResponse,
+  GetPermissionsResponse,
+  GetUserPermissionsResponse,
+  ValidationErrorResponse,
+  AuthErrorResponse,
+  NotFoundErrorResponse,
+  RateLimitErrorResponse,
+  ServerErrorResponse,
+  AnyApiResponse,
+  SuccessResponse,
+  ErrorResponse,
+  isSuccessResponse,
+  isErrorResponse
+} from './types/api';
+
+// Error classes
+export {
+  AuthError,
+  ValidationError,
+  AuthenticationError,
+  AuthorizationError,
+  UserNotFoundError,
+  NotFoundError,
+  DatabaseError,
+  ServerError,
+  RateLimitError,
+  TokenError,
+  AccountError,
+  AuthErrorFactory,
+  ErrorHandler
+} from './errors/auth';
 
 // Clase principal de la librería
 export class AuthLibrary {
@@ -367,7 +541,20 @@ export async function initializeAuth(config?: Partial<AuthConfig>): Promise<Auth
 /**
  * Función de conveniencia para crear middleware de Hono
  */
-export function createHonoAuth(config?: Partial<AuthConfig>) {
+export function createHonoAuth(config?: Partial<AuthConfig>): {
+  middleware: typeof honoAuthMiddleware;
+  optional: typeof honoOptionalAuth;
+  required: typeof honoRequireAuth;
+  permissions: typeof honoRequirePermissions;
+  roles: typeof honoRequireRoles;
+  admin: typeof honoRequireAdmin;
+  moderator: typeof honoRequireModerator;
+  ownership: typeof honoRequireOwnership;
+  rateLimit: typeof honoRateLimit;
+  cors: typeof honoCorsAuth;
+  logger: typeof honoAuthLogger;
+  library: AuthLibrary;
+} {
   const library = getAuthLibrary(config);
   return {
     middleware: honoAuthMiddleware,
@@ -388,7 +575,23 @@ export function createHonoAuth(config?: Partial<AuthConfig>) {
 /**
  * Función de conveniencia para crear middleware de Express
  */
-export function createExpressAuth(config?: Partial<AuthConfig>) {
+export function createExpressAuth(config?: Partial<AuthConfig>): {
+  middleware: typeof expressAuthMiddleware;
+  optional: typeof expressOptionalAuth;
+  required: typeof expressRequireAuth;
+  permissions: typeof expressRequirePermissions;
+  roles: typeof expressRequireRoles;
+  admin: typeof expressRequireAdmin;
+  moderator: typeof expressRequireModerator;
+  ownership: typeof expressRequireOwnership;
+  rateLimit: typeof expressRateLimit;
+  cors: typeof expressCorsAuth;
+  logger: typeof expressAuthLogger;
+  errorHandler: typeof expressAuthErrorHandler;
+  jsonValidator: typeof expressJsonValidator;
+  sanitizer: typeof expressSanitizer;
+  library: AuthLibrary;
+} {
   const library = getAuthLibrary(config);
   return {
     middleware: expressAuthMiddleware,
@@ -412,7 +615,25 @@ export function createExpressAuth(config?: Partial<AuthConfig>) {
 /**
  * Función de conveniencia para WebSocket
  */
-export function createWebSocketAuth(config?: Partial<AuthConfig>) {
+export function createWebSocketAuth(config?: Partial<AuthConfig>): {
+  authenticate: typeof authenticateWebSocket;
+  checkPermissions: typeof checkWebSocketPermissions;
+  checkRoles: typeof checkWebSocketRoles;
+  getCurrentUser: typeof getWebSocketCurrentUser;
+  isAuthenticated: typeof isWebSocketAuthenticated;
+  getAuthContext: typeof getWebSocketAuthContext;
+  sendToUser: typeof sendToUser;
+  sendToUsersWithPermissions: typeof sendToUsersWithPermissions;
+  sendToUsersWithRoles: typeof sendToUsersWithRoles;
+  broadcast: typeof broadcastToAuthenticated;
+  getStats: typeof getConnectionStats;
+  disconnect: typeof disconnectUser;
+  cleanup: typeof cleanupInactiveConnections;
+  handleMessage: typeof handleAuthenticatedMessage;
+  createResponse: typeof createWebSocketResponse;
+  initCleanup: typeof initializeConnectionCleanup;
+  library: AuthLibrary;
+} {
   const library = getAuthLibrary(config);
   return {
     authenticate: authenticateWebSocket,
@@ -439,30 +660,56 @@ export function createWebSocketAuth(config?: Partial<AuthConfig>) {
 export default AuthLibrary;
 
 /**
- * Información de la librería
+ * Library Information
  */
 export const AUTH_LIBRARY_INFO = {
-  name: 'Framework-Agnostic Auth Library',
-  version: '1.0.0',
-  description: 'Librería de autenticación y permisos agnóstica de framework con TypeScript, Bun y SQLite',
-  author: 'Auth Library Team',
+  name: 'Framework-Agnostic Authentication Library',
+  version: '1.0.8',
+  description: 'A comprehensive framework-agnostic authentication and authorization library built with TypeScript, Bun, and SQLite',
+  author: 'Auth Library Development Team',
+  license: 'MIT',
+  repository: 'https://github.com/auth-library/framework-agnostic-auth',
   frameworks: ['Hono', 'Express', 'WebSockets', 'Socket.IO', 'Fastify'],
+  runtime: 'Bun',
+  database: 'SQLite',
   features: [
-    'Framework-agnostic',
-    'TypeScript nativo',
-    'SQLite con Bun',
-    'JWT + Bun.password',
-    'RBAC (Role-Based Access Control)',
-    'Middlewares reutilizables',
-    'Migraciones automáticas',
-    'Scripts de utilidad',
-    'Configuración flexible',
-    'Logging integrado',
+    'Framework-agnostic design',
+    'Full TypeScript support',
+    'SQLite with Bun runtime',
+    'Secure JWT with Web Crypto API',
+    'Complete RBAC (Role-Based Access Control)',
+    'Reusable middleware components',
+    'Automatic database migrations',
+    'Comprehensive utility scripts',
+    'Flexible configuration system',
+    'Advanced logging and monitoring',
+    'Built-in rate limiting',
+    'CORS support',
+    'Input validation and sanitization',
+    'WebSocket authentication',
+    'Session management',
+    'Password hashing with Bun.password',
+    'Refresh token support',
+    'Multi-tenant support',
+    'Audit logging',
+    'Error handling and recovery'
+  ],
+  security: [
+    'Bcrypt password hashing',
+    'JWT token validation',
+    'CSRF protection',
     'Rate limiting',
-    'CORS configurado',
-    'Validación de entrada',
-    'Sanitización de datos'
+    'Input sanitization',
+    'SQL injection prevention',
+    'XSS protection'
+  ],
+  performance: [
+    'Optimized for Bun runtime',
+    'Connection pooling',
+    'Efficient SQLite queries',
+    'Minimal memory footprint',
+    'Fast startup time'
   ]
 };
 
-console.log(`📚 ${AUTH_LIBRARY_INFO.name} v${AUTH_LIBRARY_INFO.version} cargada`);
+console.log(`📚 ${AUTH_LIBRARY_INFO.name} v${AUTH_LIBRARY_INFO.version} loaded successfully`);
