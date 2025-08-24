@@ -3,6 +3,13 @@
 
 name: Tests
 
+# Add permissions for CodeQL and security scanning
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  pull-requests: write
+
 on:
   push:
     branches: [ main, develop ]
@@ -106,6 +113,12 @@ jobs:
     name: Security Scan
     runs-on: ubuntu-latest
     
+    # Explicit permissions for this job
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -122,13 +135,20 @@ jobs:
         run: bun audit
         continue-on-error: true
         
-      - name: Run CodeQL Analysis
-        uses: github/codeql-action/init@v2
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
         with:
           languages: typescript
+          # Optional: specify queries to run
+          queries: security-and-quality
+          
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
           
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v2
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:typescript"
 
 
   build:

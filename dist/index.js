@@ -1956,7 +1956,7 @@ class PermissionService {
       }
       const insertQuery = db2.query("INSERT INTO user_roles (id, user_id, role_id, created_at) VALUES (?, ?, ?, datetime('now'))");
       insertQuery.run(crypto.randomUUID(), data.userId, data.roleId);
-      console.log(`\u2705 Rol asignado al usuario: ${data.userId} -> ${data.roleId}`);
+      console.log(`\u2705 Role assigned to user: ${data.userId} -> ${data.roleId}`);
       return { success: true };
     } catch (error) {
       console.error("Error assigning role to user:", error);
@@ -1974,7 +1974,7 @@ class PermissionService {
       const db2 = getDatabase();
       const query = db2.query("DELETE FROM user_roles WHERE user_id = ? AND role_id = ?");
       query.run(userId, roleId);
-      console.log(`\u2705 Rol removido del usuario: ${userId} -> ${roleId}`);
+      console.log(`\u2705 Role removed from user: ${userId} -> ${roleId}`);
       return { success: true };
     } catch (error) {
       console.error("Error removing role from user:", error);
@@ -2049,7 +2049,7 @@ class PermissionService {
         const query = db2.query("DELETE FROM role_permissions WHERE role_id = ? AND permission_id = ?");
         query.run(roleId, permissionId);
       }
-      console.log(`\u2705 Permisos removidos del rol: ${roleId}`);
+      console.log(`\u2705 Permissions removed from role: ${roleId}`);
       return { success: true };
     } catch (error) {
       console.error("Error removing permissions from role:", error);
@@ -2090,7 +2090,7 @@ class PermissionService {
       const query = db2.query("UPDATE permissions SET name = ?, resource = ?, action = ?, description = ? WHERE id = ?");
       query.run(data.name || existingPermission.name, data.resource || existingPermission.resource, data.action || existingPermission.action, data.description !== undefined ? data.description : existingPermission.description || null, id);
       const updatedPermission = await this.findPermissionById(id);
-      console.log(`\u2705 Permiso actualizado: ${updatedPermission?.name}`);
+      console.log(`\u2705 Permission updated: ${updatedPermission?.name}`);
       return {
         success: true,
         permission: updatedPermission
@@ -2123,7 +2123,7 @@ class PermissionService {
       deleteRelationsQuery.run(id);
       const deletePermissionQuery = db2.query("DELETE FROM permissions WHERE id = ?");
       deletePermissionQuery.run(id);
-      console.log(`\u2705 Permiso eliminado: ${existingPermission.name}`);
+      console.log(`\u2705 Permission deleted: ${existingPermission.name}`);
       return { success: true };
     } catch (error) {
       console.error("Error deleting permission:", error);
@@ -2164,7 +2164,7 @@ class PermissionService {
       const query = db2.query("UPDATE roles SET name = ?, description = ?, is_active = ? WHERE id = ?");
       query.run(data.name || existingRole.name, data.description !== undefined ? data.description : existingRole.description || null, data.isActive !== undefined ? data.isActive ? 1 : 0 : existingRole.isActive ? 1 : 0, id);
       const updatedRole = await this.findRoleById(id);
-      console.log(`\u2705 Rol actualizado: ${updatedRole?.name}`);
+      console.log(`\u2705 Role updated: ${updatedRole?.name}`);
       return {
         success: true,
         role: updatedRole || undefined
@@ -2199,7 +2199,7 @@ class PermissionService {
       deleteRolePermissionsQuery.run(id);
       const deleteRoleQuery = db2.query("DELETE FROM roles WHERE id = ?");
       deleteRoleQuery.run(id);
-      console.log(`\u2705 Rol eliminado: ${existingRole.name}`);
+      console.log(`\u2705 Role deleted: ${existingRole.name}`);
       return { success: true };
     } catch (error) {
       console.error("Error deleting role:", error);
@@ -5594,29 +5594,55 @@ function createWebSocketAuth(config) {
 }
 var src_default = AuthLibrary;
 var AUTH_LIBRARY_INFO = {
-  name: "Framework-Agnostic Auth Library",
-  version: "1.0.0",
-  description: "Librer\xEDa de autenticaci\xF3n y permisos agn\xF3stica de framework con TypeScript, Bun y SQLite",
-  author: "Auth Library Team",
+  name: "Framework-Agnostic Authentication Library",
+  version: "1.0.8",
+  description: "A comprehensive framework-agnostic authentication and authorization library built with TypeScript, Bun, and SQLite",
+  author: "Auth Library Development Team",
+  license: "MIT",
+  repository: "https://github.com/auth-library/framework-agnostic-auth",
   frameworks: ["Hono", "Express", "WebSockets", "Socket.IO", "Fastify"],
+  runtime: "Bun",
+  database: "SQLite",
   features: [
-    "Framework-agnostic",
-    "TypeScript nativo",
-    "SQLite con Bun",
-    "JWT + Bun.password",
-    "RBAC (Role-Based Access Control)",
-    "Middlewares reutilizables",
-    "Migraciones autom\xE1ticas",
-    "Scripts de utilidad",
-    "Configuraci\xF3n flexible",
-    "Logging integrado",
+    "Framework-agnostic design",
+    "Full TypeScript support",
+    "SQLite with Bun runtime",
+    "Secure JWT with Web Crypto API",
+    "Complete RBAC (Role-Based Access Control)",
+    "Reusable middleware components",
+    "Automatic database migrations",
+    "Comprehensive utility scripts",
+    "Flexible configuration system",
+    "Advanced logging and monitoring",
+    "Built-in rate limiting",
+    "CORS support",
+    "Input validation and sanitization",
+    "WebSocket authentication",
+    "Session management",
+    "Password hashing with Bun.password",
+    "Refresh token support",
+    "Multi-tenant support",
+    "Audit logging",
+    "Error handling and recovery"
+  ],
+  security: [
+    "Bcrypt password hashing",
+    "JWT token validation",
+    "CSRF protection",
     "Rate limiting",
-    "CORS configurado",
-    "Validaci\xF3n de entrada",
-    "Sanitizaci\xF3n de datos"
+    "Input sanitization",
+    "SQL injection prevention",
+    "XSS protection"
+  ],
+  performance: [
+    "Optimized for Bun runtime",
+    "Connection pooling",
+    "Efficient SQLite queries",
+    "Minimal memory footprint",
+    "Fast startup time"
   ]
 };
-console.log(`\uD83D\uDCDA ${AUTH_LIBRARY_INFO.name} v${AUTH_LIBRARY_INFO.version} cargada`);
+console.log(`\uD83D\uDCDA ${AUTH_LIBRARY_INFO.name} v${AUTH_LIBRARY_INFO.version} loaded successfully`);
 export {
   validateAuthConfig,
   testConnection,
@@ -5707,17 +5733,29 @@ export {
   authorizeRequest,
   authenticateWebSocket,
   authenticateRequest,
+  ValidationError,
+  UserNotFoundError,
+  TokenError,
+  ServerError,
   SECURITY_CONFIG,
+  RateLimitError,
   PermissionService,
   PROD_CONFIG,
+  NotFoundError,
   JWTService,
+  ErrorHandler,
+  DatabaseError,
   DEV_CONFIG,
   DEFAULT_AUTH_CONFIG,
+  AuthorizationError,
+  AuthenticationError,
   AuthService,
   AuthLibrary,
+  AuthErrorFactory,
   AuthError,
+  AccountError,
   AUTH_LIBRARY_INFO
 };
 
-//# debugId=E472C5F7C3626C3564756E2164756E21
+//# debugId=2D0A790244F6391164756E2164756E21
 //# sourceMappingURL=index.js.map
