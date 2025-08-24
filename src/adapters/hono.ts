@@ -40,8 +40,27 @@ export function honoAuthMiddleware(config: AuthMiddlewareConfig = {}) {
       c.req.raw.headers.forEach((value, key) => {
         headers[key] = value;
       });
+      
+      // Extraer query parameters para soporte de tokens en GET requests
+      const query: Record<string, string | string[]> = {};
+      const url = new URL(c.req.url);
+      url.searchParams.forEach((value, key) => {
+        if (query[key]) {
+          // Handle multiple values for the same parameter
+          if (Array.isArray(query[key])) {
+            (query[key] as string[]).push(value);
+          } else {
+            query[key] = [query[key] as string, value];
+          }
+        } else {
+          query[key] = value;
+        }
+      });
+      
       const authRequest: AuthRequest = {
-        headers
+        headers,
+        query,
+        url: c.req.url
       };
 
       // Ejecutar autenticación

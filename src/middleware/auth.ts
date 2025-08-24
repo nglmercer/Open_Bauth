@@ -58,27 +58,8 @@ export async function authenticateRequest(
     if (extractToken) {
       token = extractToken(request);
     } else {
-      // Extraer token del header
-      const authHeader = request.headers[tokenHeader] || request.headers[tokenHeader.toLowerCase()];
-      
-      if (!authHeader) {
-        if (!required) {
-          return { success: true, context: { permissions: [], isAuthenticated: false } };
-        }
-        return {
-          success: false,
-          error: 'Authorization header is required',
-          statusCode: 401
-        };
-      }
-
-      const jwtService = config.jwtService || getJWTService();
-      // For custom headers, use the token directly; for 'authorization', extract from Bearer format
-      if (tokenHeader === 'authorization') {
-        token = jwtService.extractTokenFromHeader(authHeader);
-      } else {
-        token = authHeader; // Custom headers contain the token directly
-      }
+      // Try multiple token extraction methods
+      token = extractTokenFromRequest(request, tokenHeader, config);
     }
     
     if (!token) {
@@ -87,7 +68,7 @@ export async function authenticateRequest(
       }
       return {
         success: false,
-        error: extractToken ? 'Token not found' : 'Invalid authorization header format. Use: Bearer <token>',
+        error: extractToken ? 'Token not found' : 'Authentication token required. Provide token via Authorization header (Bearer <token>) or query parameter.',
         statusCode: 401
       };
     }
@@ -460,6 +441,60 @@ export function extractClientIP(headers: Record<string, string>): string {
  */
 export function extractUserAgent(headers: Record<string, string>): string {
   return headers['user-agent'] || headers['User-Agent'] || 'Unknown';
+}
+
+/**
+ * Función helper para extraer token de diferentes fuentes del request
+ * @param request Request object
+ * @param tokenHeader Header name for token
+ * @param config Auth middleware config
+ * @returns Token string or null
+ */
+function extractTokenFromRequest(
+  request: AuthRequest,
+  tokenHeader: string,
+  config: AuthMiddlewareConfig
+): string | null {
+  const jwtService = config.jwtService || getJWTService();
+  
+  // 1. Try to extract from headers (case-insensitive)
+  const authHeader = request.headers[tokenHeader] || 
+                    request.headers[tokenHeader.toLowerCase()] ||
+                    request.headers[tokenHeader.toUpperCase()];
+  
+  if (authHeader) {
+    // For authorization header, extract from Bearer format
+    if (tokenHeader.toLowerCase() === 'authorization') {
+      const token = jwtService.extractTokenFromHeader(authHeader);
+      if (token) return token;
+    } else {
+      // For custom headers, use token directly
+      return authHeader;
+    }
+  }
+  
+  // 2. Try to extract from query parameters (useful for GET requests)
+  if (request.query) {
+    const queryToken = request.query.token || request.query.access_token || request.query.auth_token;
+    if (queryToken) {
+      return Array.isArray(queryToken) ? queryToken[0] : queryToken;
+    }
+  }
+  
+  // 3. Try to extract from URL parameters (for WebSocket or other protocols)
+  if (request.url) {
+    try {
+      const url = new URL(request.url, 'http://localhost');
+      const urlToken = url.searchParams.get('token') || 
+                      url.searchParams.get('access_token') || 
+                      url.searchParams.get('auth_token');
+      if (urlToken) return urlToken;
+    } catch (error) {
+      // Ignore URL parsing errors
+    }
+  }
+  
+  return null;
 }
 
 /**

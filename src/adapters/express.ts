@@ -71,7 +71,11 @@ export function expressAuthMiddleware(config: AuthMiddlewareConfig = {}) {
 
       // Convertir request de Express a formato agnóstico
       const authRequest: AuthRequest = {
-        headers: req.headers as Record<string, string>
+        headers: req.headers as Record<string, string>,
+        url: req.path,
+        method: req.method,
+        query: req.query || {},
+        params: req.params || {}
       };
 
       // Ejecutar autenticación

@@ -82,7 +82,7 @@ Servicio para generación, verificación y manejo de tokens JWT.
 |--------|------------|---------|-------------|
 | `generateToken()` | `user: User` | `Promise<string>` | Genera un token JWT para un usuario |
 | `verifyToken()` | `token: string` | `Promise<JWTPayload>` | Verifica y decodifica un token JWT |
-| `extractTokenFromHeader()` | `authHeader: string` | `string \| null` | Extrae el token del header Authorization |
+| `extractTokenFromHeader()` | `authHeader: string` | `string \| null` | Extrae el token del header Authorization (case-insensitive Bearer) |
 | `isTokenExpired()` | `token: string` | `boolean` | Verifica si un token ha expirado |
 | `getTokenRemainingTime()` | `token: string` | `number` | Obtiene el tiempo restante de un token en segundos |
 | `refreshTokenIfNeeded()` | `token: string, user: User, refreshThreshold?: number` | `Promise<string>` | Refresca un token si está próximo a expirar |

@@ -79,7 +79,7 @@ const app = new Hono();
 
 #### `auth.middleware`
 
-Middleware global que extrae y valida tokens en todas las rutas.
+Middleware global que extrae y valida tokens en todas las rutas con soporte mejorado para múltiples métodos de autenticación.
 
 ```typescript
 // Aplicar middleware global
@@ -96,6 +96,33 @@ app.get('/profile', (c) => {
   return c.json({ user });
 });
 ```
+
+**Métodos de Autenticación Soportados:**
+
+1. **Authorization Header (Bearer Token)** - Case-insensitive:
+   ```
+   Authorization: Bearer <token>
+   Authorization: bearer <token>
+   Authorization: BEARER <token>
+   ```
+
+2. **Custom Headers:**
+   ```
+   X-Auth-Token: <token>
+   X-API-Key: <token>
+   ```
+
+3. **Query Parameters:**
+   ```
+   GET /api/data?token=<token>
+   GET /api/data?access_token=<token>
+   GET /api/data?auth_token=<token>
+   ```
+
+4. **URL Parameters:**
+   ```
+   GET /api/data/:token
+   ```
 
 #### `auth.required`
 
@@ -545,7 +572,7 @@ app.use(auth.middleware);
 
 #### `auth.middleware`
 
-Middleware global para Express.
+Middleware global para Express con soporte mejorado para extracción de tokens.
 
 ```typescript
 // Aplicar middleware global
@@ -560,6 +587,33 @@ app.get('/profile', (req, res) => {
   res.json({ user: req.user });
 });
 ```
+
+**Métodos de Autenticación Soportados:**
+
+1. **Authorization Header (Bearer Token)** - Case-insensitive:
+   ```
+   Authorization: Bearer <token>
+   Authorization: bearer <token>
+   Authorization: BEARER <token>
+   ```
+
+2. **Custom Headers:**
+   ```
+   X-Auth-Token: <token>
+   X-API-Key: <token>
+   ```
+
+3. **Query Parameters:**
+   ```
+   GET /api/data?token=<token>
+   GET /api/data?access_token=<token>
+   GET /api/data?auth_token=<token>
+   ```
+
+4. **URL Parameters:**
+   ```
+   GET /api/data/:token
+   ```
 
 #### `auth.required`
 

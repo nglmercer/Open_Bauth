@@ -43,10 +43,29 @@ const authMiddleware = createAuthMiddleware(authLib, {
   // Configuración del middleware
   extractToken: (req: any) => {
     // Lógica personalizada para extraer token
+    // El middleware ahora soporta múltiples métodos automáticamente:
+    
+    // 1. Authorization Header (case-insensitive)
     const authHeader = req.headers?.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
+    if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
       return authHeader.substring(7);
     }
+    
+    // 2. Custom Headers
+    if (req.headers?.['x-auth-token']) {
+      return req.headers['x-auth-token'];
+    }
+    
+    // 3. Query Parameters
+    if (req.query?.token || req.query?.access_token || req.query?.auth_token) {
+      return req.query.token || req.query.access_token || req.query.auth_token;
+    }
+    
+    // 4. URL Parameters
+    if (req.params?.token) {
+      return req.params.token;
+    }
+    
     return null;
   },
   
@@ -71,6 +90,59 @@ const authMiddleware = createAuthMiddleware(authLib, {
 
 // Usar con cualquier framework
 app.use(authMiddleware);
+```
+
+### 🔍 Extracción Automática de Tokens
+
+El middleware de autenticación ahora incluye extracción automática de tokens mejorada que soporta múltiples métodos sin configuración adicional:
+
+#### Métodos Soportados
+
+1. **Authorization Header (Case-Insensitive)**
+   ```
+   Authorization: Bearer <token>
+   Authorization: bearer <token>
+   Authorization: BEARER <token>
+   ```
+
+2. **Custom Headers**
+   ```
+   X-Auth-Token: <token>
+   X-API-Key: <token>
+   X-Access-Token: <token>
+   ```
+
+3. **Query Parameters**
+   ```
+   GET /api/data?token=<token>
+   GET /api/data?access_token=<token>
+   GET /api/data?auth_token=<token>
+   ```
+
+4. **URL Parameters**
+   ```
+   GET /api/data/:token
+   ```
+
+#### Orden de Prioridad
+
+El middleware busca tokens en el siguiente orden:
+1. Authorization header (Bearer token)
+2. Custom headers (X-Auth-Token, X-API-Key, etc.)
+3. Query parameters (token, access_token, auth_token)
+4. URL parameters (token)
+
+#### Configuración Personalizada
+
+Puedes sobrescribir la lógica de extracción usando la función `extractToken`:
+
+```typescript
+const authMiddleware = createAuthMiddleware(authLib, {
+  extractToken: (req: any) => {
+    // Tu lógica personalizada aquí
+    return customTokenExtraction(req);
+  }
+});
 ```
 
 #### `createPermissionMiddleware`

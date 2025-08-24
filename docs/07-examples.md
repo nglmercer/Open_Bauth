@@ -206,8 +206,8 @@ export default function createAuthRoutes(auth: ExpressAuthAdapter) {
   // Cerrar sesión
   router.post('/logout', auth.required, async (req, res) => {
     try {
-      // Invalidar token (si se usa blacklist)
-      const token = req.headers.authorization?.replace('Bearer ', '');
+      // Invalidar token (si se usa blacklist) - Usa el método mejorado
+      const token = auth.jwtService.extractTokenFromHeader(req.headers.authorization);
       if (token) {
         await auth.jwtService.invalidateToken(token);
       }
@@ -900,11 +900,13 @@ export function createMicroserviceAuthMiddleware(authServiceUrl: string) {
     try {
       const authHeader = req.headers.authorization;
       
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      // Verificación case-insensitive mejorada
+      if (!authHeader || !authHeader.trim().toLowerCase().startsWith('bearer ')) {
         return res.status(401).json({ error: 'Token de autorización requerido' });
       }
 
-      const token = authHeader.substring(7);
+      // Extracción mejorada del token
+      const token = authHeader.trim().substring(7);
       
       // Verificar token con el servicio de autenticación
       const response = await axios.post(`${authServiceUrl}/auth/verify`, {

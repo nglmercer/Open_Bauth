@@ -2208,7 +2208,8 @@ async function authenticateWebSocket(ws, request, config = {}) {
       }
     }
     if (!token && config.required !== false) {
-      ws.close(1008, "Authentication required");
+      const errorDetails = getWebSocketAuthErrorDetails("No token provided", 401);
+      ws.close(errorDetails.closeCode, errorDetails.reason);
       return false;
     }
     const authRequest = {
@@ -2224,7 +2225,8 @@ async function authenticateWebSocket(ws, request, config = {}) {
         userAgent: extractUserAgent(authRequest.headers),
         error: result.error
       });
-      ws.close(1008, result.error || "Authentication failed");
+      const errorDetails = getWebSocketAuthErrorDetails(result.error, result.statusCode);
+      ws.close(errorDetails.closeCode, errorDetails.reason);
       return false;
     }
     ws.auth = result.context;
@@ -2234,7 +2236,8 @@ async function authenticateWebSocket(ws, request, config = {}) {
     if (ws.userId && config.maxConnections) {
       const userConnections = activeConnections.get(ws.userId) || new Set;
       if (userConnections.size >= config.maxConnections) {
-        ws.close(1008, "Maximum connections exceeded");
+        const errorDetails = getWebSocketAuthErrorDetails("Maximum connections exceeded", 429);
+        ws.close(errorDetails.closeCode, errorDetails.reason);
         return false;
       }
     }
@@ -2255,7 +2258,8 @@ async function authenticateWebSocket(ws, request, config = {}) {
     return true;
   } catch (error) {
     console.error("WebSocket authentication error:", error);
-    ws.close(1011, "Internal authentication error");
+    const errorDetails = getWebSocketAuthErrorDetails("Internal authentication error", 500);
+    ws.close(errorDetails.closeCode, errorDetails.reason);
     return false;
   }
 }
@@ -2430,19 +2434,13 @@ function generateSessionId() {
 function handleAuthenticatedMessage(ws, message, permissions) {
   ws.lastActivity = new Date;
   if (!isWebSocketAuthenticated(ws)) {
-    ws.send(JSON.stringify({
-      type: "error",
-      message: "Authentication required",
-      timestamp: new Date().toISOString()
-    }));
+    ws.send(JSON.stringify(createWebSocketAuthErrorResponse("Authentication required", 401)));
     return false;
   }
   if (permissions && !checkWebSocketPermissions(ws, permissions)) {
-    ws.send(JSON.stringify({
-      type: "error",
-      message: "Insufficient permissions",
-      timestamp: new Date().toISOString()
-    }));
+    ws.send(JSON.stringify(createWebSocketAuthErrorResponse("Insufficient permissions", 403, {
+      requiredPermissions: permissions
+    })));
     logAuthEvent("websocket.insufficient_permissions", ws.userId, {
       requiredPermissions: permissions,
       sessionId: ws.sessionId
@@ -2458,6 +2456,123 @@ function createWebSocketResponse(type, data, message) {
     message,
     timestamp: new Date().toISOString()
   };
+}
+function createWebSocketAuthErrorResponse(error = "Authentication failed", statusCode = 401, additionalData) {
+  const errorResponse = {
+    type: "auth_error",
+    success: false,
+    error: getDetailedWebSocketAuthError(error, statusCode),
+    code: getWebSocketAuthErrorCode(error, statusCode),
+    statusCode,
+    timestamp: new Date().toISOString()
+  };
+  if (additionalData) {
+    Object.assign(errorResponse, additionalData);
+  }
+  return errorResponse;
+}
+function getWebSocketAuthErrorDetails(error = "Authentication failed", statusCode) {
+  const detailedError = getDetailedWebSocketAuthError(error, statusCode || 401);
+  let closeCode;
+  switch (statusCode) {
+    case 400:
+      closeCode = 1002;
+      break;
+    case 401:
+      closeCode = 1008;
+      break;
+    case 403:
+      closeCode = 1008;
+      break;
+    case 429:
+      closeCode = 1008;
+      break;
+    case 500:
+      closeCode = 1011;
+      break;
+    default:
+      closeCode = 1008;
+  }
+  return {
+    closeCode,
+    reason: detailedError.length > 123 ? detailedError.substring(0, 120) + "..." : detailedError
+  };
+}
+function getDetailedWebSocketAuthError(error, statusCode) {
+  const errorMappings = {
+    "Invalid token": "The provided authentication token is invalid or malformed. Please reconnect with a valid token.",
+    "Token expired": "Your authentication token has expired. Please reconnect with a new token.",
+    "No token provided": "Authentication token is required. Please provide a valid token in the connection URL or headers.",
+    "Insufficient permissions": "You do not have the required permissions for this WebSocket operation.",
+    "User not found": "The user associated with this token could not be found or has been deactivated.",
+    "Token revoked": "This authentication token has been revoked. Please obtain a new token and reconnect.",
+    "Invalid signature": "The token signature is invalid. This may indicate a compromised or tampered token.",
+    "Malformed token": "The authentication token format is incorrect. Please ensure you are using a valid JWT token.",
+    "Authentication required": "This WebSocket connection requires authentication. Please provide a valid token.",
+    "Session expired": "Your session has expired. Please reconnect with a new authentication token.",
+    "Account locked": "Your account has been temporarily locked. Please contact support.",
+    "Invalid credentials": "The provided credentials are incorrect.",
+    "Maximum connections exceeded": "You have reached the maximum number of allowed concurrent connections.",
+    "Internal authentication error": "An internal error occurred during authentication. Please try reconnecting."
+  };
+  if (errorMappings[error]) {
+    return errorMappings[error];
+  }
+  for (const [key, value] of Object.entries(errorMappings)) {
+    if (error.toLowerCase().includes(key.toLowerCase())) {
+      return value;
+    }
+  }
+  switch (statusCode) {
+    case 401:
+      return error.includes("token") ? "WebSocket authentication failed: Invalid or missing token. Please provide a valid token and reconnect." : "WebSocket authentication required. Please provide valid credentials and reconnect.";
+    case 403:
+      return "WebSocket access forbidden: You do not have sufficient permissions for this connection.";
+    case 429:
+      return "WebSocket rate limit exceeded: Too many connection attempts. Please wait before reconnecting.";
+    case 500:
+      return "WebSocket internal error: An unexpected error occurred. Please try reconnecting.";
+    default:
+      return error || "WebSocket authentication error occurred.";
+  }
+}
+function getWebSocketAuthErrorCode(error, statusCode) {
+  const errorCodes = {
+    "Invalid token": "WS_AUTH_INVALID_TOKEN",
+    "Token expired": "WS_AUTH_TOKEN_EXPIRED",
+    "No token provided": "WS_AUTH_TOKEN_MISSING",
+    "Insufficient permissions": "WS_AUTH_INSUFFICIENT_PERMISSIONS",
+    "User not found": "WS_AUTH_USER_NOT_FOUND",
+    "Token revoked": "WS_AUTH_TOKEN_REVOKED",
+    "Invalid signature": "WS_AUTH_INVALID_SIGNATURE",
+    "Malformed token": "WS_AUTH_MALFORMED_TOKEN",
+    "Authentication required": "WS_AUTH_REQUIRED",
+    "Session expired": "WS_AUTH_SESSION_EXPIRED",
+    "Account locked": "WS_AUTH_ACCOUNT_LOCKED",
+    "Invalid credentials": "WS_AUTH_INVALID_CREDENTIALS",
+    "Maximum connections exceeded": "WS_AUTH_MAX_CONNECTIONS",
+    "Internal authentication error": "WS_AUTH_INTERNAL_ERROR"
+  };
+  if (errorCodes[error]) {
+    return errorCodes[error];
+  }
+  for (const [key, value] of Object.entries(errorCodes)) {
+    if (error.toLowerCase().includes(key.toLowerCase())) {
+      return value;
+    }
+  }
+  switch (statusCode) {
+    case 401:
+      return "WS_AUTH_UNAUTHORIZED";
+    case 403:
+      return "WS_AUTH_FORBIDDEN";
+    case 429:
+      return "WS_AUTH_RATE_LIMITED";
+    case 500:
+      return "WS_AUTH_INTERNAL_ERROR";
+    default:
+      return "WS_AUTH_ERROR";
+  }
 }
 function initializeConnectionCleanup(interval = 5 * 60 * 1000) {
   setInterval(() => {
@@ -3250,10 +3365,7 @@ function honoAuthMiddleware(config = {}) {
           userAgent: extractUserAgent(authRequest.headers),
           error: result.error
         });
-        return c.json({
-          error: result.error,
-          timestamp: new Date().toISOString()
-        }, result.statusCode || 401);
+        return createHonoAuthErrorResponse(c, result.error, result.statusCode);
       }
       c.set("auth", result.context);
       if (result.context?.user) {
@@ -3267,10 +3379,9 @@ function honoAuthMiddleware(config = {}) {
       await next();
     } catch (error) {
       console.error("Hono auth middleware error:", error);
-      return c.json({
-        error: "Internal authentication error",
-        timestamp: new Date().toISOString()
-      }, 500);
+      return createHonoAuthErrorResponse(c, "Internal authentication error", 500, {
+        details: error.message
+      });
     }
   };
 }
@@ -3406,6 +3517,91 @@ function honoErrorResponse(c, error, statusCode = 400) {
     method: c.req.method
   }, statusCode);
 }
+function createHonoAuthErrorResponse(c, error = "Authentication failed", statusCode = 401, additionalData) {
+  const errorResponse = {
+    success: false,
+    error: getDetailedAuthError(error, statusCode),
+    code: getAuthErrorCode(error, statusCode),
+    timestamp: new Date().toISOString(),
+    path: c.req.path,
+    method: c.req.method
+  };
+  if (additionalData) {
+    Object.assign(errorResponse, additionalData);
+  }
+  if (statusCode === 401) {
+    c.header("WWW-Authenticate", 'Bearer realm="API"');
+  }
+  return c.json(errorResponse, statusCode);
+}
+function getDetailedAuthError(error, statusCode) {
+  const errorMappings = {
+    "Invalid token": "The provided authentication token is invalid or malformed. Please check your token and try again.",
+    "Token expired": "Your authentication token has expired. Please obtain a new token and try again.",
+    "No token provided": "Authentication token is required. Please provide a valid Bearer token in the Authorization header.",
+    "Insufficient permissions": "You do not have the required permissions to access this resource.",
+    "User not found": "The user associated with this token could not be found or has been deactivated.",
+    "Token revoked": "This authentication token has been revoked. Please obtain a new token.",
+    "Invalid signature": "The token signature is invalid. This may indicate a compromised or tampered token.",
+    "Malformed token": "The authentication token format is incorrect. Please ensure you are using a valid JWT token.",
+    "Authentication required": "This endpoint requires authentication. Please provide a valid Bearer token.",
+    "Session expired": "Your session has expired. Please log in again to continue.",
+    "Account locked": "Your account has been temporarily locked due to security reasons. Please contact support.",
+    "Invalid credentials": "The provided credentials are incorrect. Please check your username and password."
+  };
+  if (errorMappings[error]) {
+    return errorMappings[error];
+  }
+  for (const [key, value] of Object.entries(errorMappings)) {
+    if (error.toLowerCase().includes(key.toLowerCase())) {
+      return value;
+    }
+  }
+  switch (statusCode) {
+    case 401:
+      return error.includes("token") ? "Authentication failed: Invalid or missing token. Please provide a valid Bearer token in the Authorization header." : "Authentication required. Please provide valid credentials to access this resource.";
+    case 403:
+      return "Access forbidden: You do not have sufficient permissions to perform this action.";
+    case 429:
+      return "Rate limit exceeded: Too many requests. Please wait before trying again.";
+    default:
+      return error || "Authentication error occurred.";
+  }
+}
+function getAuthErrorCode(error, statusCode) {
+  const errorCodes = {
+    "Invalid token": "AUTH_INVALID_TOKEN",
+    "Token expired": "AUTH_TOKEN_EXPIRED",
+    "No token provided": "AUTH_TOKEN_MISSING",
+    "Insufficient permissions": "AUTH_INSUFFICIENT_PERMISSIONS",
+    "User not found": "AUTH_USER_NOT_FOUND",
+    "Token revoked": "AUTH_TOKEN_REVOKED",
+    "Invalid signature": "AUTH_INVALID_SIGNATURE",
+    "Malformed token": "AUTH_MALFORMED_TOKEN",
+    "Authentication required": "AUTH_REQUIRED",
+    "Session expired": "AUTH_SESSION_EXPIRED",
+    "Account locked": "AUTH_ACCOUNT_LOCKED",
+    "Invalid credentials": "AUTH_INVALID_CREDENTIALS"
+  };
+  if (errorCodes[error]) {
+    return errorCodes[error];
+  }
+  for (const [key, value] of Object.entries(errorCodes)) {
+    if (error.toLowerCase().includes(key.toLowerCase())) {
+      return value;
+    }
+  }
+  switch (statusCode) {
+    case 401:
+      return "AUTH_UNAUTHORIZED";
+    case 403:
+      return "AUTH_FORBIDDEN";
+    case 429:
+      return "AUTH_RATE_LIMITED";
+    default:
+      return "AUTH_ERROR";
+  }
+}
 function honoSuccessResponse(c, data, message, statusCode = 200) {
   const response = {
     success: true,
@@ -3460,10 +3656,7 @@ function expressAuthMiddleware(config = {}) {
           userAgent: extractUserAgent(authRequest.headers),
           error: result.error
         });
-        return res.status(result.statusCode || 401).json({
-          error: result.error,
-          timestamp: new Date().toISOString()
-        });
+        return createExpressAuthErrorResponse(res, req, result.error, result.statusCode);
       }
       req.auth = result.context;
       if (result.context?.user) {
@@ -3477,9 +3670,8 @@ function expressAuthMiddleware(config = {}) {
       next();
     } catch (error) {
       console.error("Express auth middleware error:", error);
-      return res.status(500).json({
-        error: "Internal authentication error",
-        timestamp: new Date().toISOString()
+      return createExpressAuthErrorResponse(res, req, "Internal authentication error", 500, {
+        details: error.message
       });
     }
   };
@@ -3608,6 +3800,91 @@ function expressErrorResponse(res, error, statusCode = 400) {
     error,
     timestamp: new Date().toISOString()
   });
+}
+function createExpressAuthErrorResponse(res, req, error = "Authentication failed", statusCode = 401, additionalData) {
+  const errorResponse = {
+    success: false,
+    error: getDetailedAuthError2(error, statusCode),
+    code: getAuthErrorCode2(error, statusCode),
+    timestamp: new Date().toISOString(),
+    path: req.path,
+    method: req.method
+  };
+  if (additionalData) {
+    Object.assign(errorResponse, additionalData);
+  }
+  if (statusCode === 401) {
+    res.setHeader("WWW-Authenticate", 'Bearer realm="API"');
+  }
+  return res.status(statusCode).json(errorResponse);
+}
+function getDetailedAuthError2(error, statusCode) {
+  const errorMappings = {
+    "Invalid token": "The provided authentication token is invalid or malformed. Please check your token and try again.",
+    "Token expired": "Your authentication token has expired. Please obtain a new token and try again.",
+    "No token provided": "Authentication token is required. Please provide a valid Bearer token in the Authorization header.",
+    "Insufficient permissions": "You do not have the required permissions to access this resource.",
+    "User not found": "The user associated with this token could not be found or has been deactivated.",
+    "Token revoked": "This authentication token has been revoked. Please obtain a new token.",
+    "Invalid signature": "The token signature is invalid. This may indicate a compromised or tampered token.",
+    "Malformed token": "The authentication token format is incorrect. Please ensure you are using a valid JWT token.",
+    "Authentication required": "This endpoint requires authentication. Please provide a valid Bearer token.",
+    "Session expired": "Your session has expired. Please log in again to continue.",
+    "Account locked": "Your account has been temporarily locked due to security reasons. Please contact support.",
+    "Invalid credentials": "The provided credentials are incorrect. Please check your username and password."
+  };
+  if (errorMappings[error]) {
+    return errorMappings[error];
+  }
+  for (const [key, value] of Object.entries(errorMappings)) {
+    if (error.toLowerCase().includes(key.toLowerCase())) {
+      return value;
+    }
+  }
+  switch (statusCode) {
+    case 401:
+      return error.includes("token") ? "Authentication failed: Invalid or missing token. Please provide a valid Bearer token in the Authorization header." : "Authentication required. Please provide valid credentials to access this resource.";
+    case 403:
+      return "Access forbidden: You do not have sufficient permissions to perform this action.";
+    case 429:
+      return "Rate limit exceeded: Too many requests. Please wait before trying again.";
+    default:
+      return error || "Authentication error occurred.";
+  }
+}
+function getAuthErrorCode2(error, statusCode) {
+  const errorCodes = {
+    "Invalid token": "AUTH_INVALID_TOKEN",
+    "Token expired": "AUTH_TOKEN_EXPIRED",
+    "No token provided": "AUTH_TOKEN_MISSING",
+    "Insufficient permissions": "AUTH_INSUFFICIENT_PERMISSIONS",
+    "User not found": "AUTH_USER_NOT_FOUND",
+    "Token revoked": "AUTH_TOKEN_REVOKED",
+    "Invalid signature": "AUTH_INVALID_SIGNATURE",
+    "Malformed token": "AUTH_MALFORMED_TOKEN",
+    "Authentication required": "AUTH_REQUIRED",
+    "Session expired": "AUTH_SESSION_EXPIRED",
+    "Account locked": "AUTH_ACCOUNT_LOCKED",
+    "Invalid credentials": "AUTH_INVALID_CREDENTIALS"
+  };
+  if (errorCodes[error]) {
+    return errorCodes[error];
+  }
+  for (const [key, value] of Object.entries(errorCodes)) {
+    if (error.toLowerCase().includes(key.toLowerCase())) {
+      return value;
+    }
+  }
+  switch (statusCode) {
+    case 401:
+      return "AUTH_UNAUTHORIZED";
+    case 403:
+      return "AUTH_FORBIDDEN";
+    case 429:
+      return "AUTH_RATE_LIMITED";
+    default:
+      return "AUTH_ERROR";
+  }
 }
 function expressSuccessResponse(res, data, message, statusCode = 200) {
   const response = {
@@ -4435,5 +4712,5 @@ export {
   AUTH_LIBRARY_INFO
 };
 
-//# debugId=3BCE83FB3D30827E64756E2164756E21
+//# debugId=D296465AC81D36F064756E2164756E21
 //# sourceMappingURL=index.js.map

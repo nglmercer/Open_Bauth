@@ -223,6 +223,90 @@ class BlogApiTester {
     this.token = originalToken // Restore token
   }
 
+  async testCaseInsensitiveBearerToken() {
+    console.log('\n🔤 Testing Case-Insensitive Bearer Token...')
+    if (!this.token) {
+      console.log('⚠️ No token available, skipping case-insensitive test')
+      return
+    }
+
+    // Test lowercase 'bearer'
+    await this.makeRequest('/auth/profile', {
+      headers: {
+        'Authorization': `bearer ${this.token}`
+      }
+    })
+
+    // Test uppercase 'BEARER'
+    await this.makeRequest('/auth/profile', {
+      headers: {
+        'Authorization': `BEARER ${this.token}`
+      }
+    })
+
+    // Test mixed case 'Bearer'
+    await this.makeRequest('/auth/profile', {
+      headers: {
+        'Authorization': `Bearer ${this.token}`
+      }
+    })
+  }
+
+  async testQueryParameterAuth() {
+    console.log('\n🔗 Testing Query Parameter Authentication...')
+    if (!this.token) {
+      console.log('⚠️ No token available, skipping query parameter test')
+      return
+    }
+
+    // Test token via query parameter
+    await this.makeRequest(`/auth/profile?token=${this.token}`, {
+      headers: {} // No Authorization header
+    })
+
+    // Test access_token query parameter
+    await this.makeRequest(`/auth/profile?access_token=${this.token}`, {
+      headers: {} // No Authorization header
+    })
+  }
+
+  async testCustomHeaderAuth() {
+    console.log('\n📋 Testing Custom Header Authentication...')
+    if (!this.token) {
+      console.log('⚠️ No token available, skipping custom header test')
+      return
+    }
+
+    // Test X-Auth-Token header
+    await this.makeRequest('/auth/profile', {
+      headers: {
+        'X-Auth-Token': this.token
+      }
+    })
+
+    // Test X-API-Key header
+    await this.makeRequest('/auth/profile', {
+      headers: {
+        'X-API-Key': this.token
+      }
+    })
+  }
+
+  async testTokenPriorityOrder() {
+    console.log('\n📊 Testing Token Priority Order...')
+    if (!this.token) {
+      console.log('⚠️ No token available, skipping priority test')
+      return
+    }
+
+    // Test Authorization header takes priority over query params
+    await this.makeRequest(`/auth/profile?token=invalid-query-token`, {
+      headers: {
+        'Authorization': `Bearer ${this.token}`
+      }
+    })
+  }
+
   async testAdminEndpoints() {
     console.log('\n👑 Testing Admin Endpoints (Should fail for regular user)...')
     if (!this.token) {
@@ -276,6 +360,13 @@ class BlogApiTester {
       // Security tests
       await this.testUnauthorizedAccess()
       await this.testInvalidToken()
+      
+      // Authentication improvements tests
+      await this.testCaseInsensitiveBearerToken()
+      await this.testQueryParameterAuth()
+      await this.testCustomHeaderAuth()
+      await this.testTokenPriorityOrder()
+      
       await this.testAdminEndpoints()
       
       // Cleanup
@@ -293,6 +384,10 @@ class BlogApiTester {
       console.log('   ✅ Blog post CRUD operations')
       console.log('   ✅ Ownership-based permissions')
       console.log('   ✅ Security and error handling')
+      console.log('   ✅ Case-insensitive Bearer token authentication')
+      console.log('   ✅ Query parameter authentication fallback')
+      console.log('   ✅ Custom header authentication methods')
+      console.log('   ✅ Token source priority validation')
       console.log('   ✅ Admin endpoint access control')
       
     } catch (error) {

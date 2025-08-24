@@ -436,12 +436,16 @@ if (token && jwtService.isTokenExpired(token)) {
 
 #### `extractTokenFromHeader(authHeader: string): string | null`
 
-Extrae el token de un header de autorización.
+Extrae el token de un header de autorización. **Ahora soporta Bearer tokens case-insensitive y maneja espacios en blanco.**
 
 ```typescript
-// Ejemplo de uso
-const authHeader = request.headers.authorization; // "Bearer eyJhbGciOiJIUzI1NiIs..."
-const token = jwtService.extractTokenFromHeader(authHeader);
+// Ejemplo de uso - Todos estos formatos son válidos:
+const authHeader1 = request.headers.authorization; // "Bearer eyJhbGciOiJIUzI1NiIs..."
+const authHeader2 = request.headers.authorization; // "bearer eyJhbGciOiJIUzI1NiIs..."
+const authHeader3 = request.headers.authorization; // "BEARER eyJhbGciOiJIUzI1NiIs..."
+const authHeader4 = request.headers.authorization; // " Bearer eyJhbGciOiJIUzI1NiIs..." (con espacios)
+
+const token = jwtService.extractTokenFromHeader(authHeader1);
 
 if (token) {
   try {
@@ -454,6 +458,11 @@ if (token) {
   // Header inválido o token no presente
 }
 ```
+
+**Mejoras en v1.0.3:**
+- ✅ Case-insensitive: acepta "Bearer", "bearer", "BEARER"
+- ✅ Manejo de espacios: elimina espacios en blanco al inicio y final
+- ✅ Validación mejorada del formato del header
 
 #### `decodeToken(token: string): JWTPayload | null`
 
