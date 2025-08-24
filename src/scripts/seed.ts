@@ -19,7 +19,8 @@ import { runMigrations } from '../db/migrations';
 import { AuthService } from '../services/auth';
 import { PermissionService } from '../services/permissions';
 import type { CreatePermissionData, CreateRoleData } from '../types/auth';
-
+import { defaultLogger as logger } from '../logger'
+logger.silence();
 /**
  * Datos iniciales para permisos
  */
@@ -296,7 +297,7 @@ export async function seedDatabase(dbPath?: string,
   allUsers = getAllUsers()
 ): Promise<void> {
   try {
-    console.log('🌱 Starting database seeding...');
+    logger.info('🌱 Starting database seeding...');
     
     // Initialize database and run migrations
     initDatabase(dbPath);
@@ -371,8 +372,8 @@ export async function seedDatabase(dbPath?: string,
       }
     }
     
-    console.log('✨ Seeding completed successfully!');
-    console.log(`📊 Summary: ${createdCount} users created, ${skippedCount} skipped`);
+    logger.info('✨ Seeding completed successfully!');
+    logger.info(`📊 Summary: ${createdCount} users created, ${skippedCount} skipped`);
     
   } catch (error:any) {
     console.error('❌ Error during seeding:', error);
@@ -386,7 +387,7 @@ export async function seedDatabase(dbPath?: string,
  * Función para limpiar la base de datos
  */
 export async function cleanDatabase(dbPath?: string): Promise<void> {
-  console.log('🧹 Cleaning database...');
+  logger.info('🧹 Cleaning database...');
   
   try {
     // Check if database is initialized
@@ -429,7 +430,7 @@ export async function cleanDatabase(dbPath?: string): Promise<void> {
     // Re-enable foreign keys
     db.exec('PRAGMA foreign_keys = ON');
     
-    console.log('✅ Database cleaned successfully');
+    logger.info('✅ Database cleaned successfully');
     
   } catch (error:any) {
     console.error('❌ Error during cleanup:', error);
@@ -444,12 +445,12 @@ export async function cleanDatabase(dbPath?: string): Promise<void> {
  */
 export async function resetDatabase(): Promise<void> {
   try {
-    console.log('🔄 Resetting database...');
+    logger.info('🔄 Resetting database...');
     
     await cleanDatabase();
     await seedDatabase();
     
-    console.log('✨ Database reset successfully!');
+    logger.info('✨ Database reset successfully!');
     
   } catch (error:any) {
     console.error('❌ Error during reset:', error);
@@ -462,20 +463,20 @@ export async function resetDatabase(): Promise<void> {
  */
 export async function checkDatabaseStatus(): Promise<void> {
   try {
-    console.log('🔍 Verificando estado de la base de datos...');
+    logger.info('🔍 Verificando estado de la base de datos...');
     
     const db = getDatabase();
     
     // Contar registros en cada tabla
     const tables = ['users', 'roles', 'permissions', 'user_roles', 'role_permissions', 'sessions'];
     
-    console.log('\n📊 Estado actual:');
+    logger.info('\n📊 Estado actual:');
     for (const table of tables) {
       try {
         const result = db.query(`SELECT COUNT(*) as count FROM ${table}`).get() as { count: number };
-        console.log(`  ${table}: ${result.count} registros`);
+        logger.info(`  ${table}: ${result.count} registros`);
       } catch (error:any) {
-        console.log(`  ${table}: Tabla no existe`);
+        logger.info(`  ${table}: Tabla no existe`);
       }
     }
     
@@ -491,13 +492,13 @@ export async function checkDatabaseStatus(): Promise<void> {
       `).all();
       
       if (usersWithRoles.length > 0) {
-        console.log('\n👥 Usuarios y sus roles:');
+        logger.info('\n👥 Usuarios y sus roles:');
         usersWithRoles.forEach((user: any) => {
-          console.log(`  ${user.email}: ${user.roles || 'Sin roles'}`);
+          logger.info(`  ${user.email}: ${user.roles || 'Sin roles'}`);
         });
       }
     } catch (error:any) {
-      console.log('  ⚠️  No se pudieron obtener usuarios con roles');
+      logger.info('  ⚠️  No se pudieron obtener usuarios con roles');
     }
     
   } catch (error:any) {
@@ -511,7 +512,7 @@ export async function checkDatabaseStatus(): Promise<void> {
  */
 export async function seedTestUsersOnly(count?: number): Promise<void> {
   try {
-    console.log('🧪 Creando solo usuarios de prueba...');
+    logger.info('🧪 Creando solo usuarios de prueba...');
     
     const userCount = count || 10;
     const testUsers = generateTestUsers(userCount);
@@ -531,7 +532,7 @@ export async function seedTestUsersOnly(count?: number): Promise<void> {
         
         if (result && result.user) {
           createdCount++;
-          console.log(`  ✅ Usuario de prueba creado: ${user.email}`);
+          logger.info(`  ✅ Usuario de prueba creado: ${user.email}`);
           
           // Asignar roles
           for (const roleName of user.roles) {
@@ -539,11 +540,11 @@ export async function seedTestUsersOnly(count?: number): Promise<void> {
           }
         }
       } catch (error: any) {
-        console.log(`  ⚠️  Usuario ya existe: ${user.email}`);
+        logger.info(`  ⚠️  Usuario ya existe: ${user.email}`);
       }
     }
     
-    console.log(`\n✨ ${createdCount} usuarios de prueba creados exitosamente!`);
+    logger.info(`\n✨ ${createdCount} usuarios de prueba creados exitosamente!`);
     
   } catch (error: any) {
     console.error('❌ Error creando usuarios de prueba:', error);
@@ -574,19 +575,19 @@ export async function mainSeed() {
       await seedTestUsersOnly(count);
       break;
     default:
-      console.log('Uso: bun run src/scripts/seed.ts [comando] [parámetros]');
-      console.log('\nComandos disponibles:');
-      console.log('  seed        - Poblar base de datos con datos iniciales');
-      console.log('  clean       - Limpiar todos los datos');
-      console.log('  reset       - Limpiar y volver a poblar');
-      console.log('  status      - Verificar estado actual');
-      console.log('  config      - Mostrar configuración actual');
-      console.log('  test-users  - Crear solo usuarios de prueba [cantidad]');
-      console.log('\nEjemplos:');
-      console.log('  bun run src/scripts/seed.ts seed');
-      console.log('  bun run src/scripts/seed.ts test-users 20');
-      console.log('  NODE_ENV=development SEED_USER_COUNT=25 bun run src/scripts/seed.ts seed');
-      console.log('  DEFAULT_SEED_PASSWORD="MyCustomPass123!" bun run src/scripts/seed.ts test-users 5');
+      logger.info('Uso: bun run src/scripts/seed.ts [comando] [parámetros]');
+      logger.info('\nComandos disponibles:');
+      logger.info('  seed        - Poblar base de datos con datos iniciales');
+      logger.info('  clean       - Limpiar todos los datos');
+      logger.info('  reset       - Limpiar y volver a poblar');
+      logger.info('  status      - Verificar estado actual');
+      logger.info('  config      - Mostrar configuración actual');
+      logger.info('  test-users  - Crear solo usuarios de prueba [cantidad]');
+      logger.info('\nEjemplos:');
+      logger.info('  bun run src/scripts/seed.ts seed');
+      logger.info('  bun run src/scripts/seed.ts test-users 20');
+      logger.info('  NODE_ENV=development SEED_USER_COUNT=25 bun run src/scripts/seed.ts seed');
+      logger.info('  DEFAULT_SEED_PASSWORD="MyCustomPass123!" bun run src/scripts/seed.ts test-users 5');
   }
 }
 

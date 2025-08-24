@@ -6,7 +6,8 @@ import { initDatabase, closeDatabase, getDatabase, isDatabaseInitialized } from 
 import { runMigrations, resetDatabase } from '../src/db/migrations';
 import { seedDatabase, cleanDatabase } from '../src/scripts/seed';
 import { initJWTService } from '../src/services/jwt';
-
+import { defaultLogger as logger } from '../src/logger'
+logger.silence();
 // Variables globales para tests
 export const TEST_DB_PATH = './test.db';
 export const TEST_JWT_SECRET = 'test-jwt-secret-key-for-testing-only';
@@ -21,7 +22,7 @@ process.env.BCRYPT_ROUNDS = '4'; // Menor para tests más rápidos
  * Setup global antes de todos los tests
  */
 beforeAll(async () => {
-  console.log('🧪 Configurando entorno de tests...');
+  logger.info('🧪 Configurando entorno de tests...');
   
   try {
     // Inicializar base de datos en memoria
@@ -33,7 +34,7 @@ beforeAll(async () => {
     // Inicializar servicio JWT
     initJWTService(TEST_JWT_SECRET);
     
-    console.log('✅ Entorno de tests configurado correctamente');
+    logger.info('✅ Entorno de tests configurado correctamente');
   } catch (error:any) {
     console.error('❌ Error configurando entorno de tests:', error);
     throw error;
@@ -44,12 +45,12 @@ beforeAll(async () => {
  * Cleanup global después de todos los tests
  */
 afterAll(async () => {
-  console.log('🧹 Limpiando entorno de tests...');
+  logger.info('🧹 Limpiando entorno de tests...');
   
   try {
     // Cerrar la base de datos correctamente al final de todos los tests
     await closeDatabase();
-    console.log('✅ Entorno de tests limpiado correctamente');
+    logger.info('✅ Entorno de tests limpiado correctamente');
     
     // Asegurar que no hay promesas pendientes
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -63,12 +64,12 @@ afterAll(async () => {
 // Manejar promesas rechazadas no capturadas en tests
 if (process.env.NODE_ENV === 'test') {
   process.on('unhandledRejection', (reason, promise) => {
-    console.log('⚠️ Unhandled rejection en tests (suprimido):', reason);
+    logger.info('⚠️ Unhandled rejection en tests (suprimido):', {reason});
     // No hacer exit en tests
   });
   
   process.on('uncaughtException', (error) => {
-    console.log('⚠️ Uncaught exception en tests (suprimido):', error.message);
+    logger.info('⚠️ Uncaught exception en tests (suprimido):', {message:error.message});
     // No hacer exit en tests
   });
 }
@@ -313,7 +314,7 @@ export const TEST_TIMEOUTS = {
 
 // Configuración de mocks
 export const mockConfig = {
-  // Mock para console.log en tests
+  // Mock para logger.info en tests
   silentLogs: false,
   
   // Mock para Date.now() para tests determinísticos
@@ -336,4 +337,4 @@ if (mockConfig.mockDate) {
   Date.now = () => mockConfig.fixedDate.getTime();
 }
 
-console.log('🧪 Setup de tests cargado correctamente');
+logger.info('🧪 Setup de tests cargado correctamente');

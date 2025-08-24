@@ -1,9 +1,125 @@
 // src/types/auth.ts
 
+import type { 
+  BaseEntity, 
+  Optional, 
+  Email, 
+  HashedPassword, 
+  JWT, 
+  RefreshToken, 
+  EntityId, 
+  UserId, 
+  RoleId, 
+  PermissionId,
+  QueryOptions,
+  PaginatedResponse,
+  ValidationResult
+} from './common';
+
 /**
- * Interface para representar un usuario en el sistema
+ * User metadata interface
  */
-export interface User {
+export interface UserMetadata {
+  preferences?: Record<string, any>;
+  settings?: Record<string, any>;
+  profile?: {
+    avatar?: string;
+    bio?: string;
+    location?: string;
+  };
+}
+
+/**
+ * Role metadata interface
+ */
+export interface RoleMetadata {
+  color?: string;
+  icon?: string;
+  priority?: number;
+  category?: string;
+}
+
+/**
+ * Permission metadata interface
+ */
+export interface PermissionMetadata {
+  category?: string;
+  level?: number;
+  scope?: string;
+}
+
+/**
+ * User interface with enhanced type safety
+ */
+export interface User extends BaseEntity {
+  id: UserId;
+  email: Email;
+  passwordHash: HashedPassword;
+  firstName?: string;
+  lastName?: string;
+  isActive: boolean;
+  lastLoginAt?: Date;
+  emailVerifiedAt?: Date;
+  roles: Role[];
+  permissions?: Permission[];
+  metadata?: UserMetadata;
+}
+
+/**
+ * User creation data interface
+ */
+export interface CreateUserData {
+  email: string;
+  password: string;
+  firstName?: string;
+  lastName?: string;
+  isActive?: boolean;
+  roles?: string[];
+}
+
+/**
+ * User update data interface
+ */
+export interface UpdateUserData {
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  isActive?: boolean;
+}
+
+/**
+ * User query options interface
+ */
+export interface UserQueryOptions extends QueryOptions {
+  includeRoles?: boolean;
+  includePermissions?: boolean;
+  activeOnly?: boolean;
+  emailVerified?: boolean;
+}
+
+/**
+ * User repository interface
+ */
+export interface UserRepositoryInterface {
+  findById(id: UserId, options?: UserQueryOptions): Promise<User | null>;
+  findByEmail(email: string, options?: UserQueryOptions): Promise<User | null>;
+  findMany(options?: UserQueryOptions): Promise<PaginatedResponse<User>>;
+  create(data: CreateUserData): Promise<User>;
+  update(id: UserId, data: UpdateUserData): Promise<User>;
+  delete(id: UserId): Promise<boolean>;
+  activate(id: UserId): Promise<boolean>;
+  deactivate(id: UserId): Promise<boolean>;
+  getUserRoles(id: UserId): Promise<Role[]>;
+  assignRole(userId: UserId, roleId: RoleId): Promise<boolean>;
+  removeRole(userId: UserId, roleId: RoleId): Promise<boolean>;
+  verifyEmail(id: UserId): Promise<boolean>;
+  updateLastLogin(id: UserId): Promise<boolean>;
+}
+
+/**
+ * Legacy User interface for backward compatibility
+ */
+export interface LegacyUser {
   id: string;
   email: string;
   password_hash: string;
@@ -20,9 +136,64 @@ export interface User {
 }
 
 /**
- * Interface para representar un rol en el sistema
+ * Role interface with enhanced type safety
  */
-export interface Role {
+export interface Role extends BaseEntity {
+  id: RoleId;
+  name: string;
+  description?: string;
+  isDefault: boolean;
+  permissions: Permission[];
+  metadata?: RoleMetadata;
+}
+
+/**
+ * Role creation data interface
+ */
+export interface CreateRoleData {
+  name: string;
+  description?: string;
+  isDefault?: boolean;
+  permissions?: string[];
+}
+
+/**
+ * Role update data interface
+ */
+export interface UpdateRoleData {
+  name?: string;
+  description?: string;
+  isDefault?: boolean;
+}
+
+/**
+ * Role query options interface
+ */
+export interface RoleQueryOptions extends QueryOptions {
+  includePermissions?: boolean;
+  defaultOnly?: boolean;
+}
+
+/**
+ * Role repository interface
+ */
+export interface RoleRepositoryInterface {
+  findById(id: RoleId, options?: RoleQueryOptions): Promise<Role | null>;
+  findByName(name: string, options?: RoleQueryOptions): Promise<Role | null>;
+  findMany(options?: RoleQueryOptions): Promise<PaginatedResponse<Role>>;
+  create(data: CreateRoleData): Promise<Role>;
+  update(id: RoleId, data: UpdateRoleData): Promise<Role>;
+  delete(id: RoleId): Promise<boolean>;
+  getDefaultRole(): Promise<Role | null>;
+  assignPermission(roleId: RoleId, permissionId: PermissionId): Promise<boolean>;
+  removePermission(roleId: RoleId, permissionId: PermissionId): Promise<boolean>;
+  userHasRole(userId: UserId, roleId: RoleId): Promise<boolean>;
+}
+
+/**
+ * Legacy Role interface for backward compatibility
+ */
+export interface LegacyRole {
   id: string;
   name: string;
   permissions: Permission[];
@@ -32,9 +203,63 @@ export interface Role {
 }
 
 /**
- * Interface para representar un permiso en el sistema
+ * Permission interface with enhanced type safety
  */
-export interface Permission {
+export interface Permission extends BaseEntity {
+  id: PermissionId;
+  name: string;
+  resource: string;
+  action: string;
+  description?: string;
+  metadata?: PermissionMetadata;
+}
+
+/**
+ * Permission creation data interface
+ */
+export interface CreatePermissionData {
+  name: string;
+  resource?: string;
+  action?: string;
+  description?: string;
+}
+
+/**
+ * Permission update data interface
+ */
+export interface UpdatePermissionData {
+  name?: string;
+  resource?: string;
+  action?: string;
+  description?: string;
+}
+
+/**
+ * Permission query options interface
+ */
+export interface PermissionQueryOptions extends QueryOptions {
+  resource?: string;
+  action?: string;
+}
+
+/**
+ * Permission repository interface
+ */
+export interface PermissionRepositoryInterface {
+  findById(id: PermissionId, options?: PermissionQueryOptions): Promise<Permission | null>;
+  findByName(name: string, options?: PermissionQueryOptions): Promise<Permission | null>;
+  findMany(options?: PermissionQueryOptions): Promise<PaginatedResponse<Permission>>;
+  create(data: CreatePermissionData): Promise<Permission>;
+  update(id: PermissionId, data: UpdatePermissionData): Promise<Permission>;
+  delete(id: PermissionId): Promise<boolean>;
+  findByResource(resource: string): Promise<Permission[]>;
+  findByAction(action: string): Promise<Permission[]>;
+}
+
+/**
+ * Legacy Permission interface for backward compatibility
+ */
+export interface LegacyPermission {
   id: string;
   name: string;
   resource: string;
@@ -402,6 +627,7 @@ export enum AuthErrorType {
   VALIDATION_ERROR = 'VALIDATION_ERROR',
   AUTHENTICATION_ERROR = 'AUTHENTICATION_ERROR',
   NOT_FOUND_ERROR = 'NOT_FOUND_ERROR',
+  RATE_LIMIT_ERROR = 'RATE_LIMIT_ERROR',
   SERVER_ERROR = 'SERVER_ERROR'
 }
 
