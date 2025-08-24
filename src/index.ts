@@ -183,12 +183,7 @@ export {
 } from './config/auth';
 
 // Scripts de utilidad
-export {
-  seedDatabase,
-  cleanDatabase,
-  resetDatabase,
-  checkDatabaseStatus
-} from './scripts/seed';
+export * from './scripts/seed';
 
 export {
   runDevCommand

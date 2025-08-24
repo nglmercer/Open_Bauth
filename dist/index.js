@@ -19,10 +19,10 @@ function initDatabase(dbPath = "./auth.db") {
   }
   return db;
 }
-function getDatabase() {
+function getDatabase(dbPath) {
   if (!db) {
-    console.log("\u26A0\uFE0F Database not initialized, auto-initializing with test.db");
-    initDatabase("./test.db");
+    console.log("\u26A0\uFE0F Database not initialized, auto-initializing with auth.db");
+    initDatabase(dbPath);
   }
   try {
     if (!db) {
@@ -33,7 +33,7 @@ function getDatabase() {
     if (error.message && error.message.includes("closed database")) {
       console.log("\u26A0\uFE0F Database connection closed, reinitializing...");
       db = null;
-      initDatabase("./test.db");
+      initDatabase(dbPath);
     } else {
       throw error;
     }
@@ -43,10 +43,10 @@ function getDatabase() {
   }
   return db;
 }
-function forceReinitDatabase() {
+function forceReinitDatabase(dbPath) {
   console.log("\uD83D\uDD04 Force reinitializing database...");
   db = null;
-  initDatabase("./test.db");
+  initDatabase(dbPath);
   if (!db) {
     throw new Error("Failed to reinitialize database");
   }
@@ -3111,51 +3111,116 @@ var initialRoles = [
     ]
   }
 ];
-var initialUsers = [
-  {
-    email: "admin@example.com",
-    password: "Admin123!@#",
-    firstName: "System",
-    lastName: "Administrator",
-    roles: ["admin"]
-  },
-  {
-    email: "moderator@example.com",
-    password: "Moderator123!",
-    firstName: "Content",
-    lastName: "Moderator",
-    roles: ["moderator"]
-  },
-  {
-    email: "editor@example.com",
-    password: "Editor123!",
-    firstName: "Content",
-    lastName: "Editor",
-    roles: ["editor"]
-  },
-  {
-    email: "author@example.com",
-    password: "Author123!",
-    firstName: "Content",
-    lastName: "Author",
-    roles: ["author"]
-  },
-  {
-    email: "user@example.com",
-    password: "User123!",
-    firstName: "Regular",
-    lastName: "User",
-    roles: ["user"]
+var seedConfig = {
+  createTestUsers: true,
+  createDemoContent: true,
+  userCount: process.env.SEED_USER_COUNT ? parseInt(process.env.SEED_USER_COUNT) : 15,
+  skipExistingUsers: true,
+  defaultPassword: process.env.DEFAULT_SEED_PASSWORD || "DevPassword123!"
+};
+function generateInitialUsers(options = {}) {
+  const {
+    includeAdmin = true,
+    includeModerator = true,
+    includeEditor = true,
+    includeAuthor = true,
+    includeUser = true,
+    includeGuest = true,
+    customUsers = []
+  } = options;
+  const users = [];
+  if (includeAdmin) {
+    users.push({
+      email: "admin@blogapi.com",
+      password: "Admin123!@#",
+      firstName: "Admin",
+      lastName: "User",
+      roles: ["admin"]
+    });
   }
-];
-async function seedDatabase() {
+  if (includeModerator) {
+    users.push({
+      email: "moderator@blogapi.com",
+      password: "Moderator123!",
+      firstName: "Moderator",
+      lastName: "User",
+      roles: ["moderator"]
+    });
+  }
+  if (includeEditor) {
+    users.push({
+      email: "editor@blogapi.com",
+      password: "Editor123!",
+      firstName: "Editor",
+      lastName: "User",
+      roles: ["editor"]
+    });
+  }
+  if (includeAuthor) {
+    users.push({
+      email: "author@blogapi.com",
+      password: "Author123!",
+      firstName: "Author",
+      lastName: "User",
+      roles: ["author"]
+    });
+  }
+  if (includeUser) {
+    users.push({
+      email: "user@blogapi.com",
+      password: "User123!",
+      firstName: "Regular",
+      lastName: "User",
+      roles: ["user"]
+    });
+  }
+  if (includeGuest) {
+    users.push({
+      email: "guest@blogapi.com",
+      password: "Guest123!",
+      firstName: "Guest",
+      lastName: "User",
+      roles: ["guest"]
+    });
+  }
+  users.push(...customUsers);
+  return users;
+}
+var initialUsers = generateInitialUsers();
+function generateTestUsers(count) {
+  const testUsers = [];
+  const firstNames = ["Alice", "Bob", "Charlie", "Diana", "Eve", "Frank", "Grace", "Henry", "Ivy", "Jack"];
+  const lastNames = ["Adams", "Baker", "Clark", "Davis", "Evans", "Fisher", "Green", "Harris", "Jones", "King"];
+  const roles = ["user", "author", "editor"];
+  for (let i = 0;i < count; i++) {
+    const firstName = firstNames[i % firstNames.length];
+    const lastName = lastNames[Math.floor(i / firstNames.length) % lastNames.length];
+    const role = roles[i % roles.length];
+    testUsers.push({
+      email: `test.user${i + 1}@blogapi.com`,
+      password: seedConfig.defaultPassword,
+      firstName,
+      lastName,
+      roles: [role]
+    });
+  }
+  return testUsers;
+}
+function getAllUsers() {
+  let allUsers = [...initialUsers];
+  if (seedConfig.createTestUsers && true) {
+    const testUsers = generateTestUsers(seedConfig.userCount - initialUsers.length);
+    allUsers = [...allUsers, ...testUsers];
+  }
+  return allUsers;
+}
+async function seedDatabase(dbPath, allUsers = getAllUsers()) {
   try {
-    console.log("\uD83C\uDF31 Iniciando seeding de la base de datos...");
-    initDatabase();
+    console.log("\uD83C\uDF31 Starting database seeding...");
+    initDatabase(dbPath);
     await runMigrations();
     const permissionService = new PermissionService;
     const authService = new AuthService;
-    console.log("\uD83D\uDCDD Creando permisos iniciales...");
     const createdPermissions = new Map;
     for (const permission of initialPermissions) {
       try {
@@ -3163,11 +3228,8 @@ async function seedDatabase() {
         if (result && result.role) {
           createdPermissions.set(permission.name, result.role.id);
         }
-      } catch (error) {
-        console.log(`  \u26A0\uFE0F  Permiso ya existe: ${permission.name}`);
-      }
+      } catch (error) {}
     }
-    console.log("\uD83D\uDC65 Creando roles iniciales...");
     const createdRoles = new Map;
     for (const role of initialRoles) {
       try {
@@ -3177,74 +3239,57 @@ async function seedDatabase() {
         });
         if (result && result.role) {
           createdRoles.set(role.name, result.role?.id);
-          for (const permissionName of role.permissionIds || []) {
+          for (const permissionName of role.permissions || []) {
             const permissionId = createdPermissions.get(permissionName);
             if (permissionId) {
               await permissionService.assignPermissionsToRole(result.role?.id, [permissionId]);
             }
           }
         }
-      } catch (error) {
-        console.log(`  \u26A0\uFE0F  Rol ya existe: ${role.name}`);
-      }
+      } catch (error) {}
     }
-    console.log("\uD83D\uDC64 Creando usuarios iniciales...");
-    for (const user of initialUsers) {
+    let createdCount = 0;
+    let skippedCount = 0;
+    for (const user of allUsers) {
       try {
         const result = await authService.register({
           email: user.email,
           password: user.password
         });
         if (result) {
-          console.log(`  \u2705 Usuario creado: ${user.email}`);
+          createdCount++;
           for (const roleName of user.roles) {
-            const roleId = createdRoles.get(roleName);
-            if (roleId && result.user) {
-              await permissionService.assignRoleToUser({
-                roleId,
-                userId: result.user?.id
-              });
+            if (result.user) {
+              await authService.assignRole(result.user.id, roleName);
             }
           }
-          console.log(`    \uD83C\uDFAD Roles asignados al usuario ${user.email}`);
         }
       } catch (error) {
-        console.log(`  \u26A0\uFE0F  Usuario ya existe: ${user.email}`);
-        if (true) {}
+        if (seedConfig.skipExistingUsers) {
+          skippedCount++;
+        }
       }
     }
-    console.log("\u2728 Seeding completado exitosamente!");
-    console.log(`
-\uD83D\uDCCA Resumen:`);
-    console.log(`  - Permisos: ${initialPermissions.length}`);
-    console.log(`  - Roles: ${initialRoles.length}`);
-    console.log(`  - Usuarios: ${initialUsers.length}`);
-    console.log(`
-\uD83D\uDD10 Credenciales de acceso:`);
-    console.log("  Admin: admin@example.com / Admin123!@#");
-    console.log("  Moderator: moderator@example.com / Moderator123!");
-    console.log("  Editor: editor@example.com / Editor123!");
-    console.log("  Author: author@example.com / Author123!");
-    console.log("  User: user@example.com / User123!");
+    console.log("\u2728 Seeding completed successfully!");
+    console.log(`\uD83D\uDCCA Summary: ${createdCount} users created, ${skippedCount} skipped`);
   } catch (error) {
-    console.error("\u274C Error durante el seeding:", error);
+    console.error("\u274C Error during seeding:", error);
     if (true) {
       throw error;
     }
   }
 }
-async function cleanDatabase() {
-  console.log("\uD83E\uDDF9 Limpiando base de datos...");
+async function cleanDatabase(dbPath) {
+  console.log("\uD83E\uDDF9 Cleaning database...");
   try {
     if (!isDatabaseInitialized()) {
-      initDatabase("./test.db");
+      initDatabase(dbPath);
     }
     let db2 = getDatabase();
     try {
       db2.exec("PRAGMA foreign_keys = OFF");
     } catch (error) {
       if (error instanceof Error && (error.message.includes("Database has closed") || error.message.includes("Cannot use a closed database"))) {
-        console.log("\uD83D\uDD04 Database was closed during operation, force reinitializing...");
         db2 = forceReinitDatabase();
         db2.exec("PRAGMA foreign_keys = OFF");
       } else {
@@ -3262,14 +3307,12 @@ async function cleanDatabase() {
     for (const table of tables) {
       try {
         db2.exec(`DELETE FROM ${table}`);
-      } catch (error) {
-        console.log(`  \u26A0\uFE0F  Error limpiando tabla ${table}:`, error);
-      }
+      } catch (error) {}
     }
     db2.exec("PRAGMA foreign_keys = ON");
-    console.log("\u2705 Base de datos limpiada correctamente");
+    console.log("\u2705 Database cleaned successfully");
   } catch (error) {
-    console.error("\u274C Error durante la limpieza:", error);
+    console.error("\u274C Error during cleanup:", error);
     if (true) {
       throw error;
     }
@@ -3277,12 +3320,12 @@ async function cleanDatabase() {
 }
 async function resetDatabase2() {
   try {
-    console.log("\uD83D\uDD04 Reseteando base de datos...");
+    console.log("\uD83D\uDD04 Resetting database...");
     await cleanDatabase();
     await seedDatabase();
-    console.log("\u2728 Base de datos reseteada exitosamente!");
+    console.log("\u2728 Database reset successfully!");
   } catch (error) {
-    console.error("\u274C Error durante el reseteo:", error);
+    console.error("\u274C Error during reset:", error);
     throw error;
   }
 }
@@ -3325,8 +3368,42 @@ async function checkDatabaseStatus() {
     throw error;
   }
 }
-async function main() {
+async function seedTestUsersOnly(count) {
+  try {
+    console.log("\uD83E\uDDEA Creando solo usuarios de prueba...");
+    const userCount = count || 10;
+    const testUsers = generateTestUsers(userCount);
+    initDatabase();
+    await runMigrations();
+    const authService = new AuthService;
+    let createdCount = 0;
+    for (const user of testUsers) {
+      try {
+        const result = await authService.register({
+          email: user.email,
+          password: user.password
+        });
+        if (result && result.user) {
+          createdCount++;
+          console.log(`  \u2705 Usuario de prueba creado: ${user.email}`);
+          for (const roleName of user.roles) {
+            await authService.assignRole(result.user.id, roleName);
+          }
+        }
+      } catch (error) {
+        console.log(`  \u26A0\uFE0F  Usuario ya existe: ${user.email}`);
+      }
+    }
+    console.log(`
+\u2728 ${createdCount} usuarios de prueba creados exitosamente!`);
+  } catch (error) {
+    console.error("\u274C Error creando usuarios de prueba:", error);
+    throw error;
+  }
+}
+async function mainSeed() {
   const command = process.argv[2];
+  const param = process.argv[3];
   switch (command) {
     case "seed":
       await seedDatabase();
@@ -3340,16 +3417,30 @@ async function main() {
     case "status":
       await checkDatabaseStatus();
       break;
+    case "test-users":
+      const count = param ? parseInt(param) : undefined;
+      await seedTestUsersOnly(count);
+      break;
     default:
-      console.log("Uso: bun run src/scripts/seed.ts [seed|clean|reset|status]");
-      console.log("  seed   - Poblar base de datos con datos iniciales");
-      console.log("  clean  - Limpiar todos los datos");
-      console.log("  reset  - Limpiar y volver a poblar");
-      console.log("  status - Verificar estado actual");
+      console.log("Uso: bun run src/scripts/seed.ts [comando] [par\xE1metros]");
+      console.log(`
+Comandos disponibles:`);
+      console.log("  seed        - Poblar base de datos con datos iniciales");
+      console.log("  clean       - Limpiar todos los datos");
+      console.log("  reset       - Limpiar y volver a poblar");
+      console.log("  status      - Verificar estado actual");
+      console.log("  config      - Mostrar configuraci\xF3n actual");
+      console.log("  test-users  - Crear solo usuarios de prueba [cantidad]");
+      console.log(`
+Ejemplos:`);
+      console.log("  bun run src/scripts/seed.ts seed");
+      console.log("  bun run src/scripts/seed.ts test-users 20");
+      console.log("  NODE_ENV=development SEED_USER_COUNT=25 bun run src/scripts/seed.ts seed");
+      console.log('  DEFAULT_SEED_PASSWORD="MyCustomPass123!" bun run src/scripts/seed.ts test-users 5');
   }
 }
 if (process.argv[1] && process.argv[1].endsWith("seed.ts") && true) {
-  main().catch(console.error);
+  mainSeed().catch(console.error);
 }
 
 // src/adapters/hono.ts
@@ -4650,6 +4741,7 @@ export {
   sendToUsersWithRoles,
   sendToUsersWithPermissions,
   sendToUser,
+  seedTestUsersOnly,
   seedDatabase,
   runMigrations,
   runDevCommand,
@@ -4657,6 +4749,7 @@ export {
   resetDatabase as resetDatabaseMigrations,
   resetDatabase2 as resetDatabase,
   printConfig,
+  mainSeed,
   logAuthEvent,
   isWebSocketAuthenticated,
   isHonoAuthenticated,
@@ -4743,5 +4836,5 @@ export {
   AUTH_LIBRARY_INFO
 };
 
-//# debugId=94C168A0978247EF64756E2164756E21
+//# debugId=B794F85F18E8CD9E64756E2164756E21
 //# sourceMappingURL=index.js.map

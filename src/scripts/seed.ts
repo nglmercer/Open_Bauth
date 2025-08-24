@@ -1,4 +1,19 @@
 // src/scripts/seed.ts
+// Example usage:
+// const customUsers = generateInitialUsers({
+//   includeAdmin: true,
+//   includeUser: false,
+//   customUsers: [
+//     {
+//       email: 'custom@example.com',
+//       password: 'Custom123!',
+//       firstName: 'Custom',
+//       lastName: 'User',
+//       roles: ['editor']
+//     }
+//   ]
+// });
+
 import { getDatabase, isDatabaseInitialized, initDatabase, forceReinitDatabase } from '../db/connection';
 import { runMigrations } from '../db/migrations';
 import { AuthService } from '../services/auth';
@@ -115,63 +130,182 @@ const initialRoles: CreateRoleData[] = [
 ];
 
 /**
- * Usuarios iniciales del sistema
+ * Configuración de seeding personalizable
  */
-const initialUsers = [
-  {
-    email: 'admin@example.com',
-    password: 'Admin123!@#',
-    firstName: 'System',
-    lastName: 'Administrator',
-    roles: ['admin']
-  },
-  {
-    email: 'moderator@example.com',
-    password: 'Moderator123!',
-    firstName: 'Content',
-    lastName: 'Moderator',
-    roles: ['moderator']
-  },
-  {
-    email: 'editor@example.com',
-    password: 'Editor123!',
-    firstName: 'Content',
-    lastName: 'Editor',
-    roles: ['editor']
-  },
-  {
-    email: 'author@example.com',
-    password: 'Author123!',
-    firstName: 'Content',
-    lastName: 'Author',
-    roles: ['author']
-  },
-  {
-    email: 'user@example.com',
-    password: 'User123!',
-    firstName: 'Regular',
-    lastName: 'User',
-    roles: ['user']
+interface SeedConfig {
+  createTestUsers: boolean;
+  createDemoContent: boolean;
+  userCount: number;
+  skipExistingUsers: boolean;
+  defaultPassword: string;
+}
+
+const seedConfig: SeedConfig = {
+  createTestUsers: process.env.NODE_ENV === 'development',
+  createDemoContent: true,
+  userCount: process.env.SEED_USER_COUNT ? parseInt(process.env.SEED_USER_COUNT) : 15,
+  skipExistingUsers: true,
+  defaultPassword: process.env.DEFAULT_SEED_PASSWORD || 'DevPassword123!'
+};
+
+/**
+ * Generate initial users with customizable options
+ */
+function generateInitialUsers(options: {
+  includeAdmin?: boolean;
+  includeModerator?: boolean;
+  includeEditor?: boolean;
+  includeAuthor?: boolean;
+  includeUser?: boolean;
+  includeGuest?: boolean;
+  customUsers?: Array<{
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    roles: string[];
+  }>;
+} = {}) {
+  const {
+    includeAdmin = true,
+    includeModerator = true,
+    includeEditor = true,
+    includeAuthor = true,
+    includeUser = true,
+    includeGuest = true,
+    customUsers = []
+  } = options;
+
+  const users = [];
+
+  if (includeAdmin) {
+    users.push({
+      email: 'admin@blogapi.com',
+      password: 'Admin123!@#',
+      firstName: 'Admin',
+      lastName: 'User',
+      roles: ['admin']
+    });
   }
-];
+
+  if (includeModerator) {
+    users.push({
+      email: 'moderator@blogapi.com',
+      password: 'Moderator123!',
+      firstName: 'Moderator',
+      lastName: 'User',
+      roles: ['moderator']
+    });
+  }
+
+  if (includeEditor) {
+    users.push({
+      email: 'editor@blogapi.com',
+      password: 'Editor123!',
+      firstName: 'Editor',
+      lastName: 'User',
+      roles: ['editor']
+    });
+  }
+
+  if (includeAuthor) {
+    users.push({
+      email: 'author@blogapi.com',
+      password: 'Author123!',
+      firstName: 'Author',
+      lastName: 'User',
+      roles: ['author']
+    });
+  }
+
+  if (includeUser) {
+    users.push({
+      email: 'user@blogapi.com',
+      password: 'User123!',
+      firstName: 'Regular',
+      lastName: 'User',
+      roles: ['user']
+    });
+  }
+
+  if (includeGuest) {
+    users.push({
+      email: 'guest@blogapi.com',
+      password: 'Guest123!',
+      firstName: 'Guest',
+      lastName: 'User',
+      roles: ['guest']
+    });
+  }
+
+  // Add custom users
+  users.push(...customUsers);
+
+  return users;
+}
+
+/**
+ * Default initial users
+ */
+const initialUsers = generateInitialUsers();
+
+/**
+ * Genera usuarios adicionales para testing
+ */
+function generateTestUsers(count: number): typeof initialUsers {
+  const testUsers = [];
+  const firstNames = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry', 'Ivy', 'Jack'];
+  const lastNames = ['Adams', 'Baker', 'Clark', 'Davis', 'Evans', 'Fisher', 'Green', 'Harris', 'Jones', 'King'];
+  const roles = ['user', 'author', 'editor'];
+  
+  for (let i = 0; i < count; i++) {
+    const firstName = firstNames[i % firstNames.length];
+    const lastName = lastNames[Math.floor(i / firstNames.length) % lastNames.length];
+    const role = roles[i % roles.length];
+    
+    testUsers.push({
+      email: `test.user${i + 1}@blogapi.com`,
+      password: seedConfig.defaultPassword,
+      firstName,
+      lastName,
+      roles: [role]
+    });
+  }
+  
+  return testUsers;
+}
+
+/**
+ * Obtiene la lista completa de usuarios según la configuración
+ */
+function getAllUsers(): typeof initialUsers {
+  let allUsers = [...initialUsers];
+  
+  if (seedConfig.createTestUsers && process.env.NODE_ENV === 'development') {
+    const testUsers = generateTestUsers(seedConfig.userCount - initialUsers.length);
+    allUsers = [...allUsers, ...testUsers];
+  }
+  
+  return allUsers;
+}
 
 /**
  * Función principal de seeding
  */
-export async function seedDatabase(dbPath?: string): Promise<void> {
+export async function seedDatabase(dbPath?: string,
+  allUsers = getAllUsers()
+): Promise<void> {
   try {
-    console.log('🌱 Iniciando seeding de la base de datos...');
+    console.log('🌱 Starting database seeding...');
     
-    // Inicializar base de datos y ejecutar migraciones
+    // Initialize database and run migrations
     initDatabase(dbPath);
     await runMigrations();
     
     const permissionService = new PermissionService();
     const authService = new AuthService();
     
-    console.log('📝 Creando permisos iniciales...');
-    
-    // Crear permisos
+    // Create permissions
     const createdPermissions = new Map<string, string>();
     for (const permission of initialPermissions) {
       try {
@@ -180,13 +314,11 @@ export async function seedDatabase(dbPath?: string): Promise<void> {
           createdPermissions.set(permission.name, result.role.id);
         }
       } catch (error:any) {
-        console.log(`  ⚠️  Permiso ya existe: ${permission.name}`);
+        // Permission already exists
       }
     }
     
-    console.log('👥 Creando roles iniciales...');
-    
-    // Crear roles
+    // Create roles
     const createdRoles = new Map<string, string>();
     for (const role of initialRoles) {
       try {
@@ -198,7 +330,7 @@ export async function seedDatabase(dbPath?: string): Promise<void> {
         if (result && result.role) {
           createdRoles.set(role.name, result.role?.id);
           
-          // Asignar permisos al rol
+          // Assign permissions to role
           for (const permissionName of role.permissions || []) {
             const permissionId = createdPermissions.get(permissionName);
             if (permissionId) {
@@ -207,14 +339,15 @@ export async function seedDatabase(dbPath?: string): Promise<void> {
           }
         }
       } catch (error:any) {
-        console.log(`  ⚠️  Rol ya existe: ${role.name}`);
+        // Role already exists
       }
     }
+        
+    // Create users
+    let createdCount = 0;
+    let skippedCount = 0;
     
-    console.log('👤 Creando usuarios iniciales...');
-    
-    // Crear usuarios
-    for (const user of initialUsers) {
+    for (const user of allUsers) {
       try {
         const result = await authService.register({
           email: user.email,
@@ -222,45 +355,27 @@ export async function seedDatabase(dbPath?: string): Promise<void> {
         });
         
         if (result) {
-          console.log(`  ✅ Usuario creado: ${user.email}`);
+          createdCount++;
           
-          // Asignar roles al usuario
+          // Assign roles to user
           for (const roleName of user.roles) {
             if (result.user) {
-              const assignResult = await authService.assignRole(result.user.id, roleName);
-              if (assignResult.success) {
-                console.log(`    ✅ Rol ${roleName} asignado a ${user.email}`);
-              } else {
-                console.log(`    ❌ Error asignando rol ${roleName} a ${user.email}:`, assignResult.error?.message);
-              }
+              await authService.assignRole(result.user.id, roleName);
             }
           }
-          console.log(`    🎭 Roles asignados al usuario ${user.email}`);
         }
       } catch (error:any) {
-        console.log(`  ⚠️  Usuario ya existe: ${user.email}`);
-        // En entorno de test, no propagar el error para evitar exit code 1
-        if (process.env.NODE_ENV !== 'test') {
-          // Solo loggear el error en desarrollo/producción
+        if (seedConfig.skipExistingUsers) {
+          skippedCount++;
         }
       }
     }
     
-    console.log('✨ Seeding completado exitosamente!');
-    console.log('\n📊 Resumen:');
-    console.log(`  - Permisos: ${initialPermissions.length}`);
-    console.log(`  - Roles: ${initialRoles.length}`);
-    console.log(`  - Usuarios: ${initialUsers.length}`);
-    console.log('\n🔐 Credenciales de acceso:');
-    console.log('  Admin: admin@example.com / Admin123!@#');
-    console.log('  Moderator: moderator@example.com / Moderator123!');
-    console.log('  Editor: editor@example.com / Editor123!');
-    console.log('  Author: author@example.com / Author123!');
-    console.log('  User: user@example.com / User123!');
+    console.log('✨ Seeding completed successfully!');
+    console.log(`📊 Summary: ${createdCount} users created, ${skippedCount} skipped`);
     
   } catch (error:any) {
-    console.error('❌ Error durante el seeding:', error);
-    // En entorno de test, no propagar el error para evitar exit code 1
+    console.error('❌ Error during seeding:', error);
     if (process.env.NODE_ENV !== 'test') {
       throw error;
     }
@@ -271,22 +386,21 @@ export async function seedDatabase(dbPath?: string): Promise<void> {
  * Función para limpiar la base de datos
  */
 export async function cleanDatabase(dbPath?: string): Promise<void> {
-  console.log('🧹 Limpiando base de datos...');
+  console.log('🧹 Cleaning database...');
   
   try {
-    // Verificar si la base de datos está inicializada
+    // Check if database is initialized
     if (!isDatabaseInitialized()) {
       initDatabase(dbPath);
     }
     
     let db = getDatabase();
 
-    // Deshabilitar foreign keys temporalmente
+    // Temporarily disable foreign keys
     try {
         db.exec('PRAGMA foreign_keys = OFF');
     } catch (error:any) {
         if (error instanceof Error && (error.message.includes('Database has closed') || error.message.includes('Cannot use a closed database'))) {
-            console.log('🔄 Database was closed during operation, force reinitializing...');
             db = forceReinitDatabase();
             db.exec('PRAGMA foreign_keys = OFF');
         } else {
@@ -294,7 +408,7 @@ export async function cleanDatabase(dbPath?: string): Promise<void> {
         }
     }
     
-    // Limpiar tablas en orden correcto (respetando foreign keys)
+    // Clean tables in correct order (respecting foreign keys)
     const tables = [
       'user_roles',
       'role_permissions', 
@@ -308,18 +422,17 @@ export async function cleanDatabase(dbPath?: string): Promise<void> {
       try {
         db.exec(`DELETE FROM ${table}`);
       } catch (error:any) {
-        console.log(`  ⚠️  Error limpiando tabla ${table}:`, error);
+        // Table cleanup error
       }
     }
     
-    // Rehabilitar foreign keys
+    // Re-enable foreign keys
     db.exec('PRAGMA foreign_keys = ON');
     
-    console.log('✅ Base de datos limpiada correctamente');
+    console.log('✅ Database cleaned successfully');
     
   } catch (error:any) {
-    console.error('❌ Error durante la limpieza:', error);
-    // No lanzar el error en entorno de tests para evitar exit code 1
+    console.error('❌ Error during cleanup:', error);
     if (process.env.NODE_ENV !== 'test') {
       throw error;
     }
@@ -327,19 +440,19 @@ export async function cleanDatabase(dbPath?: string): Promise<void> {
 }
 
 /**
- * Función para resetear completamente la base de datos
+ * Function to completely reset the database
  */
 export async function resetDatabase(): Promise<void> {
   try {
-    console.log('🔄 Reseteando base de datos...');
+    console.log('🔄 Resetting database...');
     
     await cleanDatabase();
     await seedDatabase();
     
-    console.log('✨ Base de datos reseteada exitosamente!');
+    console.log('✨ Database reset successfully!');
     
   } catch (error:any) {
-    console.error('❌ Error durante el reseteo:', error);
+    console.error('❌ Error during reset:', error);
     throw error;
   }
 }
@@ -393,9 +506,55 @@ export async function checkDatabaseStatus(): Promise<void> {
   }
 }
 
+/**
+ * Función para crear solo usuarios de prueba
+ */
+export async function seedTestUsersOnly(count?: number): Promise<void> {
+  try {
+    console.log('🧪 Creando solo usuarios de prueba...');
+    
+    const userCount = count || 10;
+    const testUsers = generateTestUsers(userCount);
+    
+    initDatabase();
+    await runMigrations();
+    
+    const authService = new AuthService();
+    
+    let createdCount = 0;
+    for (const user of testUsers) {
+      try {
+        const result = await authService.register({
+          email: user.email,
+          password: user.password,
+        });
+        
+        if (result && result.user) {
+          createdCount++;
+          console.log(`  ✅ Usuario de prueba creado: ${user.email}`);
+          
+          // Asignar roles
+          for (const roleName of user.roles) {
+            await authService.assignRole(result.user.id, roleName);
+          }
+        }
+      } catch (error: any) {
+        console.log(`  ⚠️  Usuario ya existe: ${user.email}`);
+      }
+    }
+    
+    console.log(`\n✨ ${createdCount} usuarios de prueba creados exitosamente!`);
+    
+  } catch (error: any) {
+    console.error('❌ Error creando usuarios de prueba:', error);
+    throw error;
+  }
+}
+
 // Ejecutar seeding si el script se ejecuta directamente
-async function main() {
+export async function mainSeed() {
   const command = process.argv[2];
+  const param = process.argv[3];
   
   switch (command) {
     case 'seed':
@@ -410,16 +569,28 @@ async function main() {
     case 'status':
       await checkDatabaseStatus();
       break;
+    case 'test-users':
+      const count = param ? parseInt(param) : undefined;
+      await seedTestUsersOnly(count);
+      break;
     default:
-      console.log('Uso: bun run src/scripts/seed.ts [seed|clean|reset|status]');
-      console.log('  seed   - Poblar base de datos con datos iniciales');
-      console.log('  clean  - Limpiar todos los datos');
-      console.log('  reset  - Limpiar y volver a poblar');
-      console.log('  status - Verificar estado actual');
+      console.log('Uso: bun run src/scripts/seed.ts [comando] [parámetros]');
+      console.log('\nComandos disponibles:');
+      console.log('  seed        - Poblar base de datos con datos iniciales');
+      console.log('  clean       - Limpiar todos los datos');
+      console.log('  reset       - Limpiar y volver a poblar');
+      console.log('  status      - Verificar estado actual');
+      console.log('  config      - Mostrar configuración actual');
+      console.log('  test-users  - Crear solo usuarios de prueba [cantidad]');
+      console.log('\nEjemplos:');
+      console.log('  bun run src/scripts/seed.ts seed');
+      console.log('  bun run src/scripts/seed.ts test-users 20');
+      console.log('  NODE_ENV=development SEED_USER_COUNT=25 bun run src/scripts/seed.ts seed');
+      console.log('  DEFAULT_SEED_PASSWORD="MyCustomPass123!" bun run src/scripts/seed.ts test-users 5');
   }
 }
 
 // Check if this script is being run directly
 if (process.argv[1] && process.argv[1].endsWith('seed.ts') && process.env.NODE_ENV !== 'test') {
-  main().catch(console.error);
+  mainSeed().catch(console.error);
 }
