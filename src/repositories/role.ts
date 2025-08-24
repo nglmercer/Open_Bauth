@@ -204,7 +204,8 @@ export class RoleRepository {
       createdAt: new Date(roleData.created_at),
       updatedAt: new Date(roleData.created_at),
       isDefault: Boolean(roleData.is_active),
-      permissions: []
+      permissions: [],
+      isActive: roleData.is_active === 1
     };
   }
 }

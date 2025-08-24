@@ -179,12 +179,12 @@ describe('WebSocket Adapter', () => {
         user: {
           id: testUserId,
           email: 'test@example.com',
-          password_hash: 'hashed_password',
+          passwordHash: 'hashed_password',
           firstName: 'Test',
           lastName: 'User',
-          is_active: true,
-          created_at: new Date(),
-          updated_at: new Date(),
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
           roles: [{
             id: 'role1',
             name: 'user',
@@ -193,9 +193,13 @@ describe('WebSocket Adapter', () => {
               name: 'chat:send',
               resource: 'chat',
               action: 'send',
-              created_at: new Date()
+              createdAt: new Date(),
+              updatedAt: new Date(),
             }],
-            created_at: new Date()
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            isDefault: false
           }]
         },
         isAuthenticated: true,
@@ -218,17 +222,20 @@ describe('WebSocket Adapter', () => {
         user: {
           id: testUserId,
           email: 'test@example.com',
-          password_hash: 'hashed_password',
+          passwordHash: 'hashed_password',
           firstName: 'Test',
           lastName: 'User',
-          is_active: true,
-          created_at: new Date(),
-          updated_at: new Date(),
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
           roles: [{
             id: 'role1',
             name: 'user',
             permissions: [],
-            created_at: new Date()
+            isDefault: false,
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date()
           }]
         },
         isAuthenticated: true,
@@ -249,12 +256,12 @@ describe('WebSocket Adapter', () => {
       const user = {
         id: testUserId,
         email: 'test@example.com',
-        password_hash: 'hashed_password',
+        passwordHash: 'hashed_password',
         firstName: 'Test',
         lastName: 'User',
-        is_active: true,
-        created_at: new Date(),
-        updated_at: new Date(),
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
         roles: []
       };
       mockWs.auth = { user, isAuthenticated: true, permissions: [], roles: [] };
@@ -268,12 +275,12 @@ describe('WebSocket Adapter', () => {
         user: { 
           id: testUserId, 
           email: 'test@example.com',
-          password_hash: 'hashed_password',
+          passwordHash: 'hashed_password',
           firstName: 'Test',
           lastName: 'User',
-          is_active: true,
-          created_at: new Date(),
-          updated_at: new Date(),
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
           roles: []
         }, 
         isAuthenticated: true, 
@@ -291,12 +298,12 @@ describe('WebSocket Adapter', () => {
         user: { 
           id: testUserId, 
           email: 'test@example.com',
-          password_hash: 'hashed_password',
+          passwordHash: 'hashed_password',
           firstName: 'Test',
           lastName: 'User',
-          is_active: true,
-          created_at: new Date(),
-          updated_at: new Date(),
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
           roles: []
         }, 
         isAuthenticated: true, 

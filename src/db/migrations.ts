@@ -1,7 +1,7 @@
 // src/db/migrations.ts
 import { getDatabase } from './connection';
 import type { Database } from 'bun:sqlite';
-
+import { defaultLogger as logger } from '../logger';
 /**
  * Interface para definir una migración
  */
@@ -35,11 +35,11 @@ const migrations: Migration[] = [
       db.exec("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)");
       db.exec("CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)");
       
-      console.log('✅ Tabla users creada');
+      logger.info('✅ Tabla users creada');
     },
     down: async (db: Database) => {
       db.exec("DROP TABLE IF EXISTS users");
-      console.log('✅ Tabla users eliminada');
+      logger.info('✅ Tabla users eliminada');
     }
   },
   
@@ -57,11 +57,11 @@ const migrations: Migration[] = [
       
       db.exec("CREATE INDEX IF NOT EXISTS idx_roles_name ON roles(name)");
       
-      console.log('✅ Tabla roles creada');
+      logger.info('✅ Tabla roles creada');
     },
     down: async (db: Database) => {
       db.exec("DROP TABLE IF EXISTS roles");
-      console.log('✅ Tabla roles eliminada');
+      logger.info('✅ Tabla roles eliminada');
     }
   },
   
@@ -83,11 +83,11 @@ const migrations: Migration[] = [
       db.exec("CREATE INDEX IF NOT EXISTS idx_permissions_resource ON permissions(resource)");
       db.exec("CREATE INDEX IF NOT EXISTS idx_permissions_action ON permissions(action)");
       
-      console.log('✅ Tabla permissions creada');
+      logger.info('✅ Tabla permissions creada');
     },
     down: async (db: Database) => {
       db.exec("DROP TABLE IF EXISTS permissions");
-      console.log('✅ Tabla permissions eliminada');
+      logger.info('✅ Tabla permissions eliminada');
     }
   },
   
@@ -110,11 +110,11 @@ const migrations: Migration[] = [
       db.exec("CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles(user_id)");
       db.exec("CREATE INDEX IF NOT EXISTS idx_user_roles_role_id ON user_roles(role_id)");
       
-      console.log('✅ Tabla user_roles creada');
+      logger.info('✅ Tabla user_roles creada');
     },
     down: async (db: Database) => {
       db.exec("DROP TABLE IF EXISTS user_roles");
-      console.log('✅ Tabla user_roles eliminada');
+      logger.info('✅ Tabla user_roles eliminada');
     }
   },
   
@@ -137,11 +137,11 @@ const migrations: Migration[] = [
       db.exec("CREATE INDEX IF NOT EXISTS idx_role_permissions_role_id ON role_permissions(role_id)");
       db.exec("CREATE INDEX IF NOT EXISTS idx_role_permissions_permission_id ON role_permissions(permission_id)");
       
-      console.log('✅ Tabla role_permissions creada');
+      logger.info('✅ Tabla role_permissions creada');
     },
     down: async (db: Database) => {
       db.exec("DROP TABLE IF EXISTS role_permissions");
-      console.log('✅ Tabla role_permissions eliminada');
+      logger.info('✅ Tabla role_permissions eliminada');
     }
   },
   
@@ -169,11 +169,11 @@ const migrations: Migration[] = [
       db.exec("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)");
       db.exec("CREATE INDEX IF NOT EXISTS idx_sessions_active ON sessions(is_active)");
       
-      console.log('✅ Tabla sessions creada');
+      logger.info('✅ Tabla sessions creada');
     },
     down: async (db: Database) => {
       db.exec("DROP TABLE IF EXISTS sessions");
-      console.log('✅ Tabla sessions eliminada');
+      logger.info('✅ Tabla sessions eliminada');
     }
   },
   
@@ -190,11 +190,11 @@ const migrations: Migration[] = [
         )
       `);
       
-      console.log('✅ Tabla migration_history creada');
+      logger.info('✅ Tabla migration_history creada');
     },
     down: async (db: Database) => {
       db.exec("DROP TABLE IF EXISTS migration_history");
-      console.log('✅ Tabla migration_history eliminada');
+      logger.info('✅ Tabla migration_history eliminada');
     }
   },
   
@@ -212,7 +212,7 @@ const migrations: Migration[] = [
         ALTER TABLE permissions ADD COLUMN description TEXT
       `);
       
-      console.log('✅ Campos description agregados a roles y permissions');
+      logger.info('✅ Campos description agregados a roles y permissions');
     },
     down: async (db: Database) => {
       // SQLite no soporta DROP COLUMN, necesitamos recrear las tablas
@@ -242,7 +242,7 @@ const migrations: Migration[] = [
         DROP TABLE permissions_backup;
       `);
       
-      console.log('✅ Campos description removidos de roles y permissions');
+      logger.info('✅ Campos description removidos de roles y permissions');
     }
   },
 
@@ -259,7 +259,7 @@ const migrations: Migration[] = [
         ALTER TABLE users ADD COLUMN last_name TEXT
       `);
       
-      console.log('✅ Campos first_name y last_name agregados a users');
+      logger.info('✅ Campos first_name y last_name agregados a users');
     },
     down: async (db: Database) => {
       // SQLite no soporta DROP COLUMN, necesitamos recrear la tabla
@@ -282,7 +282,7 @@ const migrations: Migration[] = [
       db.exec("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)");
       db.exec("CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)");
       
-      console.log('✅ Campos first_name y last_name removidos de users');
+      logger.info('✅ Campos first_name y last_name removidos de users');
     }
   },
 
@@ -295,7 +295,7 @@ const migrations: Migration[] = [
         ALTER TABLE users ADD COLUMN last_login_at DATETIME
       `);
       
-      console.log('✅ Campo last_login_at agregado a users');
+      logger.info('✅ Campo last_login_at agregado a users');
     },
     down: async (db: Database) => {
       // SQLite no soporta DROP COLUMN, necesitamos recrear la tabla
@@ -320,7 +320,7 @@ const migrations: Migration[] = [
       db.exec("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)");
       db.exec("CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)");
       
-      console.log('✅ Campo last_login_at removido de users');
+      logger.info('✅ Campo last_login_at removido de users');
     }
   },
 
@@ -333,7 +333,7 @@ const migrations: Migration[] = [
         ALTER TABLE roles ADD COLUMN is_active BOOLEAN DEFAULT 1
       `);
       
-      console.log('✅ Campo is_active agregado a roles');
+      logger.info('✅ Campo is_active agregado a roles');
     },
     down: async (db: Database) => {
       // SQLite no soporta DROP COLUMN, necesitamos recrear la tabla
@@ -353,7 +353,7 @@ const migrations: Migration[] = [
       // Recrear índices
       db.exec("CREATE INDEX IF NOT EXISTS idx_roles_name ON roles(name)");
       
-      console.log('✅ Campo is_active removido de roles');
+      logger.info('✅ Campo is_active removido de roles');
     }
   }
 ];
@@ -388,7 +388,7 @@ async function recordMigration(version: number, name: string): Promise<void> {
  * Ejecuta todas las migraciones pendientes
  */
 export async function runMigrations(): Promise<void> {
-  console.log('🔄 Iniciando migraciones...');
+  logger.info('🔄 Iniciando migraciones...');
   
   const db = getDatabase();
   
@@ -404,24 +404,24 @@ export async function runMigrations(): Promise<void> {
   
   const currentVersion = await getCurrentVersion();
   
-  console.log(`📊 Versión actual de la base de datos: ${currentVersion}`);
+  logger.info(`📊 Versión actual de la base de datos: ${currentVersion}`);
   
   // Filtrar migraciones pendientes
   const pendingMigrations = migrations.filter(m => m.version > currentVersion);
   
   if (pendingMigrations.length === 0) {
-    console.log('✅ No hay migraciones pendientes');
+    logger.info('✅ No hay migraciones pendientes');
     return;
   }
   
-  console.log(`📋 ${pendingMigrations.length} migraciones pendientes`);
+  logger.info(`📋 ${pendingMigrations.length} migraciones pendientes`);
   
   // Ejecutar migraciones en transacción
   try {
     db.exec("BEGIN TRANSACTION");
     
     for (const migration of pendingMigrations) {
-      console.log(`⚡ Ejecutando migración ${migration.version}: ${migration.name}`);
+      logger.info(`⚡ Ejecutando migración ${migration.version}: ${migration.name}`);
       
       await migration.up(db);
       
@@ -430,11 +430,11 @@ export async function runMigrations(): Promise<void> {
         await recordMigration(migration.version, migration.name);
       }
       
-      console.log(`✅ Migración ${migration.version} completada`);
+      logger.info(`✅ Migración ${migration.version} completada`);
     }
     
     db.exec("COMMIT");
-    console.log('🎉 Todas las migraciones completadas exitosamente');
+    logger.info('🎉 Todas las migraciones completadas exitosamente');
     
   } catch (error:any) {
     db.exec("ROLLBACK");
@@ -447,13 +447,13 @@ export async function runMigrations(): Promise<void> {
  * Revierte migraciones hasta una versión específica
  */
 export async function rollbackMigrations(targetVersion: number): Promise<void> {
-  console.log(`🔄 Revirtiendo migraciones hasta la versión ${targetVersion}...`);
+  logger.info(`🔄 Revirtiendo migraciones hasta la versión ${targetVersion}...`);
   
   const db = getDatabase();
   const currentVersion = await getCurrentVersion();
   
   if (targetVersion >= currentVersion) {
-    console.log('✅ No hay migraciones para revertir');
+    logger.info('✅ No hay migraciones para revertir');
     return;
   }
   
@@ -462,22 +462,22 @@ export async function rollbackMigrations(targetVersion: number): Promise<void> {
     .filter(m => m.version > targetVersion && m.version <= currentVersion)
     .sort((a, b) => b.version - a.version);
   
-  console.log(`📋 ${migrationsToRollback.length} migraciones a revertir`);
+  logger.info(`📋 ${migrationsToRollback.length} migraciones a revertir`);
   
   try {
     db.exec("BEGIN TRANSACTION");
     
     for (const migration of migrationsToRollback) {
-      console.log(`⚡ Revirtiendo migración ${migration.version}: ${migration.name}`);
+      logger.info(`⚡ Revirtiendo migración ${migration.version}: ${migration.name}`);
       
       await migration.down(db);
       db.query("DELETE FROM migration_history WHERE version = ?").run(migration.version);
       
-      console.log(`✅ Migración ${migration.version} revertida`);
+      logger.info(`✅ Migración ${migration.version} revertida`);
     }
     
     db.exec("COMMIT");
-    console.log('🎉 Rollback completado exitosamente');
+    logger.info('🎉 Rollback completado exitosamente');
     
   } catch (error:any) {
     db.exec("ROLLBACK");
@@ -512,7 +512,7 @@ export async function getMigrationStatus(): Promise<{
  * Resetea completamente la base de datos
  */
 export async function resetDatabase(): Promise<void> {
-  console.log('🔄 Reseteando base de datos...');
+  logger.info('🔄 Reseteando base de datos...');
   
   const db = getDatabase();
   
@@ -534,7 +534,7 @@ export async function resetDatabase(): Promise<void> {
     db.exec("DROP TABLE IF EXISTS migration_history");
     
     db.exec("COMMIT");
-    console.log('✅ Base de datos reseteada');
+    logger.info('✅ Base de datos reseteada');
     
     // Ejecutar migraciones nuevamente
     await runMigrations();

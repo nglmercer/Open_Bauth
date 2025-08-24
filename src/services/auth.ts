@@ -384,13 +384,8 @@ export class AuthService {
         updateFields.isActive = normalizedData.isActive;
       }
       
-      if (normalizedData.password) {
-        updateFields.passwordHash = await Bun.password.hash(normalizedData.password);
-      }
-      
-      if (normalizedData.lastLoginAt) {
-        updateFields.lastLoginAt = normalizedData.lastLoginAt;
-      }
+      // Password updates should be handled through a separate changePassword method
+      // lastLoginAt is managed automatically by the system
       
       // Actualizar usuario
       await this.userRepository.update(userId, updateFields);
@@ -550,12 +545,15 @@ export class AuthService {
     options: UserQueryOptions = {}
   ): Promise<{ users: User[], total: number }> {
     try {
-      // Map isActive to activeOnly for repository compatibility
-      const repositoryOptions = { ...options };
-      if ('isActive' in options) {
-        repositoryOptions.activeOnly = options.isActive;
-        delete repositoryOptions.isActive;
-      }
+      // Filter options to match repository interface
+      const repositoryOptions = {
+        activeOnly: options.activeOnly,
+        search: options.search,
+        sortBy: options.sortBy as 'email' | 'created_at' | 'last_login_at' | undefined,
+        sortOrder: options.sortOrder,
+        includeRoles: options.includeRoles,
+        includePermissions: options.includePermissions
+      };
       
       return await this.userRepository.getUsers({ page, limit, ...repositoryOptions });
     } catch (error) {

@@ -214,9 +214,10 @@ export type {
   AuthEventData,
   SecurityConfig,
   SessionInfo,
-  AuthErrorType,
-  AuthError
+  AuthErrorType
 } from './types/auth';
+
+export { AuthError } from './errors/auth';
 
 // Clase principal de la librería
 export class AuthLibrary {

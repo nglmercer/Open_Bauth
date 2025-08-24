@@ -161,11 +161,6 @@ export class UpdateUserDataValidator {
       EmailValidator.validate(data.email);
     }
     
-    // Validate password if provided
-    if (data.password !== undefined) {
-      PasswordValidator.validate(data.password);
-    }
-    
     // Validate names if provided
     NameValidator.validate(data.firstName, 'First name');
     NameValidator.validate(data.lastName, 'Last name');
@@ -173,10 +168,6 @@ export class UpdateUserDataValidator {
     // Validate boolean fields
     if (data.isActive !== undefined && typeof data.isActive !== 'boolean') {
       throw new ValidationError('isActive must be a boolean');
-    }
-    
-    if (data.is_active !== undefined && typeof data.is_active !== 'boolean') {
-      throw new ValidationError('is_active must be a boolean');
     }
     return data
   }
@@ -186,10 +177,6 @@ export class UpdateUserDataValidator {
     
     if (data.email !== undefined) {
       normalized.email = EmailValidator.normalize(data.email);
-    }
-    
-    if (data.password !== undefined) {
-      normalized.password = data.password;
     }
     
     if (data.firstName !== undefined) {
@@ -202,14 +189,6 @@ export class UpdateUserDataValidator {
     
     if (data.isActive !== undefined) {
       normalized.isActive = data.isActive;
-    }
-    
-    if (data.is_active !== undefined) {
-      normalized.is_active = data.is_active;
-    }
-    
-    if (data.lastLoginAt !== undefined) {
-      normalized.lastLoginAt = data.lastLoginAt;
     }
     
     return normalized;

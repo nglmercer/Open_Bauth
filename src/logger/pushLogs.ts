@@ -64,7 +64,7 @@ export function pushLogsWithLevel(
 }
 
 // Exportar también el logger para uso directo
-export { getLogger, LogLevel } from './index.js';
+export { getLogger } from './index.js';
 export type { LogEntry } from './index.js';
 
 export default pushLogs;

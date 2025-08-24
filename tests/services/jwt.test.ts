@@ -11,15 +11,11 @@ describe('JWTService', () => {
   const testUser = {
     id: '1',
     email: 'test@example.com',
-    password_hash: 'test-hash',
+    passwordHash: 'test-hash',
     firstName: 'Test',
     lastName: 'User',
-    is_active: true,
     isActive: true,
-    roles: [{ id: '1', name: 'user', permissions: [], created_at: new Date() }],
-    permissions: ['read'],
-    created_at: new Date(),
-    updated_at: new Date(),
+    roles: [{ id: '1', name: 'user', permissions: [], isDefault: false, isActive: true, createdAt: new Date(), updatedAt: new Date() }],
     createdAt: new Date(),
     updatedAt: new Date()
   };

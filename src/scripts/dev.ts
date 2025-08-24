@@ -377,7 +377,7 @@ async function getRoleByName(args: string[]): Promise<void> {
     console.log('🎭 Información del rol:');
     console.log(`  📋 Nombre: ${role.name}`);
     console.log(`  🆔 ID: ${role.id}`);
-    console.log(`  📅 Creado: ${new Date(role.created_at).toLocaleString()}`);
+    console.log(`  📅 Creado: ${new Date(role.createdAt).toLocaleString()}`);
     
     if (role.permissions && role.permissions.length > 0) {
       console.log('  🔐 Permisos:');

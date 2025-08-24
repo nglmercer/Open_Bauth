@@ -128,8 +128,8 @@ export class PermissionService {
       query.run(roleId, data.name, data.description || null, 1);
 
       // Asignar permisos si se proporcionan
-      if (data.permissionIds && data.permissionIds.length > 0) {
-        const assignResult = await this.assignPermissionsToRole(roleId, data.permissionIds);
+      if (data.permissions && data.permissions.length > 0) {
+        const assignResult = await this.assignPermissionsToRole(roleId, data.permissions);
         if (!assignResult.success) {
           return assignResult;
         }
@@ -522,7 +522,7 @@ export class PermissionService {
       query.run(
         data.name || existingRole.name,
         data.description !== undefined ? data.description : (existingRole.description || null),
-        data.isActive !== undefined ? (data.isActive ? 1 : 0) : (existingRole.isDefault ? 1 : 0),
+        data.isActive !== undefined ? (data.isActive ? 1 : 0) : (existingRole.isActive ? 1 : 0),
         id
       );
 
@@ -987,6 +987,7 @@ export class PermissionService {
         createdAt: new Date(result.created_at),
         updatedAt: new Date(result.created_at),
         isDefault: Boolean(result.is_active),
+        isActive: Boolean(result.is_active),
         permissions: []
       };
 
@@ -1027,6 +1028,7 @@ export class PermissionService {
         createdAt: new Date(result.created_at),
         updatedAt: new Date(result.created_at),
         isDefault: Boolean(result.is_active),
+        isActive: Boolean(result.is_active),
         permissions: []
       };
 
@@ -1098,6 +1100,7 @@ export class PermissionService {
           createdAt: new Date(row.created_at),
           updatedAt: new Date(row.created_at),
           isDefault: Boolean(row.is_active),
+          isActive: Boolean(row.is_active),
           permissions: []
         };
 

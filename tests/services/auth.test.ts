@@ -403,8 +403,8 @@ describe('AuthService', () => {
     });
 
     test('should filter users by active status', async () => {
-      const activeUsers = await authService.getUsers(1, 10, { isActive: true });
-      const inactiveUsers = await authService.getUsers(1, 10, { isActive: false });
+      const activeUsers = await authService.getUsers(1, 10, { activeOnly: true });
+      const inactiveUsers = await authService.getUsers(1, 10, { activeOnly: false });
       
       expect(activeUsers.users.every(user => user.isActive)).toBe(true);
       expect(inactiveUsers.users.every(user => !user.isActive)).toBe(true);

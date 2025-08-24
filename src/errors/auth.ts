@@ -1,19 +1,5 @@
 // src/errors/auth.ts
-import type { AuthErrorType } from '../types/auth';
-
-// Add RATE_LIMIT_ERROR to the AuthErrorType if not already present
-// This should be added to the types/auth.ts file:
-// export type AuthErrorType = 
-//   | 'VALIDATION_ERROR'
-//   | 'AUTHENTICATION_ERROR'
-//   | 'AUTHORIZATION_ERROR'
-//   | 'USER_NOT_FOUND'
-//   | 'NOT_FOUND_ERROR'
-//   | 'DATABASE_ERROR'
-//   | 'SERVER_ERROR'
-//   | 'RATE_LIMIT_ERROR'
-//   | 'TOKEN_ERROR'
-//   | 'ACCOUNT_ERROR';
+import { AuthErrorType } from '../types/auth';
 
 /**
  * Base authentication error class
@@ -36,9 +22,17 @@ export abstract class AuthError extends Error {
   /**
    * Convert error to API response format
    */
-  toResponse() {
+  toResponse(): {
+    success: false;
+    error: {
+      type: AuthErrorType;
+      message: string;
+      timestamp: string;
+      context?: Record<string, any>;
+    };
+  } {
     return {
-      success: false,
+      success: false as const,
       error: {
         type: this.type,
         message: this.message,
@@ -53,7 +47,7 @@ export abstract class AuthError extends Error {
  * Validation error - for input validation failures
  */
 export class ValidationError extends AuthError {
-  public readonly type: AuthErrorType = 'VALIDATION_ERROR';
+  public readonly type: AuthErrorType = AuthErrorType.VALIDATION_ERROR;
   
   constructor(message: string, field?: string) {
     super(message, field ? { field } : undefined);
@@ -64,7 +58,7 @@ export class ValidationError extends AuthError {
  * Authentication error - for login/credential failures
  */
 export class AuthenticationError extends AuthError {
-  public readonly type: AuthErrorType = 'AUTHENTICATION_ERROR';
+  public readonly type: AuthErrorType = AuthErrorType.AUTHENTICATION_ERROR;
   
   constructor(message: string = 'Authentication failed', context?: Record<string, any>) {
     super(message, context);
@@ -75,7 +69,7 @@ export class AuthenticationError extends AuthError {
  * Authorization error - for permission/access failures
  */
 export class AuthorizationError extends AuthError {
-  public readonly type: AuthErrorType = 'AUTHORIZATION_ERROR';
+  public readonly type: AuthErrorType = AuthErrorType.AUTHORIZATION_ERROR;
   
   constructor(message: string = 'Access denied', context?: Record<string, any>) {
     super(message, context);
@@ -86,7 +80,7 @@ export class AuthorizationError extends AuthError {
  * User not found error
  */
 export class UserNotFoundError extends AuthError {
-  public readonly type: AuthErrorType = 'USER_NOT_FOUND';
+  public readonly type: AuthErrorType = AuthErrorType.USER_NOT_FOUND;
   
   constructor(identifier?: string) {
     const message = identifier 
@@ -100,7 +94,7 @@ export class UserNotFoundError extends AuthError {
  * Resource not found error
  */
 export class NotFoundError extends AuthError {
-  public readonly type: AuthErrorType = 'NOT_FOUND_ERROR';
+  public readonly type: AuthErrorType = AuthErrorType.NOT_FOUND_ERROR;
   
   constructor(resource: string, identifier?: string) {
     const message = identifier 
@@ -114,7 +108,7 @@ export class NotFoundError extends AuthError {
  * Database operation error
  */
 export class DatabaseError extends AuthError {
-  public readonly type: AuthErrorType = 'DATABASE_ERROR';
+  public readonly type: AuthErrorType = AuthErrorType.DATABASE_ERROR;
   
   constructor(message: string = 'Database operation failed', operation?: string) {
     super(message, operation ? { operation } : undefined);
@@ -125,7 +119,7 @@ export class DatabaseError extends AuthError {
  * Server/internal error
  */
 export class ServerError extends AuthError {
-  public readonly type: AuthErrorType = 'SERVER_ERROR';
+  public readonly type: AuthErrorType = AuthErrorType.SERVER_ERROR;
   
   constructor(message: string = 'Internal server error', context?: Record<string, any>) {
     super(message, context);
@@ -136,7 +130,7 @@ export class ServerError extends AuthError {
  * Rate limiting error
  */
 export class RateLimitError extends AuthError {
-  public readonly type: AuthErrorType = 'RATE_LIMIT_ERROR';
+  public readonly type: AuthErrorType = AuthErrorType.RATE_LIMIT_ERROR;
   public readonly retryAfter?: number;
   
   constructor(message: string = 'Rate limit exceeded', retryAfter?: number) {
@@ -149,7 +143,7 @@ export class RateLimitError extends AuthError {
  * Token-related errors
  */
 export class TokenError extends AuthError {
-  public readonly type: AuthErrorType = 'TOKEN_ERROR';
+  public readonly type: AuthErrorType = AuthErrorType.TOKEN_ERROR;
   
   constructor(message: string = 'Token error', context?: Record<string, any>) {
     super(message, context);
@@ -160,7 +154,7 @@ export class TokenError extends AuthError {
  * Account status errors
  */
 export class AccountError extends AuthError {
-  public readonly type: AuthErrorType = 'ACCOUNT_ERROR';
+  public readonly type: AuthErrorType = AuthErrorType.ACCOUNT_ERROR;
   
   constructor(message: string, status?: string) {
     super(message, status ? { status } : undefined);

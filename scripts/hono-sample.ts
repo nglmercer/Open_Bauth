@@ -312,7 +312,7 @@ function setupProtectedRoutes() {
           firstName: user.firstName,
           lastName: user.lastName,
           roles: user.roles?.map(r => r.name),
-          createdAt: user.created_at,
+          createdAt: user.createdAt,
           lastLoginAt: user.lastLoginAt
         }
       })
@@ -587,8 +587,8 @@ function setupProtectedRoutes() {
           firstName: user.firstName,
           lastName: user.lastName,
           roles: user.roles?.map(r => r.name),
-          isActive: user.is_active,
-          createdAt: user.created_at,
+          isActive: user.isActive,
+          createdAt: user.createdAt,
           lastLoginAt: user.lastLoginAt
         })),
         total: result.total

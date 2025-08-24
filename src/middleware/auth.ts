@@ -7,9 +7,9 @@ import type {
   AuthResponse, 
   AuthContext, 
   PermissionOptions,
-  AuthError,
   AuthErrorType 
 } from '../types/auth';
+import { AuthError } from '../errors/auth';
 
 /**
  * Configuración del middleware de autenticación

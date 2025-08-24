@@ -1,102 +1,4 @@
 // @bun
-// src/db/connection.ts
-import { Database } from "bun:sqlite";
-var db;
-function initDatabase(dbPath = "./auth.db") {
-  if (!db) {
-    try {
-      db = new Database(dbPath);
-      db.exec("PRAGMA journal_mode = WAL;");
-      db.exec("PRAGMA synchronous = NORMAL;");
-      db.exec("PRAGMA cache_size = 1000;");
-      db.exec("PRAGMA temp_store = memory;");
-      db.exec("PRAGMA busy_timeout = 5000;");
-      console.log(`\u2705 Base de datos SQLite inicializada: ${dbPath}`);
-    } catch (error) {
-      console.error(`\u274C Error al inicializar la base de datos: ${error}`);
-      throw new Error(`Failed to initialize database: ${error}`);
-    }
-  }
-  return db;
-}
-function getDatabase(dbPath) {
-  if (!db) {
-    console.log("\u26A0\uFE0F Database not initialized, auto-initializing with auth.db");
-    initDatabase(dbPath);
-  }
-  try {
-    if (!db) {
-      throw new Error("Database not initialized");
-    }
-    db.query("SELECT 1").get();
-  } catch (error) {
-    if (error.message && error.message.includes("closed database")) {
-      console.log("\u26A0\uFE0F Database connection closed, reinitializing...");
-      db = null;
-      initDatabase(dbPath);
-    } else {
-      throw error;
-    }
-  }
-  if (!db) {
-    throw new Error("Failed to initialize database");
-  }
-  return db;
-}
-function forceReinitDatabase(dbPath) {
-  console.log("\uD83D\uDD04 Force reinitializing database...");
-  db = null;
-  initDatabase(dbPath);
-  if (!db) {
-    throw new Error("Failed to reinitialize database");
-  }
-  return db;
-}
-async function closeDatabase() {
-  if (db) {
-    try {
-      db.close();
-      db = null;
-      console.log("\u2705 Conexi\xF3n a la base de datos cerrada");
-    } catch (error) {
-      console.error(`\u274C Error al cerrar la base de datos: ${error}`);
-      throw error;
-    }
-  }
-}
-function isDatabaseInitialized() {
-  return db !== undefined && db !== null;
-}
-async function testConnection() {
-  try {
-    const db2 = getDatabase();
-    db2.query("SELECT 1 as test").get();
-    console.log("\u2705 Conexi\xF3n a la base de datos verificada");
-    return true;
-  } catch (error) {
-    console.error(`\u274C Error en la conexi\xF3n a la base de datos: ${error}`);
-    return false;
-  }
-}
-async function getDatabaseInfo() {
-  try {
-    const db2 = getDatabase();
-    const versionResult = db2.query("PRAGMA user_version").get();
-    const pageSizeResult = db2.query("PRAGMA page_size").get();
-    const encodingResult = db2.query("PRAGMA encoding").get();
-    const journalModeResult = db2.query("PRAGMA journal_mode").get();
-    return {
-      version: (versionResult?.user_version || 0).toString(),
-      pageSize: pageSizeResult?.page_size || 0,
-      encoding: encodingResult?.encoding || "unknown",
-      journalMode: journalModeResult?.journal_mode || "unknown"
-    };
-  } catch (error) {
-    console.error(`\u274C Error al obtener informaci\xF3n de la base de datos: ${error}`);
-    throw error;
-  }
-}
-
 // src/services/jwt.ts
 class JWTService {
   secret;
@@ -293,141 +195,269 @@ function getJWTService() {
   return jwtServiceInstance;
 }
 
-// src/services/auth.ts
-class AuthService {
-  async register(data) {
+// src/db/connection.ts
+import { Database } from "bun:sqlite";
+var db;
+function initDatabase(dbPath = "./auth.db") {
+  if (!db) {
     try {
-      const db2 = getDatabase();
-      const jwtService = getJWTService();
-      try {
-        this.validateRegisterData(data);
-      } catch (validationError) {
-        return {
-          success: false,
-          error: {
-            type: validationError.type || "VALIDATION_ERROR",
-            message: validationError.message
-          }
-        };
-      }
-      const existingUser = await this.findUserByEmail(data.email);
-      if (existingUser) {
-        return {
-          success: false,
-          error: {
-            type: "VALIDATION_ERROR",
-            message: "User already exists with this email"
-          }
-        };
-      }
-      const passwordHash = await Bun.password.hash(data.password, {
-        algorithm: "bcrypt",
-        cost: 12
-      });
-      const userId = crypto.randomUUID();
-      const isActive = data.isActive !== undefined ? data.isActive : true;
-      const insertQuery = db2.query(`
-        INSERT INTO users (id, email, password_hash, first_name, last_name, created_at, updated_at, is_active)
-        VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'), ?)
-      `);
-      insertQuery.run(userId, data.email.toLowerCase(), passwordHash, data.firstName || null, data.lastName || null, isActive ? 1 : 0);
-      await this.assignDefaultRole(userId);
-      const user = await this.findUserById(userId, { includeRoles: true, includePermissions: true });
-      if (!user) {
-        throw new Error("Failed to create user");
-      }
-      const updateLoginQuery = db2.query("UPDATE users SET last_login_at = datetime('now') WHERE id = ?");
-      updateLoginQuery.run(user.id);
-      const token = await jwtService.generateToken(user);
-      const refreshToken = await jwtService.generateRefreshToken(Number(user.id));
-      const updatedUser = await this.findUserById(user.id, { includeRoles: true, includePermissions: true });
-      return {
-        success: true,
-        user: updatedUser || user,
-        token,
-        refreshToken
-      };
+      db = new Database(dbPath);
+      db.exec("PRAGMA journal_mode = WAL;");
+      db.exec("PRAGMA synchronous = NORMAL;");
+      db.exec("PRAGMA cache_size = 1000;");
+      db.exec("PRAGMA temp_store = memory;");
+      db.exec("PRAGMA busy_timeout = 5000;");
+      console.log(`\u2705 Base de datos SQLite inicializada: ${dbPath}`);
     } catch (error) {
-      console.error("Error registering user:", error);
-      return {
-        success: false,
-        error: {
-          type: error.type || "SERVER_ERROR",
-          message: error.message || "Registration failed"
-        }
-      };
+      console.error(`\u274C Error al inicializar la base de datos: ${error}`);
+      throw new Error(`Failed to initialize database: ${error}`);
     }
   }
-  async login(data) {
-    try {
-      const db2 = getDatabase();
-      const jwtService = getJWTService();
-      this.validateLoginData(data);
-      const user = await this.findUserByEmail(data.email, {
-        includeRoles: true,
-        includePermissions: true
-      });
-      if (!user) {
-        return {
-          success: false,
-          error: {
-            type: "AUTHENTICATION_ERROR",
-            message: "Invalid credentials"
-          }
-        };
-      }
-      if (!user.is_active) {
-        return {
-          success: false,
-          error: {
-            type: "AUTHENTICATION_ERROR",
-            message: "Account is inactive"
-          }
-        };
-      }
-      const isValidPassword = await Bun.password.verify(data.password, user.password_hash);
-      if (!isValidPassword) {
-        return {
-          success: false,
-          error: {
-            type: "AUTHENTICATION_ERROR",
-            message: "Invalid credentials"
-          }
-        };
-      }
-      const updateQuery = db2.query("UPDATE users SET updated_at = datetime('now'), last_login_at = datetime('now') WHERE id = ?");
-      updateQuery.run(user.id);
-      const updatedUser = await this.findUserById(user.id, { includeRoles: true, includePermissions: true });
-      if (!updatedUser) {
-        return {
-          success: false,
-          error: {
-            type: "DATABASE_ERROR",
-            message: "User not found after update"
-          }
-        };
-      }
-      const token = await jwtService.generateToken(updatedUser);
-      const refreshToken = await jwtService.generateRefreshToken(Number(updatedUser.id));
-      console.log(`\u2705 Usuario autenticado: ${updatedUser.email}`);
-      return {
-        success: true,
-        user: updatedUser,
-        token,
-        refreshToken
-      };
-    } catch (error) {
-      console.error("Error during login:", error);
-      return {
-        success: false,
-        error: {
-          type: error.type || "AUTHENTICATION_ERROR",
-          message: error.message || "Login failed"
-        }
-      };
+  return db;
+}
+function getDatabase(dbPath) {
+  if (!db) {
+    console.log("\u26A0\uFE0F Database not initialized, auto-initializing with auth.db");
+    initDatabase(dbPath);
+  }
+  try {
+    if (!db) {
+      throw new Error("Database not initialized");
+    }
+    db.query("SELECT 1").get();
+  } catch (error) {
+    if (error.message && error.message.includes("closed database")) {
+      console.log("\u26A0\uFE0F Database connection closed, reinitializing...");
+      db = null;
+      initDatabase(dbPath);
+    } else {
+      throw error;
     }
   }
-  async findUserById(id, options = {}) {
+  if (!db) {
+    throw new Error("Failed to initialize database");
+  }
+  return db;
+}
+function forceReinitDatabase(dbPath) {
+  console.log("\uD83D\uDD04 Force reinitializing database...");
+  db = null;
+  initDatabase(dbPath);
+  if (!db) {
+    throw new Error("Failed to reinitialize database");
+  }
+  return db;
+}
+async function closeDatabase() {
+  if (db) {
+    try {
+      db.close();
+      db = null;
+      console.log("\u2705 Conexi\xF3n a la base de datos cerrada");
+    } catch (error) {
+      console.error(`\u274C Error al cerrar la base de datos: ${error}`);
+      throw error;
+    }
+  }
+}
+function isDatabaseInitialized() {
+  return db !== undefined && db !== null;
+}
+async function testConnection() {
+  try {
+    const db2 = getDatabase();
+    db2.query("SELECT 1 as test").get();
+    console.log("\u2705 Conexi\xF3n a la base de datos verificada");
+    return true;
+  } catch (error) {
+    console.error(`\u274C Error en la conexi\xF3n a la base de datos: ${error}`);
+    return false;
+  }
+}
+async function getDatabaseInfo() {
+  try {
+    const db2 = getDatabase();
+    const versionResult = db2.query("PRAGMA user_version").get();
+    const pageSizeResult = db2.query("PRAGMA page_size").get();
+    const encodingResult = db2.query("PRAGMA encoding").get();
+    const journalModeResult = db2.query("PRAGMA journal_mode").get();
+    return {
+      version: (versionResult?.user_version || 0).toString(),
+      pageSize: pageSizeResult?.page_size || 0,
+      encoding: encodingResult?.encoding || "unknown",
+      journalMode: journalModeResult?.journal_mode || "unknown"
+    };
+  } catch (error) {
+    console.error(`\u274C Error al obtener informaci\xF3n de la base de datos: ${error}`);
+    throw error;
+  }
+}
+
+// src/errors/auth.ts
+class AuthError extends Error {
+  timestamp;
+  context;
+  constructor(message, context) {
+    super(message);
+    this.name = this.constructor.name;
+    this.timestamp = new Date;
+    this.context = context;
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+  toResponse() {
+    return {
+      success: false,
+      error: {
+        type: this.type,
+        message: this.message,
+        timestamp: this.timestamp.toISOString(),
+        ...this.context && { context: this.context }
+      }
+    };
+  }
+}
+
+class ValidationError extends AuthError {
+  type = "VALIDATION_ERROR" /* VALIDATION_ERROR */;
+  constructor(message, field) {
+    super(message, field ? { field } : undefined);
+  }
+}
+
+class AuthenticationError extends AuthError {
+  type = "AUTHENTICATION_ERROR" /* AUTHENTICATION_ERROR */;
+  constructor(message = "Authentication failed", context) {
+    super(message, context);
+  }
+}
+
+class AuthorizationError extends AuthError {
+  type = "AUTHORIZATION_ERROR" /* AUTHORIZATION_ERROR */;
+  constructor(message = "Access denied", context) {
+    super(message, context);
+  }
+}
+
+class UserNotFoundError extends AuthError {
+  type = "USER_NOT_FOUND" /* USER_NOT_FOUND */;
+  constructor(identifier) {
+    const message = identifier ? `User not found: ${identifier}` : "User not found";
+    super(message, identifier ? { identifier } : undefined);
+  }
+}
+
+class NotFoundError extends AuthError {
+  type = "NOT_FOUND_ERROR" /* NOT_FOUND_ERROR */;
+  constructor(resource, identifier) {
+    const message = identifier ? `${resource} not found: ${identifier}` : `${resource} not found`;
+    super(message, { resource, identifier });
+  }
+}
+
+class DatabaseError extends AuthError {
+  type = "DATABASE_ERROR" /* DATABASE_ERROR */;
+  constructor(message = "Database operation failed", operation) {
+    super(message, operation ? { operation } : undefined);
+  }
+}
+
+class ServerError extends AuthError {
+  type = "SERVER_ERROR" /* SERVER_ERROR */;
+  constructor(message = "Internal server error", context) {
+    super(message, context);
+  }
+}
+
+class RateLimitError extends AuthError {
+  type = "RATE_LIMIT_ERROR" /* RATE_LIMIT_ERROR */;
+  retryAfter;
+  constructor(message = "Rate limit exceeded", retryAfter) {
+    super(message, retryAfter ? { retryAfter } : undefined);
+    this.retryAfter = retryAfter;
+  }
+}
+
+class TokenError extends AuthError {
+  type = "TOKEN_ERROR" /* TOKEN_ERROR */;
+  constructor(message = "Token error", context) {
+    super(message, context);
+  }
+}
+
+class AccountError extends AuthError {
+  type = "ACCOUNT_ERROR" /* ACCOUNT_ERROR */;
+  constructor(message, status) {
+    super(message, status ? { status } : undefined);
+  }
+}
+
+class AuthErrorFactory {
+  static fromUnknown(error, defaultMessage = "Unknown error") {
+    if (error instanceof AuthError) {
+      return error;
+    }
+    if (error instanceof Error) {
+      const message = error.message.toLowerCase();
+      if (message.includes("user not found") || message.includes("user does not exist")) {
+        return new UserNotFoundError;
+      }
+      if (message.includes("invalid credentials") || message.includes("authentication")) {
+        return new AuthenticationError(error.message);
+      }
+      if (message.includes("validation") || message.includes("invalid") || message.includes("required") || message.includes("must be") || message.includes("cannot be") || message.includes("contains") || message.includes("format") || message.includes("characters long") || message.includes("email") && (message.includes("format") || message.includes("invalid"))) {
+        return new ValidationError(error.message);
+      }
+      if (message.includes("database") || message.includes("sql")) {
+        return new DatabaseError(error.message);
+      }
+      return new ServerError(error.message);
+    }
+    return new ServerError(defaultMessage, { originalError: String(error) });
+  }
+  static validation(message, field) {
+    return new ValidationError(message, field);
+  }
+  static authentication(message) {
+    return new AuthenticationError(message);
+  }
+  static userNotFound(identifier) {
+    return new UserNotFoundError(identifier);
+  }
+  static database(message, operation) {
+    return new DatabaseError(message, operation);
+  }
+  static rateLimit(message, retryAfter) {
+    return new RateLimitError(message, retryAfter);
+  }
+  static server(message, context) {
+    return new ServerError(message, context);
+  }
+}
+
+class ErrorHandler {
+  static handle(error, operation = "operation") {
+    const authError = AuthErrorFactory.fromUnknown(error, `${operation} failed`);
+    console.error(`[${operation}] ${authError.type}: ${authError.message}`, {
+      stack: authError.stack,
+      context: authError.context,
+      timestamp: authError.timestamp
+    });
+    return authError.toResponse();
+  }
+  static isType(error, ErrorClass) {
+    return error instanceof ErrorClass;
+  }
+  static getMessage(error) {
+    if (error instanceof Error) {
+      return error.message;
+    }
+    return String(error);
+  }
+}
+
+// src/repositories/user.ts
+class UserRepository {
+  async findById(id, options = {}, transaction) {
     try {
       const db2 = getDatabase();
       const activeCondition = options.activeOnly ? " AND is_active = 1" : "";
@@ -441,17 +471,246 @@ class AuthService {
         return null;
       }
       const userData = userResult[0];
-      const user = this.mapDatabaseUserToUser(userData);
+      const user = this.mapDatabaseUserToSafeUser(userData);
       if (options.includeRoles) {
-        user.roles = await this.getUserRoles(id, options.includePermissions);
+        user.roles = await this.getUserRoles(id, options.includePermissions, transaction);
       }
       return user;
     } catch (error) {
-      console.error("Error finding user by ID:", error);
-      throw new Error(`Failed to find user: ${error.message}`);
+      throw new DatabaseError(`Failed to find user by ID: ${error instanceof Error ? error.message : String(error)}`, "findById");
     }
   }
-  async findUserByEmail(email, options = {}) {
+  async findByEmail(email, options = {}, transaction) {
+    try {
+      const db2 = getDatabase();
+      let query = `
+        SELECT id, email, password_hash, first_name, last_name, created_at, updated_at, is_active, last_login_at
+        FROM users
+        WHERE email = ?
+      `;
+      const params = [email.toLowerCase()];
+      if (options.activeOnly) {
+        query += ` AND is_active = 1`;
+      }
+      const userResult = db2.query(query).all(...params);
+      if (userResult.length === 0) {
+        return null;
+      }
+      const userData = userResult[0];
+      const user = this.mapDatabaseUserToSafeUser(userData);
+      if (options.includeRoles) {
+        user.roles = await this.getUserRoles(userData.id, options.includePermissions, transaction);
+      }
+      return user;
+    } catch (error) {
+      throw new DatabaseError(`Failed to find user by email: ${error instanceof Error ? error.message : String(error)}`, "findByEmail");
+    }
+  }
+  async create(userData, transaction) {
+    try {
+      const db2 = getDatabase();
+      const insertQuery = db2.query(`
+        INSERT INTO users (id, email, password_hash, first_name, last_name, created_at, updated_at, is_active)
+        VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'), ?)
+      `);
+      insertQuery.run(userData.id, userData.email.toLowerCase(), userData.passwordHash, userData.firstName || null, userData.lastName || null, userData.isActive !== false ? 1 : 0);
+      const createdUser = await this.findById(userData.id, { includeRoles: true });
+      if (!createdUser) {
+        throw new DatabaseError("Failed to retrieve created user", "create");
+      }
+      return createdUser;
+    } catch (error) {
+      throw new DatabaseError(`Failed to create user: ${error instanceof Error ? error.message : String(error)}`, "create");
+    }
+  }
+  async update(userId, updateData, transaction) {
+    try {
+      const db2 = getDatabase();
+      const updateFields = [];
+      const updateValues = [];
+      if (updateData.email !== undefined) {
+        updateFields.push("email = ?");
+        updateValues.push(updateData.email.toLowerCase());
+      }
+      if (updateData.passwordHash !== undefined) {
+        updateFields.push("password_hash = ?");
+        updateValues.push(updateData.passwordHash);
+      }
+      if (updateData.firstName !== undefined) {
+        updateFields.push("first_name = ?");
+        updateValues.push(updateData.firstName);
+      }
+      if (updateData.lastName !== undefined) {
+        updateFields.push("last_name = ?");
+        updateValues.push(updateData.lastName);
+      }
+      if (updateData.isActive !== undefined) {
+        updateFields.push("is_active = ?");
+        updateValues.push(updateData.isActive ? 1 : 0);
+      }
+      if (updateData.lastLoginAt !== undefined) {
+        updateFields.push("last_login_at = ?");
+        const lastLoginDate = updateData.lastLoginAt instanceof Date ? updateData.lastLoginAt : new Date(updateData.lastLoginAt);
+        updateValues.push(lastLoginDate.toISOString());
+      }
+      updateFields.push("updated_at = datetime('now')");
+      updateValues.push(userId);
+      if (updateFields.length === 1) {
+        return;
+      }
+      const updateQuery = db2.query(`UPDATE users SET ${updateFields.join(", ")} WHERE id = ?`);
+      updateQuery.run(...updateValues);
+    } catch (error) {
+      throw new DatabaseError(`Failed to update user: ${error instanceof Error ? error.message : String(error)}`, "update");
+    }
+  }
+  async delete(userId, transaction) {
+    try {
+      const db2 = getDatabase();
+      const deleteRolesQuery = db2.query("DELETE FROM user_roles WHERE user_id = ?");
+      deleteRolesQuery.run(userId);
+      const deleteUserQuery = db2.query("DELETE FROM users WHERE id = ?");
+      deleteUserQuery.run(userId);
+    } catch (error) {
+      throw new DatabaseError(`Failed to delete user: ${error instanceof Error ? error.message : String(error)}`, "delete");
+    }
+  }
+  async getUsers(options = {}) {
+    try {
+      const db2 = getDatabase();
+      const page = Math.max(1, options.page || 1);
+      const limit = Math.min(100, Math.max(1, options.limit || 10));
+      const offset = (page - 1) * limit;
+      const whereConditions = [];
+      const whereParams = [];
+      if (options.activeOnly !== undefined) {
+        whereConditions.push(`is_active = ${options.activeOnly ? 1 : 0}`);
+      }
+      if (options.search) {
+        whereConditions.push("(email LIKE ? OR first_name LIKE ? OR last_name LIKE ?)");
+        const searchPattern = `%${options.search}%`;
+        whereParams.push(searchPattern, searchPattern, searchPattern);
+      }
+      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(" AND ")}` : "";
+      const sortBy = options.sortBy || "created_at";
+      const sortOrder = options.sortOrder || "desc";
+      const orderClause = `ORDER BY ${sortBy} ${sortOrder.toUpperCase()}`;
+      const countQuery = db2.query(`SELECT COUNT(*) as count FROM users ${whereClause}`);
+      const countResult = countQuery.get(...whereParams);
+      const total = countResult.count;
+      const usersQuery = db2.query(`
+        SELECT id, email, password_hash, first_name, last_name, created_at, updated_at, is_active, last_login_at
+        FROM users
+        ${whereClause}
+        ${orderClause}
+        LIMIT ? OFFSET ?
+      `);
+      const usersResult = usersQuery.all(...whereParams, limit, offset);
+      const users = [];
+      for (const userData of usersResult) {
+        const user = this.mapDatabaseUserToSafeUser(userData);
+        if (options.includeRoles) {
+          user.roles = await this.getUserRoles(userData.id, options.includePermissions);
+        }
+        users.push(user);
+      }
+      return {
+        users,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      };
+    } catch (error) {
+      throw new DatabaseError(`Failed to get users: ${error instanceof Error ? error.message : String(error)}`, "getUsers");
+    }
+  }
+  async getUserRoles(userId, includePermissions = false, transaction) {
+    try {
+      const db2 = getDatabase();
+      const rolesQuery = db2.query(`
+        SELECT r.id, r.name, r.created_at, r.is_active
+        FROM roles r
+        INNER JOIN user_roles ur ON r.id = ur.role_id
+        WHERE ur.user_id = ?
+        ORDER BY r.name
+      `);
+      const rolesResult = rolesQuery.all(userId);
+      const roles = [];
+      for (const roleData of rolesResult) {
+        const role = {
+          id: roleData.id,
+          name: roleData.name,
+          createdAt: new Date(roleData.created_at),
+          updatedAt: new Date(roleData.created_at),
+          created_at: new Date(roleData.created_at),
+          isActive: Boolean(roleData.is_active),
+          isDefault: false,
+          description: undefined,
+          permissions: [],
+          metadata: undefined
+        };
+        if (includePermissions) {
+          role.permissions = await this.getRolePermissions(role.id, transaction);
+        }
+        roles.push(role);
+      }
+      return roles;
+    } catch (error) {
+      throw new DatabaseError(`Failed to get user roles: ${error instanceof Error ? error.message : String(error)}`, "getUserRoles");
+    }
+  }
+  async getRolePermissions(roleId, transaction) {
+    try {
+      const db2 = getDatabase();
+      const permissionsQuery = db2.query(`
+        SELECT p.id, p.name, p.resource, p.action, p.created_at
+        FROM permissions p
+        INNER JOIN role_permissions rp ON p.id = rp.permission_id
+        WHERE rp.role_id = ?
+        ORDER BY p.resource, p.action
+      `);
+      const permissionsResult = permissionsQuery.all(roleId);
+      return permissionsResult.map((permData) => ({
+        id: permData.id,
+        name: permData.name,
+        resource: permData.resource,
+        action: permData.action,
+        createdAt: new Date(permData.created_at),
+        updatedAt: new Date
+      }));
+    } catch (error) {
+      throw new DatabaseError(`Failed to get role permissions: ${error instanceof Error ? error.message : String(error)}`, "getRolePermissions");
+    }
+  }
+  mapDatabaseUserToUser(userData) {
+    return {
+      id: userData.id,
+      email: userData.email,
+      passwordHash: userData.password_hash,
+      firstName: userData.first_name || undefined,
+      lastName: userData.last_name || undefined,
+      createdAt: new Date(userData.created_at),
+      updatedAt: new Date(userData.updated_at),
+      isActive: Boolean(userData.is_active),
+      lastLoginAt: userData.last_login_at ? new Date(userData.last_login_at) : undefined,
+      roles: []
+    };
+  }
+  mapDatabaseUserToSafeUser(userData) {
+    return {
+      id: userData.id,
+      email: userData.email,
+      firstName: userData.first_name || undefined,
+      lastName: userData.last_name || undefined,
+      createdAt: new Date(userData.created_at),
+      updatedAt: new Date(userData.updated_at),
+      isActive: Boolean(userData.is_active),
+      lastLoginAt: userData.last_login_at ? new Date(userData.last_login_at) : undefined,
+      roles: []
+    };
+  }
+  async findByEmailForAuth(email, options = {}, transaction) {
     try {
       const db2 = getDatabase();
       let query = `
@@ -470,463 +729,1074 @@ class AuthService {
       const userData = userResult[0];
       const user = this.mapDatabaseUserToUser(userData);
       if (options.includeRoles) {
-        user.roles = await this.getUserRoles(userData.id, options.includePermissions);
+        user.roles = await this.getUserRoles(userData.id, options.includePermissions, transaction);
       }
       return user;
     } catch (error) {
-      console.error("Error finding user by email:", error);
-      throw new Error(`Failed to find user: ${error.message}`);
+      throw new DatabaseError(`Failed to find user by email for auth: ${error instanceof Error ? error.message : String(error)}`, "findByEmailForAuth");
+    }
+  }
+}
+
+// src/repositories/role.ts
+class RoleRepository {
+  async findById(roleId, transaction) {
+    try {
+      const db2 = transaction ? transaction.getDatabase() : getDatabase();
+      const query = db2.query("SELECT id, name, created_at, is_active FROM roles WHERE id = ?");
+      const result = query.get(roleId);
+      if (!result) {
+        return null;
+      }
+      return this.mapDatabaseRoleToRole(result);
+    } catch (error) {
+      throw new DatabaseError(`Failed to find role by ID: ${error instanceof Error ? error.message : String(error)}`, "findById");
+    }
+  }
+  async findByName(name, transaction) {
+    try {
+      const db2 = transaction ? transaction.getDatabase() : getDatabase();
+      const query = db2.query("SELECT id, name, created_at, is_active FROM roles WHERE name = ?");
+      const result = query.get(name.toLowerCase());
+      if (!result) {
+        return null;
+      }
+      return this.mapDatabaseRoleToRole(result);
+    } catch (error) {
+      throw new DatabaseError(`Failed to find role by name: ${error instanceof Error ? error.message : String(error)}`, "findByName");
+    }
+  }
+  async create(roleData, transaction) {
+    try {
+      const db2 = transaction ? transaction.getDatabase() : getDatabase();
+      const insertQuery = db2.query(`
+        INSERT INTO roles (id, name, created_at, is_active)
+        VALUES (?, ?, datetime('now'), ?)
+      `);
+      insertQuery.run(roleData.id, roleData.name.toLowerCase(), roleData.isActive !== false ? 1 : 0);
+      return roleData.id;
+    } catch (error) {
+      throw new DatabaseError(`Failed to create role: ${error instanceof Error ? error.message : String(error)}`, "create");
+    }
+  }
+  async userHasRole(userId, roleId, transaction) {
+    try {
+      const db2 = transaction ? transaction.getDatabase() : getDatabase();
+      const query = db2.query("SELECT id FROM user_roles WHERE user_id = ? AND role_id = ?");
+      const result = query.get(userId, roleId);
+      return result !== null;
+    } catch (error) {
+      throw new DatabaseError(`Failed to check user role: ${error instanceof Error ? error.message : String(error)}`, "userHasRole");
+    }
+  }
+  async assignToUser(userId, roleId, transaction) {
+    try {
+      const db2 = transaction ? transaction.getDatabase() : getDatabase();
+      const exists = await this.userHasRole(userId, roleId, transaction);
+      if (exists) {
+        throw new Error("User already has this role");
+      }
+      const insertQuery = db2.query(`
+        INSERT INTO user_roles (id, user_id, role_id, created_at)
+        VALUES (?, ?, ?, datetime('now'))
+      `);
+      insertQuery.run(crypto.randomUUID(), userId, roleId);
+    } catch (error) {
+      throw new DatabaseError(`Failed to assign role to user: ${error instanceof Error ? error.message : String(error)}`, "assignToUser");
+    }
+  }
+  async removeFromUser(userId, roleId, transaction) {
+    try {
+      const db2 = transaction ? transaction.getDatabase() : getDatabase();
+      const deleteQuery = db2.query("DELETE FROM user_roles WHERE user_id = ? AND role_id = ?");
+      deleteQuery.run(userId, roleId);
+    } catch (error) {
+      throw new DatabaseError(`Failed to remove role from user: ${error instanceof Error ? error.message : String(error)}`, "removeFromUser");
+    }
+  }
+  async getOrCreateDefaultRole(transaction) {
+    try {
+      let role = await this.findByName("user", transaction);
+      if (!role) {
+        const roleId = crypto.randomUUID();
+        await this.create({
+          id: roleId,
+          name: "user",
+          isActive: true
+        }, transaction);
+        role = await this.findById(roleId, transaction);
+        if (!role) {
+          throw new Error("Failed to create default role");
+        }
+      }
+      return role;
+    } catch (error) {
+      throw new DatabaseError(`Failed to get or create default role: ${error instanceof Error ? error.message : String(error)}`, "getOrCreateDefaultRole");
+    }
+  }
+  async getAll(activeOnly = false) {
+    try {
+      const db2 = getDatabase();
+      let query = "SELECT id, name, created_at, is_active FROM roles";
+      const params = [];
+      if (activeOnly) {
+        query += " WHERE is_active = 1";
+      }
+      query += " ORDER BY name";
+      const rolesQuery = db2.query(query);
+      const results = rolesQuery.all(...params);
+      return results.map((result) => this.mapDatabaseRoleToRole(result));
+    } catch (error) {
+      throw new DatabaseError(`Failed to get all roles: ${error instanceof Error ? error.message : String(error)}`, "getAll");
+    }
+  }
+  mapDatabaseRoleToRole(roleData) {
+    return {
+      id: roleData.id,
+      name: roleData.name,
+      createdAt: new Date(roleData.created_at),
+      updatedAt: new Date(roleData.created_at),
+      isDefault: Boolean(roleData.is_active),
+      permissions: [],
+      isActive: roleData.is_active === 1
+    };
+  }
+}
+
+// src/validators/auth.ts
+class EmailValidator {
+  static EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  static validate(email) {
+    if (!email || typeof email !== "string") {
+      throw new ValidationError("Email is required");
+    }
+    if (!this.EMAIL_REGEX.test(email.trim())) {
+      throw new ValidationError("Invalid email format");
+    }
+  }
+  static normalize(email) {
+    return email.toLowerCase().trim();
+  }
+}
+
+class PasswordValidator {
+  static MIN_LENGTH = 8;
+  static STRENGTH_REGEX = /(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
+  static validate(password) {
+    if (!password || typeof password !== "string") {
+      throw new ValidationError("Password is required");
+    }
+    if (password.length < this.MIN_LENGTH) {
+      throw new ValidationError(`Password must be at least ${this.MIN_LENGTH} characters long`);
+    }
+    if (!this.STRENGTH_REGEX.test(password)) {
+      throw new ValidationError("Password must contain at least one uppercase letter, one lowercase letter, and one number");
+    }
+  }
+}
+
+class NameValidator {
+  static MAX_LENGTH = 50;
+  static NAME_REGEX = /^[a-zA-Z0-9\s'-]+$/;
+  static validate(name, fieldName) {
+    if (name === undefined || name === null) {
+      return;
+    }
+    if (typeof name !== "string") {
+      throw new ValidationError(`${fieldName} must be a string`);
+    }
+    const trimmedName = name.trim();
+    if (trimmedName.length === 0) {
+      return;
+    }
+    if (trimmedName.length > this.MAX_LENGTH) {
+      throw new ValidationError(`${fieldName} must not exceed ${this.MAX_LENGTH} characters`);
+    }
+    if (!this.NAME_REGEX.test(trimmedName)) {
+      throw new ValidationError(`${fieldName} contains invalid characters`);
+    }
+  }
+  static normalize(name) {
+    if (!name || typeof name !== "string") {
+      return "";
+    }
+    const trimmed = name.trim();
+    return trimmed.length > 0 ? trimmed : "";
+  }
+}
+
+class RegisterDataValidator {
+  static validate(data) {
+    if (!data || typeof data !== "object") {
+      throw new ValidationError("Invalid registration data");
+    }
+    EmailValidator.validate(data.email);
+    PasswordValidator.validate(data.password);
+    NameValidator.validate(data.firstName, "First name");
+    NameValidator.validate(data.lastName, "Last name");
+    if (data.isActive !== undefined && typeof data.isActive !== "boolean") {
+      throw new ValidationError("isActive must be a boolean");
+    }
+  }
+  static normalize(data) {
+    return {
+      email: EmailValidator.normalize(data.email),
+      password: data.password,
+      firstName: NameValidator.normalize(data.firstName),
+      lastName: NameValidator.normalize(data.lastName),
+      isActive: data.isActive
+    };
+  }
+}
+
+class LoginDataValidator {
+  static validate(data) {
+    if (!data || typeof data !== "object") {
+      throw new ValidationError("Invalid login data");
+    }
+    EmailValidator.validate(data.email);
+    if (!data.password || typeof data.password !== "string") {
+      throw new ValidationError("Password is required");
+    }
+  }
+  static normalize(data) {
+    return {
+      email: EmailValidator.normalize(data.email),
+      password: data.password
+    };
+  }
+}
+
+class UpdateUserDataValidator {
+  static validate(data) {
+    if (!data || typeof data !== "object") {
+      throw new ValidationError("Invalid update data");
+    }
+    if (data.email !== undefined) {
+      EmailValidator.validate(data.email);
+    }
+    NameValidator.validate(data.firstName, "First name");
+    NameValidator.validate(data.lastName, "Last name");
+    if (data.isActive !== undefined && typeof data.isActive !== "boolean") {
+      throw new ValidationError("isActive must be a boolean");
+    }
+    return data;
+  }
+  static normalize(data) {
+    const normalized = {};
+    if (data.email !== undefined) {
+      normalized.email = EmailValidator.normalize(data.email);
+    }
+    if (data.firstName !== undefined) {
+      normalized.firstName = NameValidator.normalize(data.firstName);
+    }
+    if (data.lastName !== undefined) {
+      normalized.lastName = NameValidator.normalize(data.lastName);
+    }
+    if (data.isActive !== undefined) {
+      normalized.isActive = data.isActive;
+    }
+    return normalized;
+  }
+}
+
+class UserIdValidator {
+  static UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  static NUMERIC_ID_REGEX = /^[0-9]+$/;
+  static validate(userId) {
+    if (!userId || typeof userId !== "string") {
+      throw new ValidationError("User ID is required");
+    }
+    if (!this.UUID_REGEX.test(userId) && !this.NUMERIC_ID_REGEX.test(userId)) {
+      throw new ValidationError("Invalid user ID format");
+    }
+  }
+}
+
+class RoleNameValidator {
+  static MAX_LENGTH = 50;
+  static ROLE_REGEX = /^[a-zA-Z0-9_-]+$/;
+  static validate(roleName) {
+    if (!roleName || typeof roleName !== "string") {
+      throw new ValidationError("Role name is required");
+    }
+    const trimmed = roleName.trim();
+    if (trimmed.length === 0) {
+      throw new ValidationError("Role name cannot be empty");
+    }
+    if (trimmed.length > this.MAX_LENGTH) {
+      throw new ValidationError(`Role name must not exceed ${this.MAX_LENGTH} characters`);
+    }
+    if (!this.ROLE_REGEX.test(trimmed)) {
+      throw new ValidationError("Role name contains invalid characters");
+    }
+  }
+  static normalize(roleName) {
+    return roleName.toLowerCase().trim();
+  }
+}
+
+// src/config/constants.ts
+var AUTH_CONFIG = {
+  PASSWORD: {
+    MIN_LENGTH: 8,
+    MAX_LENGTH: 128,
+    BCRYPT_ROUNDS: 12,
+    STRENGTH_REGEX: /(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
+    REQUIRE_SPECIAL_CHARS: false,
+    SPECIAL_CHARS_REGEX: /[!@#$%^&*(),.?":{}|<>]/
+  },
+  EMAIL: {
+    MAX_LENGTH: 254,
+    VALIDATION_REGEX: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+    NORMALIZE_CASE: true
+  },
+  NAME: {
+    MAX_LENGTH: 50,
+    MIN_LENGTH: 1,
+    VALIDATION_REGEX: /^[a-zA-Z\s'-]+$/,
+    ALLOW_EMPTY: true
+  },
+  USER_ID: {
+    FORMAT: "UUID",
+    UUID_REGEX: /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  },
+  ROLE: {
+    MAX_LENGTH: 50,
+    MIN_LENGTH: 1,
+    VALIDATION_REGEX: /^[a-zA-Z0-9_-]+$/,
+    DEFAULT_ROLE: "user",
+    NORMALIZE_CASE: true
+  },
+  SESSION: {
+    MAX_CONCURRENT_SESSIONS: 5,
+    CLEANUP_INTERVAL_MS: 60 * 60 * 1000,
+    EXTEND_ON_ACTIVITY: true
+  },
+  RATE_LIMIT: {
+    LOGIN: {
+      MAX_ATTEMPTS: 5,
+      WINDOW_MS: 15 * 60 * 1000,
+      BLOCK_DURATION_MS: 30 * 60 * 1000
+    },
+    REGISTER: {
+      MAX_ATTEMPTS: 3,
+      WINDOW_MS: 60 * 60 * 1000,
+      BLOCK_DURATION_MS: 60 * 60 * 1000
+    },
+    PASSWORD_RESET: {
+      MAX_ATTEMPTS: 3,
+      WINDOW_MS: 60 * 60 * 1000,
+      BLOCK_DURATION_MS: 60 * 60 * 1000
+    },
+    GENERAL: {
+      MAX_ATTEMPTS: 1000,
+      WINDOW_MS: 15 * 60 * 1000,
+      BLOCK_DURATION_MS: 15 * 60 * 1000
+    },
+    USER_MODIFICATION: {
+      MAX_ATTEMPTS: 10,
+      WINDOW_MS: 60 * 60 * 1000,
+      BLOCK_DURATION_MS: 60 * 60 * 1000
+    }
+  },
+  SECURITY: {
+    HASH_ALGORITHM: "bcrypt",
+    SALT_ROUNDS: 12,
+    SECURE_HEADERS: true,
+    AUDIT_LOGGING: true,
+    INPUT_SANITIZATION: true,
+    XSS_PROTECTION: true
+  },
+  DATABASE: {
+    CONNECTION_TIMEOUT_MS: 30000,
+    QUERY_TIMEOUT_MS: 1e4,
+    MAX_RETRIES: 3,
+    RETRY_DELAY_MS: 1000
+  },
+  PAGINATION: {
+    DEFAULT_PAGE: 1,
+    DEFAULT_LIMIT: 10,
+    MAX_LIMIT: 100,
+    MIN_LIMIT: 1
+  },
+  VALIDATION_MESSAGES: {
+    EMAIL_REQUIRED: "Email is required",
+    EMAIL_INVALID: "Invalid email format",
+    PASSWORD_REQUIRED: "Password is required",
+    PASSWORD_TOO_SHORT: "Password must be at least {min} characters long",
+    PASSWORD_TOO_LONG: "Password must not exceed {max} characters",
+    PASSWORD_WEAK: "Password must contain at least one uppercase letter, one lowercase letter, and one number",
+    NAME_TOO_LONG: "{field} must not exceed {max} characters",
+    NAME_INVALID_CHARS: "{field} contains invalid characters",
+    USER_ID_REQUIRED: "User ID is required",
+    USER_ID_INVALID: "Invalid user ID format",
+    ROLE_NAME_REQUIRED: "Role name is required",
+    ROLE_NAME_INVALID: "Role name contains invalid characters",
+    ROLE_NAME_TOO_LONG: "Role name must not exceed {max} characters"
+  },
+  ERROR_MESSAGES: {
+    USER_NOT_FOUND: "User not found",
+    USER_EXISTS: "User already exists with this email",
+    INVALID_CREDENTIALS: "Invalid credentials",
+    ACCOUNT_INACTIVE: "Account is inactive",
+    ROLE_NOT_FOUND: "Role not found",
+    ROLE_ALREADY_ASSIGNED: "User already has this role",
+    PERMISSION_DENIED: "Permission denied",
+    RATE_LIMIT_EXCEEDED: "Rate limit exceeded. Please try again later",
+    SERVER_ERROR: "Internal server error",
+    DATABASE_ERROR: "Database operation failed",
+    VALIDATION_ERROR: "Validation failed"
+  },
+  SUCCESS_MESSAGES: {
+    USER_REGISTERED: "User registered successfully",
+    USER_LOGGED_IN: "User logged in successfully",
+    USER_UPDATED: "User updated successfully",
+    USER_DELETED: "User deleted successfully",
+    PASSWORD_UPDATED: "Password updated successfully",
+    ROLE_ASSIGNED: "Role assigned successfully",
+    ROLE_REMOVED: "Role removed successfully"
+  }
+};
+
+// src/logger/Logger.ts
+import { EventEmitter } from "events";
+
+// src/logger/types.ts
+var LogLevel2;
+((LogLevel3) => {
+  LogLevel3[LogLevel3["DEBUG"] = 0] = "DEBUG";
+  LogLevel3[LogLevel3["INFO"] = 1] = "INFO";
+  LogLevel3[LogLevel3["WARN"] = 2] = "WARN";
+  LogLevel3[LogLevel3["ERROR"] = 3] = "ERROR";
+  LogLevel3[LogLevel3["FATAL"] = 4] = "FATAL";
+  LogLevel3[LogLevel3["SILENT"] = 5] = "SILENT";
+})(LogLevel2 ||= {});
+
+// src/logger/formatter.ts
+var COLORS = {
+  DEBUG: "\x1B[36m",
+  INFO: "\x1B[32m",
+  WARN: "\x1B[33m",
+  ERROR: "\x1B[31m",
+  FATAL: "\x1B[35m",
+  RESET: "\x1B[0m"
+};
+
+class LogFormatter {
+  config;
+  constructor(config) {
+    this.config = config;
+  }
+  formatForConsole(entry) {
+    const color = this.config.enableColors ? COLORS[entry.level] : "";
+    const reset = this.config.enableColors ? COLORS.RESET : "";
+    const timestamp = new Date(entry.timestamp).toLocaleString();
+    let formatted = `${color}[${timestamp}] ${entry.level} [${entry.event}] ${entry.message}${reset}`;
+    if (entry.data) {
+      formatted += `
+${color}Data: ${this.stringifyData(entry.data)}${reset}`;
+    }
+    if (entry.stack) {
+      formatted += `
+${color}Stack: ${entry.stack}${reset}`;
+    }
+    if (entry.context && Object.keys(entry.context).length > 0) {
+      formatted += `
+${color}Context: ${JSON.stringify(entry.context, null, 2)}${reset}`;
+    }
+    return formatted;
+  }
+  formatForFile(entry) {
+    if (this.config.format === "json") {
+      return JSON.stringify(entry) + `
+`;
+    }
+    const timestamp = new Date(entry.timestamp).toLocaleString();
+    let formatted = `[${timestamp}] ${entry.level} [${entry.event}] ${entry.message}`;
+    if (entry.data) {
+      formatted += ` | Data: ${this.stringifyData(entry.data)}`;
+    }
+    if (entry.stack) {
+      formatted += ` | Stack: ${entry.stack.replace(/\n/g, " ")}`;
+    }
+    if (entry.context && Object.keys(entry.context).length > 0) {
+      formatted += ` | Context: ${JSON.stringify(entry.context)}`;
+    }
+    return formatted + `
+`;
+  }
+  stringifyData(data) {
+    try {
+      return JSON.stringify(data, null, 2);
+    } catch {
+      return String(data);
+    }
+  }
+}
+
+// src/logger/fileManager.ts
+import fs from "fs";
+import path from "path";
+
+class LogFileManager {
+  config;
+  currentLogFile = null;
+  currentFileSize = 0;
+  constructor(config) {
+    this.config = config;
+    if (this.config.enableFile) {
+      this.ensureLogDirectory();
+    }
+  }
+  writeToFile(content) {
+    if (!this.config.enableFile)
+      return;
+    try {
+      const fileName = this.getCurrentLogFileName();
+      if (this.currentLogFile !== fileName) {
+        this.currentLogFile = fileName;
+        this.currentFileSize = fs.existsSync(fileName) ? fs.statSync(fileName).size : 0;
+      }
+      if (this.shouldRotateFile()) {
+        this.rotateLogFile();
+      }
+      fs.appendFileSync(this.currentLogFile, content);
+      this.currentFileSize += Buffer.byteLength(content, "utf8");
+    } catch (error) {
+      console.error("Error writing to log file:", error);
+    }
+  }
+  ensureLogDirectory() {
+    if (!fs.existsSync(this.config.logDirectory)) {
+      fs.mkdirSync(this.config.logDirectory, { recursive: true });
+    }
+  }
+  getCurrentLogFileName() {
+    const date = new Date;
+    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    return path.join(this.config.logDirectory, `webrtc-signaling-${dateStr}.log`);
+  }
+  shouldRotateFile() {
+    if (!this.currentLogFile)
+      return false;
+    try {
+      const stats = fs.statSync(this.currentLogFile);
+      return stats.size >= this.config.maxFileSize;
+    } catch {
+      return false;
+    }
+  }
+  rotateLogFile() {
+    if (!this.currentLogFile)
+      return;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const rotatedName = this.currentLogFile.replace(".log", `-${timestamp}.log`);
+    try {
+      fs.renameSync(this.currentLogFile, rotatedName);
+      this.cleanOldLogFiles();
+      this.currentFileSize = 0;
+    } catch (error) {
+      console.error("Error rotating log file:", error);
+    }
+  }
+  cleanOldLogFiles() {
+    try {
+      const files = fs.readdirSync(this.config.logDirectory).filter((file) => file.startsWith("webrtc-signaling-") && file.endsWith(".log")).map((file) => ({
+        name: file,
+        path: path.join(this.config.logDirectory, file),
+        stats: fs.statSync(path.join(this.config.logDirectory, file))
+      })).sort((a, b) => b.stats.mtime.getTime() - a.stats.mtime.getTime());
+      if (files.length > this.config.maxFiles) {
+        const filesToDelete = files.slice(this.config.maxFiles);
+        filesToDelete.forEach((file) => {
+          try {
+            fs.unlinkSync(file.path);
+          } catch (error) {
+            console.error(`Error deleting old log file ${file.name}:`, error);
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Error cleaning old log files:", error);
+    }
+  }
+}
+
+// src/logger/config.ts
+import path2 from "path";
+var BASE_CONFIG = {
+  level: 1 /* INFO */,
+  enableConsole: true,
+  enableFile: false,
+  logDirectory: path2.join(process.cwd(), "logs"),
+  maxFileSize: 10 * 1024 * 1024,
+  maxFiles: 5,
+  datePattern: "YYYY-MM-DD",
+  format: "text",
+  includeStackTrace: true,
+  enableColors: true
+};
+var ENVIRONMENT_CONFIGS = {
+  development: {
+    level: 0 /* DEBUG */,
+    enableFile: true,
+    maxFileSize: 5 * 1024 * 1024,
+    maxFiles: 3
+  },
+  production: {
+    level: 1 /* INFO */,
+    enableConsole: false,
+    enableFile: true,
+    maxFileSize: 50 * 1024 * 1024,
+    maxFiles: 10,
+    format: "json",
+    includeStackTrace: false,
+    enableColors: false
+  },
+  test: {
+    level: 2 /* WARN */,
+    enableConsole: false,
+    enableFile: false
+  },
+  silent: {
+    level: 5 /* SILENT */,
+    enableConsole: false,
+    enableFile: false
+  }
+};
+function createConfig(env, overrides = {}) {
+  const environment = env || "development";
+  const envConfig = ENVIRONMENT_CONFIGS[environment.toLowerCase()] || {};
+  return {
+    ...BASE_CONFIG,
+    ...envConfig,
+    ...overrides
+  };
+}
+
+// src/logger/Logger.ts
+class Logger extends EventEmitter {
+  formatter;
+  fileManager;
+  config;
+  constructor(config = {}) {
+    super();
+    this.config = createConfig("development", config);
+    this.formatter = new LogFormatter(this.config);
+    this.fileManager = new LogFileManager(this.config);
+  }
+  log(level, event, logData = {}, ...args) {
+    if (this.config.level === 5 /* SILENT */ || level < this.config.level) {
+      return;
+    }
+    const entry = this.createLogEntry(level, event, logData);
+    this.emit("log", entry, ...args);
+    if (this.config.enableConsole) {
+      this.writeToConsole(entry);
+    }
+    if (this.config.enableFile) {
+      const formatted = this.formatter.formatForFile(entry);
+      this.fileManager.writeToFile(formatted);
+    }
+  }
+  createLogEntry(level, event, logData = {}) {
+    const { message = "", data, context } = logData;
+    const entry = {
+      timestamp: new Date().toISOString(),
+      level: LogLevel2[level],
+      event,
+      message,
+      context
+    };
+    if (data !== undefined) {
+      if (data instanceof Error) {
+        entry.message = entry.message || data.message;
+        if (this.config.includeStackTrace) {
+          entry.stack = data.stack;
+        }
+      } else {
+        entry.data = data;
+      }
+    }
+    return entry;
+  }
+  writeToConsole(entry) {
+    const formatted = this.formatter.formatForConsole(entry);
+    const level = LogLevel2[entry.level];
+    if (level >= 3 /* ERROR */) {
+      console.error(formatted);
+    } else {
+      console.log(formatted);
+    }
+  }
+  debug(event, logData, ...args) {
+    this.log(0 /* DEBUG */, event, logData, ...args);
+  }
+  info(event, logData, ...args) {
+    this.log(1 /* INFO */, event, logData, ...args);
+  }
+  warn(event, logData, ...args) {
+    this.log(2 /* WARN */, event, logData, ...args);
+  }
+  error(event, logData, ...args) {
+    this.log(3 /* ERROR */, event, logData, ...args);
+  }
+  fatal(event, logData, ...args) {
+    this.log(4 /* FATAL */, event, logData, ...args);
+  }
+  updateConfig(newConfig) {
+    this.config = { ...this.config, ...newConfig };
+    this.formatter = new LogFormatter(this.config);
+    this.fileManager = new LogFileManager(this.config);
+  }
+  getConfig() {
+    return { ...this.config };
+  }
+  silence() {
+    this.updateConfig({ level: 5 /* SILENT */, enableConsole: false });
+  }
+  unsilence(level = 1 /* INFO */) {
+    this.updateConfig({ level, enableConsole: true });
+  }
+  enableConsoleOnly() {
+    this.updateConfig({ enableConsole: true, enableFile: false });
+  }
+  enableFileOnly() {
+    this.updateConfig({ enableConsole: false, enableFile: true });
+  }
+}
+var globalLogger = null;
+function getLogger(config) {
+  if (!globalLogger) {
+    globalLogger = new Logger(config);
+  } else if (config) {
+    globalLogger.updateConfig(config);
+  }
+  return globalLogger;
+}
+// src/logger/index.ts
+var defaultLogger = getLogger();
+
+// src/services/auth.ts
+defaultLogger.silence();
+
+class AuthService {
+  userRepository;
+  roleRepository;
+  constructor() {
+    this.userRepository = new UserRepository;
+    this.roleRepository = new RoleRepository;
+  }
+  async register(data) {
+    try {
+      const jwtService = getJWTService();
+      RegisterDataValidator.validate(data);
+      const normalizedData = RegisterDataValidator.normalize(data);
+      const existingUser = await this.userRepository.findByEmail(normalizedData.email);
+      if (existingUser) {
+        throw AuthErrorFactory.validation(AUTH_CONFIG.ERROR_MESSAGES.USER_EXISTS);
+      }
+      const passwordHash = await Bun.password.hash(normalizedData.password, {
+        algorithm: AUTH_CONFIG.SECURITY.HASH_ALGORITHM,
+        cost: AUTH_CONFIG.SECURITY.SALT_ROUNDS
+      });
+      const userId = crypto.randomUUID();
+      await this.userRepository.create({
+        id: userId,
+        email: normalizedData.email,
+        passwordHash,
+        firstName: normalizedData.firstName,
+        lastName: normalizedData.lastName,
+        isActive: normalizedData.isActive !== false
+      });
+      await this.assignDefaultRole(userId);
+      const user = await this.userRepository.findById(userId, {
+        includeRoles: true,
+        includePermissions: true
+      });
+      if (!user) {
+        throw AuthErrorFactory.database("Failed to create user", "register");
+      }
+      await this.userRepository.update(userId, { lastLoginAt: new Date });
+      const token = await jwtService.generateToken(user);
+      const refreshToken = await jwtService.generateRefreshToken(Number(user.id));
+      const updatedUser = await this.userRepository.findById(user.id, {
+        includeRoles: true,
+        includePermissions: true
+      });
+      defaultLogger.info(`\u2705 ${AUTH_CONFIG.SUCCESS_MESSAGES.USER_REGISTERED}: ${updatedUser?.email}`);
+      return {
+        success: true,
+        user: updatedUser || user,
+        token,
+        refreshToken
+      };
+    } catch (error) {
+      return ErrorHandler.handle(error, "register");
+    }
+  }
+  async login(data) {
+    try {
+      const jwtService = getJWTService();
+      LoginDataValidator.validate(data);
+      const normalizedData = LoginDataValidator.normalize(data);
+      const user = await this.userRepository.findByEmailForAuth(normalizedData.email, {
+        includeRoles: true,
+        includePermissions: true
+      });
+      if (!user) {
+        throw AuthErrorFactory.authentication(AUTH_CONFIG.ERROR_MESSAGES.INVALID_CREDENTIALS);
+      }
+      if (!user.isActive) {
+        throw AuthErrorFactory.authentication(AUTH_CONFIG.ERROR_MESSAGES.ACCOUNT_INACTIVE);
+      }
+      const isValidPassword = await Bun.password.verify(normalizedData.password, user.passwordHash);
+      if (!isValidPassword) {
+        throw AuthErrorFactory.authentication(AUTH_CONFIG.ERROR_MESSAGES.INVALID_CREDENTIALS);
+      }
+      await this.userRepository.update(user.id, { lastLoginAt: new Date });
+      const updatedUser = await this.userRepository.findById(user.id, {
+        includeRoles: true,
+        includePermissions: true
+      });
+      if (!updatedUser) {
+        throw AuthErrorFactory.database("User not found after update", "login");
+      }
+      const token = await jwtService.generateToken(updatedUser);
+      const refreshToken = await jwtService.generateRefreshToken(Number(updatedUser.id));
+      defaultLogger.info(`\u2705 ${AUTH_CONFIG.SUCCESS_MESSAGES.USER_LOGGED_IN}: ${updatedUser.email}`);
+      return {
+        success: true,
+        user: updatedUser,
+        token,
+        refreshToken
+      };
+    } catch (error) {
+      return ErrorHandler.handle(error, "login");
+    }
+  }
+  async findUserById(id, options = {}) {
+    try {
+      UserIdValidator.validate(id);
+      return await this.userRepository.findById(id, options);
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        throw error;
+      }
+      throw AuthErrorFactory.database(`Failed to find user: ${ErrorHandler.getMessage(error)}`, "findUserById");
+    }
+  }
+  async findUserByEmail(email, options = {}) {
+    try {
+      return await this.userRepository.findByEmail(email, options);
+    } catch (error) {
+      throw AuthErrorFactory.database(`Failed to find user: ${ErrorHandler.getMessage(error)}`, "findUserByEmail");
     }
   }
   async getUserRoles(userId, includePermissions = false) {
     try {
-      const db2 = getDatabase();
-      const rolesQuery = db2.query(`
-        SELECT r.id, r.name, r.created_at, r.is_active
-        FROM roles r
-        INNER JOIN user_roles ur ON r.id = ur.role_id
-        WHERE ur.user_id = ?
-        ORDER BY r.name
-      `);
-      const rolesResult = rolesQuery.all(userId);
-      const roles = [];
-      for (const roleData of rolesResult) {
-        const role = {
-          id: roleData.id,
-          name: roleData.name,
-          created_at: new Date(roleData.created_at),
-          isActive: Boolean(roleData.is_active),
-          permissions: []
-        };
-        if (includePermissions) {
-          const permissionsQuery = db2.query(`
-            SELECT p.id, p.name, p.resource, p.action, p.created_at
-            FROM permissions p
-            INNER JOIN role_permissions rp ON p.id = rp.permission_id
-            WHERE rp.role_id = ?
-            ORDER BY p.resource, p.action
-          `);
-          const permissionsResult = permissionsQuery.all(role.id);
-          role.permissions = permissionsResult.map((permData) => ({
-            id: permData.id,
-            name: permData.name,
-            resource: permData.resource,
-            action: permData.action,
-            created_at: new Date(permData.created_at)
-          }));
-        }
-        roles.push(role);
-      }
-      return roles;
+      UserIdValidator.validate(userId);
+      return await this.userRepository.getUserRoles(userId, includePermissions);
     } catch (error) {
-      console.error("Error getting user roles:", error);
-      throw new Error(`Failed to get user roles: ${error.message}`);
+      if (error instanceof ValidationError) {
+        throw error;
+      }
+      throw AuthErrorFactory.database(`Failed to get user roles: ${ErrorHandler.getMessage(error)}`, "getUserRoles");
     }
   }
   async assignRole(userId, roleName) {
     try {
-      const db2 = getDatabase();
-      const user = await this.findUserById(userId);
-      if (!user) {
-        return {
-          success: false,
-          error: {
-            type: "USER_NOT_FOUND",
-            message: "User not found"
-          }
-        };
+      UserIdValidator.validate(userId);
+      RoleNameValidator.validate(roleName);
+      const userExists = await this.userRepository.findById(userId);
+      if (!userExists) {
+        throw AuthErrorFactory.userNotFound(AUTH_CONFIG.ERROR_MESSAGES.USER_NOT_FOUND);
       }
-      const findRoleQuery = db2.query("SELECT id FROM roles WHERE name = ?");
-      const roleResult = findRoleQuery.get(roleName);
-      if (!roleResult) {
-        return {
-          success: false,
-          error: {
-            type: "NOT_FOUND_ERROR",
-            message: `Role '${roleName}' not found`
-          }
-        };
+      const role = await this.roleRepository.findByName(roleName);
+      if (!role) {
+        return false;
       }
-      const existingQuery = db2.query("SELECT id FROM user_roles WHERE user_id = ? AND role_id = ?");
-      const existing = existingQuery.get(userId, roleResult.id);
-      if (existing) {
-        return {
-          success: false,
-          error: {
-            type: "VALIDATION_ERROR",
-            message: "User already has this role"
-          }
-        };
+      const hasRole = await this.roleRepository.userHasRole(userId, role.id);
+      if (hasRole) {
+        return false;
       }
-      const assignRoleQuery = db2.query("INSERT INTO user_roles (id, user_id, role_id, created_at) VALUES (?, ?, ?, datetime('now'))");
-      assignRoleQuery.run(crypto.randomUUID(), userId, roleResult.id);
-      console.log(`\u2705 Rol ${roleName} asignado al usuario: ${userId}`);
-      return { success: true };
+      await this.roleRepository.assignToUser(userId, role.id);
+      defaultLogger.info(`\u2705 Rol ${roleName} asignado al usuario: ${userId}`);
+      return true;
     } catch (error) {
-      console.error("Error assigning role:", error);
-      return {
-        success: false,
-        error: {
-          type: "DATABASE_ERROR",
-          message: error.message || "Failed to assign role"
-        }
-      };
+      if (error instanceof AuthError) {
+        throw error;
+      }
+      throw AuthErrorFactory.database(`Failed to assign role: ${ErrorHandler.getMessage(error)}`, "assignRole");
     }
   }
   async assignDefaultRole(userId) {
     try {
-      const db2 = getDatabase();
-      const findRoleQuery = db2.query("SELECT id FROM roles WHERE name = 'user'");
-      let userRole = findRoleQuery.all();
-      if (userRole.length === 0) {
-        const roleId = crypto.randomUUID();
-        const createRoleQuery = db2.query("INSERT INTO roles (id, name, created_at) VALUES (?, ?, datetime('now'))");
-        createRoleQuery.run(roleId, "user");
-        userRole = [{ id: roleId }];
+      UserIdValidator.validate(userId);
+      const defaultRole = await this.roleRepository.getOrCreateDefaultRole();
+      const hasRole = await this.roleRepository.userHasRole(userId, defaultRole.id);
+      if (hasRole) {
+        return;
       }
-      const assignRoleQuery = db2.query("INSERT INTO user_roles (id, user_id, role_id, created_at) VALUES (?, ?, ?, datetime('now'))");
-      assignRoleQuery.run(crypto.randomUUID(), userId, userRole[0].id);
+      await this.roleRepository.assignToUser(userId, defaultRole.id);
     } catch (error) {
-      console.error("Error assigning default role:", error);
-      throw error;
-    }
-  }
-  validateRegisterData(data) {
-    if (!data.email || !data.password) {
-      const error = new Error("Email and password are required");
-      error.type = "VALIDATION_ERROR";
-      throw error;
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(data.email)) {
-      const error = new Error("Invalid email format");
-      error.type = "VALIDATION_ERROR";
-      throw error;
-    }
-    if (data.password.length < 8) {
-      const error = new Error("Invalid password strength");
-      error.type = "VALIDATION_ERROR";
-      throw error;
-    }
-    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(data.password)) {
-      const error = new Error("Password must contain at least one uppercase letter, one lowercase letter, and one number");
-      error.type = "VALIDATION_ERROR";
-      throw error;
-    }
-  }
-  validateLoginData(data) {
-    if (!data.email || !data.password) {
-      throw new Error("Email and password are required");
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(data.email)) {
-      throw new Error("Invalid email format");
+      if (error instanceof ValidationError) {
+        throw error;
+      }
+      throw AuthErrorFactory.database(`Failed to assign default role: ${ErrorHandler.getMessage(error)}`, "assignDefaultRole");
     }
   }
   async updatePassword(userId, newPassword) {
     try {
-      const db2 = getDatabase();
-      if (newPassword.length < 8) {
-        return {
-          success: false,
-          error: {
-            type: "VALIDATION_ERROR",
-            message: "Password must be at least 8 characters long"
-          }
-        };
+      UserIdValidator.validate(userId);
+      PasswordValidator.validate(newPassword);
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw AuthErrorFactory.userNotFound(AUTH_CONFIG.ERROR_MESSAGES.USER_NOT_FOUND);
       }
-      const passwordHash = await Bun.password.hash(newPassword, {
-        algorithm: "bcrypt",
-        cost: 12
-      });
-      const updatePasswordQuery = db2.query("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?");
-      updatePasswordQuery.run(passwordHash, userId);
-      console.log(`\u2705 Contrase\xF1a actualizada para usuario: ${userId}`);
-      return { success: true };
+      const hashedPassword = await Bun.password.hash(newPassword);
+      await this.userRepository.update(userId, { passwordHash: hashedPassword });
+      return true;
     } catch (error) {
-      console.error("Error updating password:", error);
-      return {
-        success: false,
-        error: {
-          type: "DATABASE_ERROR",
-          message: `Failed to update password: ${error.message}`
-        }
-      };
+      if (error instanceof AuthError) {
+        throw error;
+      }
+      throw AuthErrorFactory.database(`Failed to update password: ${ErrorHandler.getMessage(error)}`, "updatePassword");
     }
   }
-  async updateUser(userId, data) {
+  async updateUser(userId, updateData) {
     try {
-      const db2 = getDatabase();
-      const existingUser = await this.findUserById(userId);
+      const validatedData = UpdateUserDataValidator.validate(updateData);
+      const normalizedData = UpdateUserDataValidator.normalize(validatedData);
+      UserIdValidator.validate(userId);
+      const existingUser = await this.userRepository.findById(userId);
       if (!existingUser) {
-        return {
-          success: false,
-          error: {
-            type: "USER_NOT_FOUND",
-            message: "User not found"
-          }
-        };
+        throw AuthErrorFactory.userNotFound(AUTH_CONFIG.ERROR_MESSAGES.USER_NOT_FOUND);
       }
-      if (data.email && data.email !== existingUser.email) {
-        const existingByEmail = await this.findUserByEmail(data.email);
-        if (existingByEmail && existingByEmail.id !== userId) {
-          return {
-            success: false,
-            error: {
-              type: "VALIDATION_ERROR",
-              message: "Email already exists"
-            }
-          };
+      if (normalizedData.email && normalizedData.email !== existingUser.email) {
+        const emailExists = await this.userRepository.findByEmail(normalizedData.email);
+        if (emailExists) {
+          return { ...existingUser, isActive: false };
         }
       }
-      let updateFields = [];
-      let updateValues = [];
-      if (data.email) {
-        updateFields.push("email = ?");
-        updateValues.push(data.email);
+      const updateFields = {};
+      if (normalizedData.email) {
+        updateFields.email = normalizedData.email;
       }
-      if (data.firstName !== undefined) {
-        updateFields.push("first_name = ?");
-        updateValues.push(data.firstName);
+      if (normalizedData.firstName !== undefined) {
+        updateFields.firstName = normalizedData.firstName;
       }
-      if (data.lastName !== undefined) {
-        updateFields.push("last_name = ?");
-        updateValues.push(data.lastName);
+      if (normalizedData.lastName !== undefined) {
+        updateFields.lastName = normalizedData.lastName;
       }
-      if (data.is_active !== undefined || data.isActive !== undefined) {
-        updateFields.push("is_active = ?");
-        const activeValue = data.is_active !== undefined ? data.is_active : data.isActive;
-        updateValues.push(activeValue ? 1 : 0);
+      if (normalizedData.isActive !== undefined) {
+        updateFields.isActive = normalizedData.isActive;
       }
-      if (data.password) {
-        const passwordHash = await Bun.password.hash(data.password, {
-          algorithm: "bcrypt",
-          cost: 12
-        });
-        updateFields.push("password_hash = ?");
-        updateValues.push(passwordHash);
-      }
-      updateFields.push("updated_at = datetime('now')");
-      updateValues.push(userId);
-      const updateQuery = db2.query(`UPDATE users SET ${updateFields.join(", ")} WHERE id = ?`);
-      updateQuery.run(...updateValues);
-      if (data.lastLoginAt) {
-        const loginUpdateQuery = db2.query("UPDATE users SET last_login_at = datetime('now') WHERE id = ?");
-        loginUpdateQuery.run(userId);
-      }
-      const updatedUser = await this.findUserById(userId, { includeRoles: true, includePermissions: true });
+      await this.userRepository.update(userId, updateFields);
+      const updatedUser = await this.userRepository.findById(userId);
       if (!updatedUser) {
-        return {
-          success: false,
-          error: {
-            type: "DATABASE_ERROR",
-            message: "Failed to retrieve updated user"
-          }
-        };
+        throw AuthErrorFactory.database("Failed to retrieve updated user", "updateUser");
       }
-      console.log(`\u2705 Usuario actualizado: ${updatedUser.email}`);
-      return { success: true, user: updatedUser };
+      return updatedUser;
     } catch (error) {
-      console.error("Error updating user:", error);
-      return {
-        success: false,
-        error: {
-          type: "DATABASE_ERROR",
-          message: error.message || "Failed to update user"
-        }
-      };
+      if (error instanceof AuthError) {
+        throw error;
+      }
+      throw AuthErrorFactory.database(`Failed to update user: ${ErrorHandler.getMessage(error)}`, "updateUser");
     }
   }
   async deactivateUser(userId) {
     try {
-      const db2 = getDatabase();
-      const deactivateQuery = db2.query("UPDATE users SET is_active = 0, updated_at = datetime('now') WHERE id = ?");
-      deactivateQuery.run(userId);
-      console.log(`\u2705 Usuario desactivado: ${userId}`);
-      return { success: true };
+      UserIdValidator.validate(userId);
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw AuthErrorFactory.userNotFound(AUTH_CONFIG.ERROR_MESSAGES.USER_NOT_FOUND);
+      }
+      await this.userRepository.update(userId, { isActive: false });
+      defaultLogger.info(`\u2705 Usuario desactivado: ${userId}`);
+      return user;
     } catch (error) {
-      console.error("Error deactivating user:", error);
-      return {
-        success: false,
-        error: {
-          type: "DATABASE_ERROR",
-          message: `Failed to deactivate user: ${error.message}`
-        }
-      };
+      if (error instanceof AuthError) {
+        throw error;
+      }
+      throw AuthErrorFactory.database(`Failed to deactivate user: ${ErrorHandler.getMessage(error)}`, "deactivateUser");
     }
   }
   async activateUser(userId) {
     try {
-      const db2 = getDatabase();
-      const activateQuery = db2.query("UPDATE users SET is_active = 1, updated_at = datetime('now') WHERE id = ?");
-      activateQuery.run(userId);
-      console.log(`\u2705 Usuario activado: ${userId}`);
-      return { success: true };
+      UserIdValidator.validate(userId);
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw AuthErrorFactory.userNotFound(AUTH_CONFIG.ERROR_MESSAGES.USER_NOT_FOUND);
+      }
+      await this.userRepository.update(userId, { isActive: true });
+      const updatedUser = await this.userRepository.findById(userId);
+      if (!updatedUser) {
+        throw AuthErrorFactory.database("Failed to retrieve updated user", "activateUser");
+      }
+      defaultLogger.info(`\u2705 Usuario activado: ${userId}`);
+      return updatedUser;
     } catch (error) {
-      console.error("Error activating user:", error);
-      return {
-        success: false,
-        error: {
-          type: "DATABASE_ERROR",
-          message: `Failed to activate user: ${error.message}`
-        }
-      };
+      if (error instanceof AuthError) {
+        throw error;
+      }
+      throw AuthErrorFactory.database(`Failed to activate user: ${ErrorHandler.getMessage(error)}`, "activateUser");
     }
   }
   async deleteUser(userId) {
     try {
-      const db2 = getDatabase();
-      const existingUser = await this.findUserById(userId);
-      if (!existingUser) {
-        return {
-          success: false,
-          error: {
-            type: "USER_NOT_FOUND",
-            message: "User not found"
-          }
-        };
+      UserIdValidator.validate(userId);
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw AuthErrorFactory.userNotFound(AUTH_CONFIG.ERROR_MESSAGES.USER_NOT_FOUND);
       }
-      const deleteUserRolesQuery = db2.query("DELETE FROM user_roles WHERE user_id = ?");
-      deleteUserRolesQuery.run(userId);
-      const deleteUserQuery = db2.query("DELETE FROM users WHERE id = ?");
-      deleteUserQuery.run(userId);
-      console.log(`\u2705 Usuario eliminado: ${userId}`);
-      return { success: true };
+      await this.userRepository.delete(userId);
+      defaultLogger.info(`\u2705 Usuario eliminado: ${userId}`);
+      return true;
     } catch (error) {
-      console.error("Error deleting user:", error);
-      return {
-        success: false,
-        error: {
-          type: "DATABASE_ERROR",
-          message: error.message || "Failed to delete user"
-        }
-      };
+      if (error instanceof AuthError) {
+        throw error;
+      }
+      throw AuthErrorFactory.database(`Failed to delete user: ${ErrorHandler.getMessage(error)}`, "deleteUser");
     }
   }
   async removeRole(userId, roleName) {
     try {
-      const db2 = getDatabase();
-      const existingUser = await this.findUserById(userId);
-      if (!existingUser) {
-        return {
-          success: false,
-          error: {
-            type: "USER_NOT_FOUND",
-            message: "User not found"
-          }
-        };
+      UserIdValidator.validate(userId);
+      RoleNameValidator.validate(roleName);
+      const user = await this.userRepository.findById(userId);
+      if (!user) {
+        throw AuthErrorFactory.userNotFound(AUTH_CONFIG.ERROR_MESSAGES.USER_NOT_FOUND);
       }
-      const roleQuery = db2.query("SELECT id FROM roles WHERE name = ?");
-      const role = roleQuery.get(roleName);
+      const role = await this.roleRepository.findByName(roleName);
       if (!role) {
-        return {
-          success: false,
-          error: {
-            type: "NOT_FOUND_ERROR",
-            message: "Role not found"
-          }
-        };
+        throw AuthErrorFactory.validation(AUTH_CONFIG.ERROR_MESSAGES.ROLE_NOT_FOUND);
       }
-      const userRoleQuery = db2.query("SELECT id FROM user_roles WHERE user_id = ? AND role_id = ?");
-      const userRole = userRoleQuery.get(userId, role.id);
-      if (!userRole) {
-        return {
-          success: false,
-          error: {
-            type: "NOT_FOUND_ERROR",
-            message: "User does not have this role"
-          }
-        };
-      }
-      const removeRoleQuery = db2.query("DELETE FROM user_roles WHERE user_id = ? AND role_id = ?");
-      removeRoleQuery.run(userId, role.id);
-      console.log(`\u2705 Rol ${roleName} removido del usuario: ${userId}`);
-      return { success: true };
+      await this.roleRepository.removeFromUser(userId, role.id);
+      defaultLogger.info(`\u2705 Rol ${roleName} removido del usuario: ${userId}`);
+      return true;
     } catch (error) {
-      console.error("Error removing role:", error);
-      return {
-        success: false,
-        error: {
-          type: "DATABASE_ERROR",
-          message: error.message || "Failed to remove role"
-        }
-      };
+      if (error instanceof AuthError) {
+        throw error;
+      }
+      throw AuthErrorFactory.database(`Failed to remove role: ${ErrorHandler.getMessage(error)}`, "removeRole");
     }
   }
   async getUsers(page = 1, limit = 10, options = {}) {
     try {
-      const db2 = getDatabase();
-      const offset = (page - 1) * limit;
-      let whereConditions = [];
-      let queryParams = [];
-      if (options.activeOnly) {
-        whereConditions.push("is_active = ?");
-        queryParams.push(1);
-      }
-      if (options.isActive !== undefined) {
-        whereConditions.push("is_active = ?");
-        queryParams.push(options.isActive ? 1 : 0);
-      }
-      if (options.search) {
-        whereConditions.push("(email LIKE ? OR first_name LIKE ? OR last_name LIKE ?)");
-        const searchTerm = `%${options.search}%`;
-        queryParams.push(searchTerm, searchTerm, searchTerm);
-      }
-      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(" AND ")}` : "";
-      let orderBy = "ORDER BY created_at DESC";
-      if (options.sortBy) {
-        const sortDirection = options.sortOrder === "asc" ? "ASC" : "DESC";
-        switch (options.sortBy) {
-          case "email":
-            orderBy = `ORDER BY email ${sortDirection}`;
-            break;
-          case "created_at":
-            orderBy = `ORDER BY created_at ${sortDirection}`;
-            break;
-          case "name":
-            orderBy = `ORDER BY first_name ${sortDirection}, last_name ${sortDirection}`;
-            break;
-          default:
-            orderBy = "ORDER BY created_at DESC";
-        }
-      }
-      const countQuery = db2.query(`SELECT COUNT(*) as total FROM users ${whereClause}`);
-      const countResult = countQuery.get(...queryParams);
-      const total = countResult?.total || countResult?.["COUNT(*)"] || 0;
-      const usersQuery = db2.query(`SELECT id, email, password_hash, first_name, last_name, created_at, updated_at, is_active, last_login_at FROM users ${whereClause} ${orderBy} LIMIT ? OFFSET ?`);
-      const usersResult = usersQuery.all(...queryParams, limit, offset);
-      const users = [];
-      for (const userData of usersResult) {
-        const user = this.mapDatabaseUserToUser(userData);
-        if (options.includeRoles) {
-          user.roles = await this.getUserRoles(userData.id, options.includePermissions);
-        }
-        users.push(user);
-      }
-      return { users, total };
+      const repositoryOptions = {
+        activeOnly: options.activeOnly,
+        search: options.search,
+        sortBy: options.sortBy,
+        sortOrder: options.sortOrder,
+        includeRoles: options.includeRoles,
+        includePermissions: options.includePermissions
+      };
+      return await this.userRepository.getUsers({ page, limit, ...repositoryOptions });
     } catch (error) {
-      console.error("Error getting users:", error);
-      throw new Error(`Failed to get users: ${error.message}`);
+      throw AuthErrorFactory.database(`Failed to get users: ${ErrorHandler.getMessage(error)}`, "getUsers");
     }
-  }
-  mapDatabaseUserToUser(userData) {
-    const createdAt = new Date(userData.created_at);
-    const updatedAt = new Date(userData.updated_at);
-    return {
-      id: userData.id,
-      email: userData.email,
-      password_hash: userData.password_hash,
-      firstName: userData.first_name,
-      lastName: userData.last_name,
-      created_at: createdAt,
-      updated_at: updatedAt,
-      createdAt,
-      updatedAt,
-      is_active: Boolean(userData.is_active),
-      isActive: Boolean(userData.is_active),
-      lastLoginAt: userData.last_login_at ? new Date(userData.last_login_at) : undefined,
-      roles: []
-    };
   }
 }
 var authServiceInstance = null;
@@ -1019,8 +1889,8 @@ class PermissionService {
       const roleId = crypto.randomUUID();
       const query = db2.query("INSERT INTO roles (id, name, description, is_active, created_at) VALUES (?, ?, ?, ?, datetime('now'))");
       query.run(roleId, data.name, data.description || null, 1);
-      if (data.permissionIds && data.permissionIds.length > 0) {
-        const assignResult = await this.assignPermissionsToRole(roleId, data.permissionIds);
+      if (data.permissions && data.permissions.length > 0) {
+        const assignResult = await this.assignPermissionsToRole(roleId, data.permissions);
         if (!assignResult.success) {
           return assignResult;
         }
@@ -1517,7 +2387,8 @@ class PermissionService {
         resource: row.resource,
         action: row.action,
         description: row.description,
-        created_at: new Date(row.created_at)
+        createdAt: new Date(row.created_at),
+        updatedAt: new Date(row.created_at)
       }));
     } catch (error) {
       console.error("Error getting user permissions:", error);
@@ -1538,7 +2409,8 @@ class PermissionService {
         resource: result.resource,
         action: result.action,
         description: result.description,
-        created_at: new Date(result.created_at)
+        createdAt: new Date(result.created_at),
+        updatedAt: new Date(result.created_at)
       };
     } catch (error) {
       console.error("Error finding permission by ID:", error);
@@ -1559,7 +2431,8 @@ class PermissionService {
         resource: result.resource,
         action: result.action,
         description: result.description,
-        created_at: new Date(result.created_at)
+        createdAt: new Date(result.created_at),
+        updatedAt: new Date(result.created_at)
       };
     } catch (error) {
       console.error("Error finding permission by name:", error);
@@ -1578,7 +2451,9 @@ class PermissionService {
         id: result.id,
         name: result.name,
         description: result.description,
-        created_at: new Date(result.created_at),
+        createdAt: new Date(result.created_at),
+        updatedAt: new Date(result.created_at),
+        isDefault: Boolean(result.is_active),
         isActive: Boolean(result.is_active),
         permissions: []
       };
@@ -1603,7 +2478,9 @@ class PermissionService {
         id: result.id,
         name: result.name,
         description: result.description,
-        created_at: new Date(result.created_at),
+        createdAt: new Date(result.created_at),
+        updatedAt: new Date(result.created_at),
+        isDefault: Boolean(result.is_active),
         isActive: Boolean(result.is_active),
         permissions: []
       };
@@ -1632,7 +2509,8 @@ class PermissionService {
         resource: row.resource,
         action: row.action,
         description: row.description,
-        created_at: new Date(row.created_at)
+        createdAt: new Date(row.created_at),
+        updatedAt: new Date(row.created_at)
       }));
     } catch (error) {
       console.error("Error getting role permissions:", error);
@@ -1654,7 +2532,9 @@ class PermissionService {
           id: row.id,
           name: row.name,
           description: row.description,
-          created_at: new Date(row.created_at),
+          createdAt: new Date(row.created_at),
+          updatedAt: new Date(row.created_at),
+          isDefault: Boolean(row.is_active),
           isActive: Boolean(row.is_active),
           permissions: []
         };
@@ -1684,7 +2564,8 @@ class PermissionService {
         resource: row.resource,
         action: row.action,
         description: row.description,
-        created_at: new Date(row.created_at)
+        createdAt: new Date(row.created_at),
+        updatedAt: new Date(row.created_at)
       }));
     } catch (error) {
       console.error("Error getting all permissions:", error);
@@ -2610,11 +3491,11 @@ var migrations = [
       `);
       db2.exec("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)");
       db2.exec("CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)");
-      console.log("\u2705 Tabla users creada");
+      defaultLogger.info("\u2705 Tabla users creada");
     },
     down: async (db2) => {
       db2.exec("DROP TABLE IF EXISTS users");
-      console.log("\u2705 Tabla users eliminada");
+      defaultLogger.info("\u2705 Tabla users eliminada");
     }
   },
   {
@@ -2629,11 +3510,11 @@ var migrations = [
         )
       `);
       db2.exec("CREATE INDEX IF NOT EXISTS idx_roles_name ON roles(name)");
-      console.log("\u2705 Tabla roles creada");
+      defaultLogger.info("\u2705 Tabla roles creada");
     },
     down: async (db2) => {
       db2.exec("DROP TABLE IF EXISTS roles");
-      console.log("\u2705 Tabla roles eliminada");
+      defaultLogger.info("\u2705 Tabla roles eliminada");
     }
   },
   {
@@ -2652,11 +3533,11 @@ var migrations = [
       db2.exec("CREATE INDEX IF NOT EXISTS idx_permissions_name ON permissions(name)");
       db2.exec("CREATE INDEX IF NOT EXISTS idx_permissions_resource ON permissions(resource)");
       db2.exec("CREATE INDEX IF NOT EXISTS idx_permissions_action ON permissions(action)");
-      console.log("\u2705 Tabla permissions creada");
+      defaultLogger.info("\u2705 Tabla permissions creada");
     },
     down: async (db2) => {
       db2.exec("DROP TABLE IF EXISTS permissions");
-      console.log("\u2705 Tabla permissions eliminada");
+      defaultLogger.info("\u2705 Tabla permissions eliminada");
     }
   },
   {
@@ -2676,11 +3557,11 @@ var migrations = [
       `);
       db2.exec("CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles(user_id)");
       db2.exec("CREATE INDEX IF NOT EXISTS idx_user_roles_role_id ON user_roles(role_id)");
-      console.log("\u2705 Tabla user_roles creada");
+      defaultLogger.info("\u2705 Tabla user_roles creada");
     },
     down: async (db2) => {
       db2.exec("DROP TABLE IF EXISTS user_roles");
-      console.log("\u2705 Tabla user_roles eliminada");
+      defaultLogger.info("\u2705 Tabla user_roles eliminada");
     }
   },
   {
@@ -2700,11 +3581,11 @@ var migrations = [
       `);
       db2.exec("CREATE INDEX IF NOT EXISTS idx_role_permissions_role_id ON role_permissions(role_id)");
       db2.exec("CREATE INDEX IF NOT EXISTS idx_role_permissions_permission_id ON role_permissions(permission_id)");
-      console.log("\u2705 Tabla role_permissions creada");
+      defaultLogger.info("\u2705 Tabla role_permissions creada");
     },
     down: async (db2) => {
       db2.exec("DROP TABLE IF EXISTS role_permissions");
-      console.log("\u2705 Tabla role_permissions eliminada");
+      defaultLogger.info("\u2705 Tabla role_permissions eliminada");
     }
   },
   {
@@ -2729,11 +3610,11 @@ var migrations = [
       db2.exec("CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)");
       db2.exec("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)");
       db2.exec("CREATE INDEX IF NOT EXISTS idx_sessions_active ON sessions(is_active)");
-      console.log("\u2705 Tabla sessions creada");
+      defaultLogger.info("\u2705 Tabla sessions creada");
     },
     down: async (db2) => {
       db2.exec("DROP TABLE IF EXISTS sessions");
-      console.log("\u2705 Tabla sessions eliminada");
+      defaultLogger.info("\u2705 Tabla sessions eliminada");
     }
   },
   {
@@ -2748,11 +3629,11 @@ var migrations = [
           executed_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
-      console.log("\u2705 Tabla migration_history creada");
+      defaultLogger.info("\u2705 Tabla migration_history creada");
     },
     down: async (db2) => {
       db2.exec("DROP TABLE IF EXISTS migration_history");
-      console.log("\u2705 Tabla migration_history eliminada");
+      defaultLogger.info("\u2705 Tabla migration_history eliminada");
     }
   },
   {
@@ -2765,7 +3646,7 @@ var migrations = [
       db2.exec(`
         ALTER TABLE permissions ADD COLUMN description TEXT
       `);
-      console.log("\u2705 Campos description agregados a roles y permissions");
+      defaultLogger.info("\u2705 Campos description agregados a roles y permissions");
     },
     down: async (db2) => {
       db2.exec(`
@@ -2792,7 +3673,7 @@ var migrations = [
         INSERT INTO permissions SELECT * FROM permissions_backup;
         DROP TABLE permissions_backup;
       `);
-      console.log("\u2705 Campos description removidos de roles y permissions");
+      defaultLogger.info("\u2705 Campos description removidos de roles y permissions");
     }
   },
   {
@@ -2805,7 +3686,7 @@ var migrations = [
       db2.exec(`
         ALTER TABLE users ADD COLUMN last_name TEXT
       `);
-      console.log("\u2705 Campos first_name y last_name agregados a users");
+      defaultLogger.info("\u2705 Campos first_name y last_name agregados a users");
     },
     down: async (db2) => {
       db2.exec(`
@@ -2824,7 +3705,7 @@ var migrations = [
       `);
       db2.exec("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)");
       db2.exec("CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)");
-      console.log("\u2705 Campos first_name y last_name removidos de users");
+      defaultLogger.info("\u2705 Campos first_name y last_name removidos de users");
     }
   },
   {
@@ -2834,7 +3715,7 @@ var migrations = [
       db2.exec(`
         ALTER TABLE users ADD COLUMN last_login_at DATETIME
       `);
-      console.log("\u2705 Campo last_login_at agregado a users");
+      defaultLogger.info("\u2705 Campo last_login_at agregado a users");
     },
     down: async (db2) => {
       db2.exec(`
@@ -2855,7 +3736,7 @@ var migrations = [
       `);
       db2.exec("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)");
       db2.exec("CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)");
-      console.log("\u2705 Campo last_login_at removido de users");
+      defaultLogger.info("\u2705 Campo last_login_at removido de users");
     }
   },
   {
@@ -2865,7 +3746,7 @@ var migrations = [
       db2.exec(`
         ALTER TABLE roles ADD COLUMN is_active BOOLEAN DEFAULT 1
       `);
-      console.log("\u2705 Campo is_active agregado a roles");
+      defaultLogger.info("\u2705 Campo is_active agregado a roles");
     },
     down: async (db2) => {
       db2.exec(`
@@ -2881,7 +3762,7 @@ var migrations = [
         DROP TABLE roles_backup;
       `);
       db2.exec("CREATE INDEX IF NOT EXISTS idx_roles_name ON roles(name)");
-      console.log("\u2705 Campo is_active removido de roles");
+      defaultLogger.info("\u2705 Campo is_active removido de roles");
     }
   }
 ];
@@ -2899,7 +3780,7 @@ async function recordMigration(version, name) {
   db2.query("INSERT INTO migration_history (version, name) VALUES (?, ?)").run(version, name);
 }
 async function runMigrations() {
-  console.log("\uD83D\uDD04 Iniciando migraciones...");
+  defaultLogger.info("\uD83D\uDD04 Iniciando migraciones...");
   const db2 = getDatabase();
   db2.exec(`
     CREATE TABLE IF NOT EXISTS migration_history (
@@ -2910,25 +3791,25 @@ async function runMigrations() {
     )
   `);
   const currentVersion = await getCurrentVersion();
-  console.log(`\uD83D\uDCCA Versi\xF3n actual de la base de datos: ${currentVersion}`);
+  defaultLogger.info(`\uD83D\uDCCA Versi\xF3n actual de la base de datos: ${currentVersion}`);
   const pendingMigrations = migrations.filter((m) => m.version > currentVersion);
   if (pendingMigrations.length === 0) {
-    console.log("\u2705 No hay migraciones pendientes");
+    defaultLogger.info("\u2705 No hay migraciones pendientes");
     return;
   }
-  console.log(`\uD83D\uDCCB ${pendingMigrations.length} migraciones pendientes`);
+  defaultLogger.info(`\uD83D\uDCCB ${pendingMigrations.length} migraciones pendientes`);
   try {
     db2.exec("BEGIN TRANSACTION");
     for (const migration of pendingMigrations) {
-      console.log(`\u26A1 Ejecutando migraci\xF3n ${migration.version}: ${migration.name}`);
+      defaultLogger.info(`\u26A1 Ejecutando migraci\xF3n ${migration.version}: ${migration.name}`);
       await migration.up(db2);
       if (migration.name !== "create_migration_history_table") {
         await recordMigration(migration.version, migration.name);
       }
-      console.log(`\u2705 Migraci\xF3n ${migration.version} completada`);
+      defaultLogger.info(`\u2705 Migraci\xF3n ${migration.version} completada`);
     }
     db2.exec("COMMIT");
-    console.log("\uD83C\uDF89 Todas las migraciones completadas exitosamente");
+    defaultLogger.info("\uD83C\uDF89 Todas las migraciones completadas exitosamente");
   } catch (error) {
     db2.exec("ROLLBACK");
     console.error("\u274C Error durante las migraciones:", error);
@@ -2936,25 +3817,25 @@ async function runMigrations() {
   }
 }
 async function rollbackMigrations(targetVersion) {
-  console.log(`\uD83D\uDD04 Revirtiendo migraciones hasta la versi\xF3n ${targetVersion}...`);
+  defaultLogger.info(`\uD83D\uDD04 Revirtiendo migraciones hasta la versi\xF3n ${targetVersion}...`);
   const db2 = getDatabase();
   const currentVersion = await getCurrentVersion();
   if (targetVersion >= currentVersion) {
-    console.log("\u2705 No hay migraciones para revertir");
+    defaultLogger.info("\u2705 No hay migraciones para revertir");
     return;
   }
   const migrationsToRollback = migrations.filter((m) => m.version > targetVersion && m.version <= currentVersion).sort((a, b) => b.version - a.version);
-  console.log(`\uD83D\uDCCB ${migrationsToRollback.length} migraciones a revertir`);
+  defaultLogger.info(`\uD83D\uDCCB ${migrationsToRollback.length} migraciones a revertir`);
   try {
     db2.exec("BEGIN TRANSACTION");
     for (const migration of migrationsToRollback) {
-      console.log(`\u26A1 Revirtiendo migraci\xF3n ${migration.version}: ${migration.name}`);
+      defaultLogger.info(`\u26A1 Revirtiendo migraci\xF3n ${migration.version}: ${migration.name}`);
       await migration.down(db2);
       db2.query("DELETE FROM migration_history WHERE version = ?").run(migration.version);
-      console.log(`\u2705 Migraci\xF3n ${migration.version} revertida`);
+      defaultLogger.info(`\u2705 Migraci\xF3n ${migration.version} revertida`);
     }
     db2.exec("COMMIT");
-    console.log("\uD83C\uDF89 Rollback completado exitosamente");
+    defaultLogger.info("\uD83C\uDF89 Rollback completado exitosamente");
   } catch (error) {
     db2.exec("ROLLBACK");
     console.error("\u274C Error durante el rollback:", error);
@@ -2974,7 +3855,7 @@ async function getMigrationStatus() {
   };
 }
 async function resetDatabase() {
-  console.log("\uD83D\uDD04 Reseteando base de datos...");
+  defaultLogger.info("\uD83D\uDD04 Reseteando base de datos...");
   const db2 = getDatabase();
   try {
     db2.exec("BEGIN TRANSACTION");
@@ -2988,7 +3869,7 @@ async function resetDatabase() {
     }
     db2.exec("DROP TABLE IF EXISTS migration_history");
     db2.exec("COMMIT");
-    console.log("\u2705 Base de datos reseteada");
+    defaultLogger.info("\u2705 Base de datos reseteada");
     await runMigrations();
   } catch (error) {
     db2.exec("ROLLBACK");
@@ -2998,6 +3879,7 @@ async function resetDatabase() {
 }
 
 // src/scripts/seed.ts
+defaultLogger.silence();
 var initialPermissions = [
   { name: "users.read", resource: "users", action: "read" },
   { name: "users.create", resource: "users", action: "create" },
@@ -3216,7 +4098,7 @@ function getAllUsers() {
 }
 async function seedDatabase(dbPath, allUsers = getAllUsers()) {
   try {
-    console.log("\uD83C\uDF31 Starting database seeding...");
+    defaultLogger.info("\uD83C\uDF31 Starting database seeding...");
     initDatabase(dbPath);
     await runMigrations();
     const permissionService = new PermissionService;
@@ -3270,8 +4152,8 @@ async function seedDatabase(dbPath, allUsers = getAllUsers()) {
         }
       }
     }
-    console.log("\u2728 Seeding completed successfully!");
-    console.log(`\uD83D\uDCCA Summary: ${createdCount} users created, ${skippedCount} skipped`);
+    defaultLogger.info("\u2728 Seeding completed successfully!");
+    defaultLogger.info(`\uD83D\uDCCA Summary: ${createdCount} users created, ${skippedCount} skipped`);
   } catch (error) {
     console.error("\u274C Error during seeding:", error);
     if (true) {
@@ -3280,7 +4162,7 @@ async function seedDatabase(dbPath, allUsers = getAllUsers()) {
   }
 }
 async function cleanDatabase(dbPath) {
-  console.log("\uD83E\uDDF9 Cleaning database...");
+  defaultLogger.info("\uD83E\uDDF9 Cleaning database...");
   try {
     if (!isDatabaseInitialized()) {
       initDatabase(dbPath);
@@ -3310,7 +4192,7 @@ async function cleanDatabase(dbPath) {
       } catch (error) {}
     }
     db2.exec("PRAGMA foreign_keys = ON");
-    console.log("\u2705 Database cleaned successfully");
+    defaultLogger.info("\u2705 Database cleaned successfully");
   } catch (error) {
     console.error("\u274C Error during cleanup:", error);
     if (true) {
@@ -3320,10 +4202,10 @@ async function cleanDatabase(dbPath) {
 }
 async function resetDatabase2() {
   try {
-    console.log("\uD83D\uDD04 Resetting database...");
+    defaultLogger.info("\uD83D\uDD04 Resetting database...");
     await cleanDatabase();
     await seedDatabase();
-    console.log("\u2728 Database reset successfully!");
+    defaultLogger.info("\u2728 Database reset successfully!");
   } catch (error) {
     console.error("\u274C Error during reset:", error);
     throw error;
@@ -3331,17 +4213,17 @@ async function resetDatabase2() {
 }
 async function checkDatabaseStatus() {
   try {
-    console.log("\uD83D\uDD0D Verificando estado de la base de datos...");
+    defaultLogger.info("\uD83D\uDD0D Verificando estado de la base de datos...");
     const db2 = getDatabase();
     const tables = ["users", "roles", "permissions", "user_roles", "role_permissions", "sessions"];
-    console.log(`
+    defaultLogger.info(`
 \uD83D\uDCCA Estado actual:`);
     for (const table of tables) {
       try {
         const result = db2.query(`SELECT COUNT(*) as count FROM ${table}`).get();
-        console.log(`  ${table}: ${result.count} registros`);
+        defaultLogger.info(`  ${table}: ${result.count} registros`);
       } catch (error) {
-        console.log(`  ${table}: Tabla no existe`);
+        defaultLogger.info(`  ${table}: Tabla no existe`);
       }
     }
     try {
@@ -3354,14 +4236,14 @@ async function checkDatabaseStatus() {
         ORDER BY u.email
       `).all();
       if (usersWithRoles.length > 0) {
-        console.log(`
+        defaultLogger.info(`
 \uD83D\uDC65 Usuarios y sus roles:`);
         usersWithRoles.forEach((user) => {
-          console.log(`  ${user.email}: ${user.roles || "Sin roles"}`);
+          defaultLogger.info(`  ${user.email}: ${user.roles || "Sin roles"}`);
         });
       }
     } catch (error) {
-      console.log("  \u26A0\uFE0F  No se pudieron obtener usuarios con roles");
+      defaultLogger.info("  \u26A0\uFE0F  No se pudieron obtener usuarios con roles");
     }
   } catch (error) {
     console.error("\u274C Error verificando estado:", error);
@@ -3370,7 +4252,7 @@ async function checkDatabaseStatus() {
 }
 async function seedTestUsersOnly(count) {
   try {
-    console.log("\uD83E\uDDEA Creando solo usuarios de prueba...");
+    defaultLogger.info("\uD83E\uDDEA Creando solo usuarios de prueba...");
     const userCount = count || 10;
     const testUsers = generateTestUsers(userCount);
     initDatabase();
@@ -3385,16 +4267,16 @@ async function seedTestUsersOnly(count) {
         });
         if (result && result.user) {
           createdCount++;
-          console.log(`  \u2705 Usuario de prueba creado: ${user.email}`);
+          defaultLogger.info(`  \u2705 Usuario de prueba creado: ${user.email}`);
           for (const roleName of user.roles) {
             await authService.assignRole(result.user.id, roleName);
           }
         }
       } catch (error) {
-        console.log(`  \u26A0\uFE0F  Usuario ya existe: ${user.email}`);
+        defaultLogger.info(`  \u26A0\uFE0F  Usuario ya existe: ${user.email}`);
       }
     }
-    console.log(`
+    defaultLogger.info(`
 \u2728 ${createdCount} usuarios de prueba creados exitosamente!`);
   } catch (error) {
     console.error("\u274C Error creando usuarios de prueba:", error);
@@ -3422,21 +4304,21 @@ async function mainSeed() {
       await seedTestUsersOnly(count);
       break;
     default:
-      console.log("Uso: bun run src/scripts/seed.ts [comando] [par\xE1metros]");
-      console.log(`
+      defaultLogger.info("Uso: bun run src/scripts/seed.ts [comando] [par\xE1metros]");
+      defaultLogger.info(`
 Comandos disponibles:`);
-      console.log("  seed        - Poblar base de datos con datos iniciales");
-      console.log("  clean       - Limpiar todos los datos");
-      console.log("  reset       - Limpiar y volver a poblar");
-      console.log("  status      - Verificar estado actual");
-      console.log("  config      - Mostrar configuraci\xF3n actual");
-      console.log("  test-users  - Crear solo usuarios de prueba [cantidad]");
-      console.log(`
+      defaultLogger.info("  seed        - Poblar base de datos con datos iniciales");
+      defaultLogger.info("  clean       - Limpiar todos los datos");
+      defaultLogger.info("  reset       - Limpiar y volver a poblar");
+      defaultLogger.info("  status      - Verificar estado actual");
+      defaultLogger.info("  config      - Mostrar configuraci\xF3n actual");
+      defaultLogger.info("  test-users  - Crear solo usuarios de prueba [cantidad]");
+      defaultLogger.info(`
 Ejemplos:`);
-      console.log("  bun run src/scripts/seed.ts seed");
-      console.log("  bun run src/scripts/seed.ts test-users 20");
-      console.log("  NODE_ENV=development SEED_USER_COUNT=25 bun run src/scripts/seed.ts seed");
-      console.log('  DEFAULT_SEED_PASSWORD="MyCustomPass123!" bun run src/scripts/seed.ts test-users 5');
+      defaultLogger.info("  bun run src/scripts/seed.ts seed");
+      defaultLogger.info("  bun run src/scripts/seed.ts test-users 20");
+      defaultLogger.info("  NODE_ENV=development SEED_USER_COUNT=25 bun run src/scripts/seed.ts seed");
+      defaultLogger.info('  DEFAULT_SEED_PASSWORD="MyCustomPass123!" bun run src/scripts/seed.ts test-users 5');
   }
 }
 if (process.argv[1] && process.argv[1].endsWith("seed.ts") && true) {
@@ -4375,7 +5257,7 @@ async function getRoleByName(args) {
     console.log("\uD83C\uDFAD Informaci\xF3n del rol:");
     console.log(`  \uD83D\uDCCB Nombre: ${role.name}`);
     console.log(`  \uD83C\uDD94 ID: ${role.id}`);
-    console.log(`  \uD83D\uDCC5 Creado: ${new Date(role.created_at).toLocaleString()}`);
+    console.log(`  \uD83D\uDCC5 Creado: ${new Date(role.createdAt).toLocaleString()}`);
     if (role.permissions && role.permissions.length > 0) {
       console.log("  \uD83D\uDD10 Permisos:");
       role.permissions.forEach((permission) => {
@@ -4833,8 +5715,9 @@ export {
   DEFAULT_AUTH_CONFIG,
   AuthService,
   AuthLibrary,
+  AuthError,
   AUTH_LIBRARY_INFO
 };
 
-//# debugId=B794F85F18E8CD9E64756E2164756E21
+//# debugId=E472C5F7C3626C3564756E2164756E21
 //# sourceMappingURL=index.js.map

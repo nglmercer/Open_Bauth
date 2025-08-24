@@ -2,6 +2,18 @@ import type { Request, Response, NextFunction } from 'express';
 import { AUTH_CONFIG } from '../config/constants';
 import { AuthErrorFactory } from '../errors/auth';
 
+// Extend Request interface to include user property
+declare global {
+  namespace Express {
+    interface Request {
+      user?: {
+        id: string;
+        [key: string]: any;
+      };
+    }
+  }
+}
+
 /**
  * Rate limiter store interface
  */
@@ -101,26 +113,27 @@ export class RateLimiter {
         });
         
         if (currentCount > this.config.maxRequests) {
-          throw AuthErrorFactory.rateLimitExceeded(this.config.message);
+          throw AuthErrorFactory.rateLimit(this.config.message);
         }
         
         // Handle response to potentially skip counting
+        const rateLimiterInstance = this;
         if (this.config.skipSuccessfulRequests || this.config.skipFailedRequests) {
           const originalSend = res.send;
-          res.send = function(body) {
+          res.send = function(body: any) {
             const statusCode = res.statusCode;
             const isSuccess = statusCode >= 200 && statusCode < 300;
             const isFailure = statusCode >= 400;
             
             // If we should skip this request, decrement the counter
-            if ((isSuccess && this.config.skipSuccessfulRequests) ||
-                (isFailure && this.config.skipFailedRequests)) {
+            if ((isSuccess && rateLimiterInstance.config.skipSuccessfulRequests) ||
+                (isFailure && rateLimiterInstance.config.skipFailedRequests)) {
               // Note: This is a simplified approach. In production, you might want
               // a more sophisticated way to handle this.
             }
             
-            return originalSend.call(this, body);
-          }.bind(this);
+            return originalSend.call(res, body);
+          };
         }
         
         next();
@@ -137,30 +150,30 @@ export class RateLimiter {
 export const rateLimiters = {
   // General API rate limiter
   general: new RateLimiter({
-    windowMs: AUTH_CONFIG.RATE_LIMITING.GENERAL.WINDOW_MS,
-    maxRequests: AUTH_CONFIG.RATE_LIMITING.GENERAL.MAX_REQUESTS,
+    windowMs: AUTH_CONFIG.RATE_LIMIT.LOGIN.WINDOW_MS,
+    maxRequests: AUTH_CONFIG.RATE_LIMIT.LOGIN.MAX_ATTEMPTS,
     message: 'Too many requests from this IP, please try again later'
   }),
 
   // Authentication endpoints (login, register)
   auth: new RateLimiter({
-    windowMs: AUTH_CONFIG.RATE_LIMITING.AUTH.WINDOW_MS,
-    maxRequests: AUTH_CONFIG.RATE_LIMITING.AUTH.MAX_REQUESTS,
+    windowMs: AUTH_CONFIG.RATE_LIMIT.LOGIN.WINDOW_MS,
+    maxRequests: AUTH_CONFIG.RATE_LIMIT.LOGIN.MAX_ATTEMPTS,
     message: 'Too many authentication attempts, please try again later',
     skipSuccessfulRequests: true // Don't count successful logins
   }),
 
   // Password reset endpoints
   passwordReset: new RateLimiter({
-    windowMs: AUTH_CONFIG.RATE_LIMITING.PASSWORD_RESET.WINDOW_MS,
-    maxRequests: AUTH_CONFIG.RATE_LIMITING.PASSWORD_RESET.MAX_REQUESTS,
+    windowMs: AUTH_CONFIG.RATE_LIMIT.PASSWORD_RESET.WINDOW_MS,
+    maxRequests: AUTH_CONFIG.RATE_LIMIT.PASSWORD_RESET.MAX_ATTEMPTS,
     message: 'Too many password reset attempts, please try again later'
   }),
 
   // User creation/modification endpoints
   userModification: new RateLimiter({
-    windowMs: AUTH_CONFIG.RATE_LIMITING.USER_MODIFICATION.WINDOW_MS,
-    maxRequests: AUTH_CONFIG.RATE_LIMITING.USER_MODIFICATION.MAX_REQUESTS,
+    windowMs: AUTH_CONFIG.RATE_LIMIT.REGISTER.WINDOW_MS,
+    maxRequests: AUTH_CONFIG.RATE_LIMIT.REGISTER.MAX_ATTEMPTS,
     message: 'Too many user modification requests, please try again later'
   })
 };

@@ -288,7 +288,8 @@ export const testUtils = {
   validateRoleStructure(role: any) {
     expect(role).toHaveProperty('id');
     expect(role).toHaveProperty('name');
-    expect(role).toHaveProperty('created_at');
+    expect(role).toHaveProperty('createdAt');
+    expect(role).toHaveProperty('updatedAt');
     expect(role).toHaveProperty('isActive');
   },
 
@@ -300,7 +301,8 @@ export const testUtils = {
     expect(permission).toHaveProperty('name');
     expect(permission).toHaveProperty('resource');
     expect(permission).toHaveProperty('action');
-    expect(permission).toHaveProperty('created_at');
+    expect(permission).toHaveProperty('createdAt');
+    expect(permission).toHaveProperty('updatedAt');
   }
 };
 

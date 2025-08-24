@@ -201,7 +201,11 @@ export class UserRepository {
       
       if (updateData.lastLoginAt !== undefined) {
         updateFields.push('last_login_at = ?');
-        updateValues.push(updateData.lastLoginAt.toISOString());
+        // Ensure lastLoginAt is a valid Date object
+        const lastLoginDate = updateData.lastLoginAt instanceof Date 
+          ? updateData.lastLoginAt 
+          : new Date(updateData.lastLoginAt);
+        updateValues.push(lastLoginDate.toISOString());
       }
       
       updateFields.push("updated_at = datetime('now')");

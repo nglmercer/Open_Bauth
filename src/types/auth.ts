@@ -143,6 +143,7 @@ export interface Role extends BaseEntity {
   name: string;
   description?: string;
   isDefault: boolean;
+  isActive: boolean;
   permissions: Permission[];
   metadata?: RoleMetadata;
 }
@@ -164,6 +165,7 @@ export interface UpdateRoleData {
   name?: string;
   description?: string;
   isDefault?: boolean;
+  isActive?: boolean;
 }
 
 /**
@@ -407,63 +409,11 @@ export interface PermissionOptions {
 }
 
 /**
- * Datos para crear un nuevo permiso
- */
-export interface CreatePermissionData {
-  name: string;
-  description?: string;
-  resource?: string;
-  action?: string;
-}
-
-/**
- * Datos para crear un nuevo rol
- */
-export interface CreateRoleData {
-  name: string;
-  description?: string;
-  permissionIds?: string[];
-  permissions?: string[];
-}
-
-/**
  * Datos para asignar rol a usuario
  */
 export interface AssignRoleData {
   userId: string;
   roleId: string;
-}
-
-/**
- * Tipos de datos para actualizar un permiso
- */
-export interface UpdatePermissionData {
-  description?: string;
-  resource?: string;
-  action?: string;
-  name?: string;
-}
-
-/**
- * Tipos de datos para actualizar un rol
- */
-export interface UpdateRoleData {
-  name?: string;
-  description?: string;
-  isActive?: boolean;
-}
-
-/**
- * Tipos de datos para actualizar un usuario
- */
-export interface UpdateUserData {
-  email?: string;
-  is_active?: boolean;
-  isActive?: boolean;
-  password?: string;
-  lastLoginAt?: Date;
-  firstName?: string;
-  lastName?: string;
 }
 
 /**
@@ -511,18 +461,7 @@ export interface DatabaseResult {
   error?: string;
 }
 
-/**
- * Opciones para consultas de usuario
- */
-export interface UserQueryOptions {
-  includeRoles?: boolean;
-  includePermissions?: boolean;
-  activeOnly?: boolean;
-  isActive?: boolean;
-  search?: string;
-  sortBy?: 'email' | 'created_at' | 'last_login_at';
-  sortOrder?: 'asc' | 'desc';
-}
+// Note: UserQueryOptions is already defined above, removing duplicate
 
 /**
  * Estadísticas del sistema de autenticación
@@ -626,15 +565,17 @@ export enum AuthErrorType {
   DATABASE_ERROR = 'DATABASE_ERROR',
   VALIDATION_ERROR = 'VALIDATION_ERROR',
   AUTHENTICATION_ERROR = 'AUTHENTICATION_ERROR',
+  AUTHORIZATION_ERROR = 'AUTHORIZATION_ERROR',
   NOT_FOUND_ERROR = 'NOT_FOUND_ERROR',
   RATE_LIMIT_ERROR = 'RATE_LIMIT_ERROR',
+  TOKEN_ERROR = 'TOKEN_ERROR',
+  ACCOUNT_ERROR = 'ACCOUNT_ERROR',
   SERVER_ERROR = 'SERVER_ERROR'
 }
 
-/**
- * Error personalizado del sistema de autenticación
- */
-export class AuthError extends Error {
+// Note: The main AuthError class is defined in src/errors/auth.ts
+// This is kept for backward compatibility
+export class LegacyAuthError extends Error {
   public readonly type: AuthErrorType;
   public readonly statusCode: number;
   public readonly metadata?: Record<string, any>;
@@ -646,7 +587,7 @@ export class AuthError extends Error {
     metadata?: Record<string, any>
   ) {
     super(message);
-    this.name = 'AuthError';
+    this.name = 'LegacyAuthError';
     this.type = type;
     this.statusCode = statusCode;
     this.metadata = metadata;
