@@ -39,7 +39,7 @@ jobs:
             ${{ runner.os }}-bun-
             
       - name: Install dependencies
-        run: bun install --frozen-lockfile=false
+        run: bun install --no-frozen-lockfile
         
       - name: Create test database directory
         run: mkdir -p tests/data
@@ -124,7 +124,7 @@ jobs:
           bun-version: latest
         
       - name: Install dependencies
-        run: bun install --frozen-lockfile=false
+        run: bun install --no-frozen-lockfile
         
       - name: Run security audit
         run: bun audit
@@ -154,7 +154,7 @@ jobs:
           bun-version: latest
         
       - name: Install dependencies
-        run: bun install --frozen-lockfile=false
+        run: bun install --no-frozen-lockfile
         
       - name: Build package
         run: bun run build
