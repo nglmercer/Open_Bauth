@@ -1,6 +1,6 @@
 {
   "name": "open-bauth",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Framework-agnostic authentication library built with Bun, TypeScript, and SQLite",
   "main": "dist/index.js",
   "types": "dist/src/index.d.ts",
@@ -78,7 +78,7 @@
     "middleware",
     "security"
   ],
-  "author": "Your Name",
+  "author": "melser",
   "license": "MIT",
   "repository": {
     "type": "git",

@@ -1,7 +1,7 @@
 // Test script for the Hono Blog API with Authentication
 // This script demonstrates all the available endpoints
 
-const API_BASE = 'http://localhost:3001'
+const API_BASE = 'http://localhost:3000'
 
 interface ApiResponse {
   success: boolean
