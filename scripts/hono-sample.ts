@@ -12,14 +12,14 @@ import {
   initPermissionService,
   type RegisterData,
   type LoginData,
-  type User
+  type User,
+  type AuthLibrary
 } from '../src/index'
 
 // Initialize the app
 const app = new Hono()
 
 // Auth middleware will be initialized after auth service is ready
-let auth: any
 
 // Global middleware
 app.use('*', logger())
@@ -290,7 +290,7 @@ app.notFound((c) => {
 })
 
 // Setup protected routes after auth is initialized
-function setupProtectedRoutes() {
+function setupProtectedRoutes(auth: ReturnType<typeof createHonoAuth>) {
   // Get user profile (protected route)
   authRoutes.get('/profile', auth.required(), async (c) => {
     try {
@@ -645,13 +645,12 @@ async function initializeApp() {
     permissionService = authLibrary.getPermissionService()
     
     // Initialize auth middleware after auth service is ready
-    auth = createHonoAuth({
+    const Honoauth = createHonoAuth({
       jwtSecret: process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production',
       jwtExpiration: '24h'
     })
-    
     // Now add all protected routes
-    setupProtectedRoutes()
+    setupProtectedRoutes(Honoauth)
     
     console.log('✅ Auth library initialized successfully')
     console.log('📚 Blog API ready with the following features:')

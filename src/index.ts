@@ -539,7 +539,7 @@ export async function initializeAuth(config?: Partial<AuthConfig>): Promise<Auth
 }
 
 /**
- * Función de conveniencia para crear middleware de Hono
+ * Convenience function to create Hono middleware
  */
 export function createHonoAuth(config?: Partial<AuthConfig>): {
   middleware: typeof honoAuthMiddleware;

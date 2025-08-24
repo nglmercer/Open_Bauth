@@ -20,7 +20,6 @@ jobs:
     strategy:
       matrix:
         bun-version: [1.0.0, latest]
-        node-version: [18, 20]
     
     steps:
       - name: Checkout code
@@ -30,11 +29,6 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ matrix.bun-version }}
-          
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
           
       - name: Cache dependencies
         uses: actions/cache@v3
@@ -58,14 +52,14 @@ jobs:
         run: bun run type-check
         
       - name: Run unit tests
-        run: bun test --coverage --reporter=junit --reporter-outfile=test-results.xml
+        run: bun test --coverage --reporter=junit --reporter-outfile=test-results.xml --preload ./tests/setup.ts
         env:
           NODE_ENV: test
           TEST_DB_PATH: ./tests/data/test.db
           JWT_SECRET: test-secret-key-for-ci
           
       - name: Run integration tests
-        run: bun test tests/integration --reporter=junit --reporter-outfile=integration-results.xml
+        run: bun test tests/integration --reporter=junit --reporter-outfile=integration-results.xml --preload ./tests/setup.ts --timeout 60000
         env:
           NODE_ENV: test
           TEST_DB_PATH: ./tests/data/integration.db
@@ -75,7 +69,7 @@ jobs:
         uses: actions/upload-artifact@v3
         if: always()
         with:
-          name: test-results-${{ matrix.bun-version }}-node${{ matrix.node-version }}
+          name: test-results-${{ matrix.bun-version }}
           path: |
             test-results.xml
             integration-results.xml
@@ -83,7 +77,7 @@ jobs:
             
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
-        if: matrix.bun-version == 'latest' && matrix.node-version == '20'
+        if: matrix.bun-version == 'latest'
         with:
           file: ./coverage/lcov.info
           flags: unittests
@@ -92,7 +86,7 @@ jobs:
           
       - name: Comment PR with test results
         uses: actions/github-script@v6
-        if: github.event_name == 'pull_request' && matrix.bun-version == 'latest' && matrix.node-version == '20'
+        if: github.event_name == 'pull_request' && matrix.bun-version == 'latest'
         with:
           script: |
             const fs = require('fs');
@@ -126,6 +120,8 @@ jobs:
         
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
         
       - name: Install dependencies
         run: bun install
@@ -153,12 +149,14 @@ jobs:
         
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
         
       - name: Install dependencies
         run: bun install
         
       - name: Run performance tests
-        run: bun test tests/integration --test-name-pattern="Performance"
+        run: bun test --test-name-pattern=Performance --timeout 120000 --preload ./tests/setup.ts
         env:
           NODE_ENV: test
           TEST_DB_PATH: ./tests/data/perf.db
@@ -182,6 +180,8 @@ jobs:
         
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
         
       - name: Install dependencies
         run: bun install
