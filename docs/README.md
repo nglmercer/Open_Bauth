@@ -87,7 +87,7 @@ Toda la documentación está organizada en los archivos numerados del 01 al 09, 
 
 ## 🔗 Enlaces Útiles
 
-- **[Repositorio GitHub](https://github.com/open-bauth/framework-agnostic-auth)**
+- **[Repositorio GitHub](https://github.com/nglmercer/open-bauth/framework-agnostic-auth)**
 
 ---
 
@@ -95,10 +95,10 @@ Toda la documentación está organizada en los archivos numerados del 01 al 09, 
 
 Esta documentación es un proyecto vivo. Si encuentras errores, tienes sugerencias o quieres contribuir:
 
-1. **[Reportar Issues](https://github.com/open-bauth/docs/issues)**
-2. **[Proponer Mejoras](https://github.com/open-bauth/docs/pulls)**
+1. **[Reportar Issues](https://github.com/nglmercer/open-bauth/docs/issues)**
+2. **[Proponer Mejoras](https://github.com/nglmercer/open-bauth/docs/pulls)**
 
 ---
 
-*Documentación generada para la Librería de Autenticación v1.0.0*
+*Documentación generada para la Librería de Autenticación v1.0.7*
 *Última actualización: $(date)*

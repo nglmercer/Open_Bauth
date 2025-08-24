@@ -75,7 +75,7 @@ const authLibAdvanced = new AuthLibrary({
   },
   
   security: {
-    bcryptRounds: 12,
+    passwordHashAlgorithm: 'argon2id', // Bun.password usa Argon2id por defecto
     maxLoginAttempts: 5,
     lockoutDuration: 900000, // 15 minutos
     sessionTimeout: 86400000, // 24 horas

@@ -89,7 +89,7 @@ DATABASE_ENABLE_FOREIGN_KEYS=true
 DATABASE_BUSY_TIMEOUT=5000
 
 # Security Configuration
-BCRYPT_ROUNDS=12
+PASSWORD_HASH_ALGORITHM=argon2id
 MAX_LOGIN_ATTEMPTS=5
 LOCKOUT_DURATION=900000
 SESSION_TIMEOUT=86400000
@@ -145,7 +145,7 @@ export const developmentConfig: Partial<AuthConfig> = {
   },
   
   security: {
-    bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS || '12'),
+    passwordHashAlgorithm: process.env.PASSWORD_HASH_ALGORITHM || 'argon2id',
     maxLoginAttempts: parseInt(process.env.MAX_LOGIN_ATTEMPTS || '5'),
     lockoutDuration: parseInt(process.env.LOCKOUT_DURATION || '900000'),
     sessionTimeout: parseInt(process.env.SESSION_TIMEOUT || '86400000'),
@@ -269,10 +269,10 @@ export function validateEnvironment(): { valid: boolean; errors: string[] } {
     errors.push('JWT_SECRET debe tener al menos 32 caracteres');
   }
   
-  if (process.env.BCRYPT_ROUNDS) {
-    const rounds = parseInt(process.env.BCRYPT_ROUNDS);
-    if (rounds < 10 || rounds > 15) {
-      errors.push('BCRYPT_ROUNDS debe estar entre 10 y 15');
+  if (process.env.PASSWORD_HASH_ALGORITHM) {
+    const validAlgorithms = ['argon2id', 'argon2i', 'argon2d', 'scrypt', 'bcrypt'];
+    if (!validAlgorithms.includes(process.env.PASSWORD_HASH_ALGORITHM)) {
+      errors.push('PASSWORD_HASH_ALGORITHM debe ser uno de: ' + validAlgorithms.join(', '));
     }
   }
   

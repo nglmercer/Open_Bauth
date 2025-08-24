@@ -98,13 +98,15 @@ if (result.success) {
 - Campos requeridos presentes
 
 **Proceso interno:**
-1. Valida datos de entrada
-2. Verifica que el email no exista
-3. Hashea la contraseña con bcrypt
-4. Crea el usuario en la base de datos
-5. Asigna rol por defecto ('user')
-6. Genera token JWT
-7. Retorna resultado
+1. Valida y normaliza datos de entrada con RegisterDataValidator
+2. Verifica que el email no exista en el sistema
+3. Hashea la contraseña usando Bun.password con algoritmo configurado
+4. Genera UUID único para el usuario
+5. Crea el usuario en la base de datos
+6. Asigna rol por defecto usando assignDefaultRole()
+7. Actualiza lastLoginAt con fecha actual
+8. Genera tokens JWT (access y refresh)
+9. Retorna resultado con usuario completo incluyendo roles y permisos
 
 #### `login(credentials: LoginData): Promise<AuthResult>`
 
@@ -139,19 +141,24 @@ if (result.success) {
 ```
 
 **Características de seguridad:**
-- Protección contra ataques de fuerza bruta
-- Bloqueo temporal después de intentos fallidos
-- Registro de intentos de login
-- Validación de contraseña con bcrypt
+- Validación de datos con LoginDataValidator
+- Verificación de cuenta activa (isActive)
+- Validación de contraseña con Bun.password.verify
+- Actualización automática de lastLoginAt
+- Generación de tokens JWT seguros
+- Manejo robusto de errores con AuthErrorFactory
 
 **Proceso interno:**
-1. Busca usuario por email
-2. Verifica que la cuenta no esté bloqueada
-3. Compara contraseña con hash almacenado
-4. Actualiza último login
-5. Resetea contador de intentos fallidos
-6. Genera tokens JWT
-7. Retorna resultado
+1. Valida y normaliza datos con LoginDataValidator
+2. Busca usuario por email usando findByEmailForAuth (incluye passwordHash)
+3. Verifica que el usuario existe
+4. Verifica que la cuenta esté activa (isActive = true)
+5. Compara contraseña con hash usando Bun.password.verify
+6. Actualiza lastLoginAt con fecha actual
+7. Obtiene usuario actualizado con roles y permisos
+8. Genera tokens JWT (access y refresh)
+9. Registra login exitoso en logs
+10. Retorna resultado completo
 
 #### `refreshToken(refreshToken: string): Promise<AuthResult>`
 
@@ -224,39 +231,42 @@ const success = await authService.confirmPasswordReset(
 
 ### Gestión de Usuarios
 
-#### `getUsers(options?: GetUsersOptions): Promise<User[]>`
+#### `getUsers(page: number = 1, limit: number = 10, filters?: UserFilters): Promise<PaginatedResult<User>>`
 
-Obtiene lista de usuarios con opciones de filtrado.
+Obtiene lista paginada de usuarios con opciones de filtrado.
 
 ```typescript
-interface GetUsersOptions {
-  limit?: number;
-  offset?: number;
-  search?: string;
+interface UserFilters {
   role?: string;
-  active?: boolean;
-  sortBy?: 'email' | 'firstName' | 'lastName' | 'createdAt';
-  sortOrder?: 'asc' | 'desc';
+  isActive?: boolean;
+  search?: string;
+}
+
+interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 // Ejemplos de uso
 
-// Obtener todos los usuarios
-const allUsers = await authService.getUsers();
+// Obtener primera página de usuarios
+const result = await authService.getUsers();
+console.log(result.data); // Array de usuarios
+console.log(result.total); // Total de usuarios
 
-// Búsqueda paginada
-const users = await authService.getUsers({
-  limit: 10,
-  offset: 0,
-  search: 'juan',
-  sortBy: 'firstName',
-  sortOrder: 'asc'
+// Obtener usuarios con filtros
+const adminUsers = await authService.getUsers(1, 10, {
+  role: 'admin',
+  isActive: true
 });
 
-// Filtrar por rol
-const admins = await authService.getUsers({
-  role: 'admin',
-  active: true
+// Búsqueda con paginación
+const searchResult = await authService.getUsers(2, 5, {
+  search: 'john',
+  isActive: true
 });
 ```
 
@@ -310,6 +320,160 @@ const activated = await authService.activateUser('user-123');
 ```typescript
 const deactivated = await authService.deactivateUser('user-123');
 ```
+
+#### `findUserById(id: string): Promise<User | null>`
+
+Busca un usuario por su ID único.
+
+```typescript
+const user = await authService.findUserById('user-uuid-123');
+if (user) {
+  console.log(user.email);
+}
+```
+
+#### `findUserByEmail(email: string): Promise<User | null>`
+
+Busca un usuario por su dirección de email.
+
+```typescript
+const user = await authService.findUserByEmail('user@example.com');
+if (user) {
+  console.log(user.firstName);
+}
+```
+
+#### `getUserRoles(userId: string): Promise<Role[]>`
+
+Obtiene todos los roles asignados a un usuario específico.
+
+```typescript
+const roles = await authService.getUserRoles('user-uuid-123');
+roles.forEach(role => {
+  console.log(`Role: ${role.name}, Permissions: ${role.permissions.length}`);
+});
+```
+
+#### `assignRole(userId: string, roleId: string): Promise<void>`
+
+Asigna un rol específico a un usuario.
+
+```typescript
+// Asignar rol de administrador
+await authService.assignRole('user-uuid-123', 'admin-role-uuid');
+```
+
+#### `removeRole(userId: string, roleId: string): Promise<void>`
+
+Remueve un rol específico de un usuario.
+
+```typescript
+// Remover rol de moderador
+await authService.removeRole('user-uuid-123', 'moderator-role-uuid');
+```
+
+#### `updatePassword(userId: string, newPassword: string): Promise<void>`
+
+Actualiza la contraseña de un usuario (requiere validación previa).
+
+```typescript
+// Cambiar contraseña después de validar la actual
+await authService.updatePassword('user-uuid-123', 'newSecurePassword123!');
+```
+
+#### `updateUser(userId: string, updateData: Partial<User>): Promise<User>`
+
+Actualiza los datos de un usuario existente.
+
+```typescript
+const updatedUser = await authService.updateUser('user-uuid-123', {
+  firstName: 'Juan Carlos',
+  lastName: 'García',
+  phone: '+1234567890'
+});
+```
+
+#### `activateUser(userId: string): Promise<void>`
+
+Activa una cuenta de usuario previamente desactivada.
+
+```typescript
+// Reactivar cuenta de usuario
+await authService.activateUser('user-uuid-123');
+```
+
+#### `deactivateUser(userId: string): Promise<void>`
+
+Desactiva una cuenta de usuario sin eliminarla permanentemente.
+
+```typescript
+// Desactivar cuenta temporalmente
+await authService.deactivateUser('user-uuid-123');
+```
+
+#### `deleteUser(userId: string): Promise<void>`
+
+Elimina permanentemente un usuario del sistema.
+
+```typescript
+// Eliminar usuario permanentemente
+await authService.deleteUser('user-uuid-123');
+```
+
+### Patrón Singleton y Inicialización
+
+El `AuthService` implementa un patrón singleton para garantizar una única instancia en toda la aplicación.
+
+#### `initAuthService(dependencies: AuthServiceDependencies): AuthService`
+
+Inicializa el servicio de autenticación con las dependencias requeridas.
+
+```typescript
+interface AuthServiceDependencies {
+  userRepository: UserRepository;
+  roleRepository: RoleRepository;
+  jwtService: JWTService;
+  registerDataValidator: RegisterDataValidator;
+  loginDataValidator: LoginDataValidator;
+  authErrorFactory: AuthErrorFactory;
+  logger: Logger;
+}
+
+// Inicialización del servicio
+const authService = initAuthService({
+  userRepository,
+  roleRepository,
+  jwtService,
+  registerDataValidator,
+  loginDataValidator,
+  authErrorFactory,
+  logger
+});
+```
+
+#### `getAuthService(): AuthService`
+
+Obtiene la instancia singleton del servicio de autenticación.
+
+```typescript
+// Obtener la instancia (debe haberse inicializado previamente)
+const authService = getAuthService();
+
+// Usar el servicio
+const users = await authService.getUsers();
+```
+
+**Características del patrón singleton:**
+- Una única instancia en toda la aplicación
+- Inicialización lazy (solo cuando se necesita)
+- Reutilización de dependencias
+- Gestión centralizada del estado
+
+**Proceso de inicialización:**
+1. Se validan todas las dependencias requeridas
+2. Se crea la instancia única del AuthService
+3. Se almacena la referencia para uso posterior
+4. Se retorna la instancia para uso inmediato
 
 ---
 

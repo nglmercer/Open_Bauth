@@ -124,9 +124,11 @@ Code: AUTH_001
 1. **Verificar hash de contraseña:**
 ```typescript
 // Debug: Verificar si la contraseña se está hasheando correctamente
-const bcrypt = require('bcrypt');
-const isValid = await bcrypt.compare(plainPassword, hashedPassword);
+const isValid = await Bun.password.verify(plainPassword, hashedPassword);
 console.log('Password valid:', isValid);
+
+// Verificar algoritmo usado
+console.log('Hash algorithm:', hashedPassword.startsWith('$argon2') ? 'argon2' : 'other');
 ```
 
 2. **Verificar usuario en base de datos:**
@@ -137,13 +139,16 @@ FROM users
 WHERE email = 'user@example.com';
 ```
 
-3. **Verificar configuración de bcrypt:**
+3. **Verificar configuración de hash:**
 ```typescript
 const config = {
   security: {
-    bcryptRounds: 12 // Asegurar que coincida con el usado al crear
+    passwordHashAlgorithm: 'argon2id' // Algoritmo usado por Bun.password
   }
 };
+
+// Verificar que Bun.password esté disponible
+console.log('Bun.password available:', typeof Bun?.password?.hash === 'function');
 ```
 
 #### Error: "Token expired"

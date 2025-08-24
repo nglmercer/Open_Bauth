@@ -1074,7 +1074,7 @@ interface JWTConfig {
 
 ```typescript
 interface SecurityConfig {
-  bcryptRounds?: number;
+  passwordHashAlgorithm?: 'argon2id' | 'argon2i' | 'argon2d' | 'scrypt' | 'bcrypt';
   maxLoginAttempts?: number;
   lockoutDuration?: number;
   passwordMinLength?: number;
