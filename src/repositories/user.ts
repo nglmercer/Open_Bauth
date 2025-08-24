@@ -127,7 +127,7 @@ export class UserRepository {
     firstName?: string | null;
     lastName?: string | null;
     isActive?: boolean;
-  }, transaction?: DatabaseTransaction): Promise<typeof userData> {
+  }, transaction?: DatabaseTransaction): Promise<User> {
     try {
       const db = getDatabase();
       
@@ -145,7 +145,13 @@ export class UserRepository {
         userData.isActive !== false ? 1 : 0
       );
       
-      return userData;
+      // Fetch the created user and return it properly mapped
+      const createdUser = await this.findById(userData.id, { includeRoles: true });
+      if (!createdUser) {
+        throw new DatabaseError('Failed to retrieve created user', 'create');
+      }
+      
+      return createdUser;
     } catch (error) {
       throw new DatabaseError(`Failed to create user: ${error instanceof Error ? error.message : String(error)}`, 'create');
     }
@@ -160,7 +166,7 @@ export class UserRepository {
     firstName?: string | null;
     lastName?: string | null;
     isActive?: boolean;
-    lastLoginAt?: boolean;
+    lastLoginAt?: Date;
   }, transaction?: DatabaseTransaction): Promise<void> {
     try {
       const db = getDatabase();
@@ -193,8 +199,9 @@ export class UserRepository {
         updateValues.push(updateData.isActive ? 1 : 0);
       }
       
-      if (updateData.lastLoginAt) {
-        updateFields.push("last_login_at = datetime('now')");
+      if (updateData.lastLoginAt !== undefined) {
+        updateFields.push('last_login_at = ?');
+        updateValues.push(updateData.lastLoginAt.toISOString());
       }
       
       updateFields.push("updated_at = datetime('now')");
@@ -386,7 +393,8 @@ export class UserRepository {
         name: permData.name,
         resource: permData.resource,
         action: permData.action,
-        created_at: new Date(permData.created_at)
+        createdAt: new Date(permData.created_at),
+        updatedAt: new Date()
       }));
     } catch (error) {
       throw new DatabaseError(`Failed to get role permissions: ${error instanceof Error ? error.message : String(error)}`, 'getRolePermissions');
@@ -403,8 +411,8 @@ export class UserRepository {
       passwordHash: userData.password_hash,
       firstName: userData.first_name || undefined,
       lastName: userData.last_name || undefined,
-      created_at: new Date(userData.created_at),
-      updated_at: new Date(userData.updated_at),
+      createdAt: new Date(userData.created_at),
+      updatedAt: new Date(userData.updated_at),
       isActive: Boolean(userData.is_active),
       lastLoginAt: userData.last_login_at ? new Date(userData.last_login_at) : undefined,
       roles: []

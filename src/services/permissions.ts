@@ -522,7 +522,7 @@ export class PermissionService {
       query.run(
         data.name || existingRole.name,
         data.description !== undefined ? data.description : (existingRole.description || null),
-        data.isActive !== undefined ? (data.isActive ? 1 : 0) : (existingRole.isActive ? 1 : 0),
+        data.isActive !== undefined ? (data.isActive ? 1 : 0) : (existingRole.isDefault ? 1 : 0),
         id
       );
 
@@ -886,7 +886,8 @@ export class PermissionService {
         resource: row.resource,
         action: row.action,
         description: row.description,
-        created_at: new Date(row.created_at)
+        createdAt: new Date(row.created_at),
+        updatedAt: new Date(row.created_at)
       }));
     } catch (error:any) {
       console.error('Error getting user permissions:', error);
@@ -918,7 +919,8 @@ export class PermissionService {
         resource: result.resource,
         action: result.action,
         description: result.description,
-        created_at: new Date(result.created_at)
+        createdAt: new Date(result.created_at),
+        updatedAt: new Date(result.created_at)
       };
     } catch (error:any) {
       console.error('Error finding permission by ID:', error);
@@ -950,7 +952,8 @@ export class PermissionService {
         resource: result.resource,
         action: result.action,
         description: result.description,
-        created_at: new Date(result.created_at)
+        createdAt: new Date(result.created_at),
+        updatedAt: new Date(result.created_at)
       };
     } catch (error:any) {
       console.error('Error finding permission by name:', error);
@@ -981,8 +984,9 @@ export class PermissionService {
         id: result.id,
         name: result.name,
         description: result.description,
-        created_at: new Date(result.created_at),
-        isActive: Boolean(result.is_active),
+        createdAt: new Date(result.created_at),
+        updatedAt: new Date(result.created_at),
+        isDefault: Boolean(result.is_active),
         permissions: []
       };
 
@@ -1020,8 +1024,9 @@ export class PermissionService {
         id: result.id,
         name: result.name,
         description: result.description,
-        created_at: new Date(result.created_at),
-        isActive: Boolean(result.is_active),
+        createdAt: new Date(result.created_at),
+        updatedAt: new Date(result.created_at),
+        isDefault: Boolean(result.is_active),
         permissions: []
       };
 
@@ -1059,7 +1064,8 @@ export class PermissionService {
         resource: row.resource,
         action: row.action,
         description: row.description,
-        created_at: new Date(row.created_at)
+        createdAt: new Date(row.created_at),
+        updatedAt: new Date(row.created_at)
       }));
     } catch (error:any) {
       console.error('Error getting role permissions:', error);
@@ -1089,8 +1095,9 @@ export class PermissionService {
           id: row.id,
           name: row.name,
           description: row.description,
-          created_at: new Date(row.created_at),
-          isActive: Boolean(row.is_active),
+          createdAt: new Date(row.created_at),
+          updatedAt: new Date(row.created_at),
+          isDefault: Boolean(row.is_active),
           permissions: []
         };
 
@@ -1129,7 +1136,8 @@ export class PermissionService {
         resource: row.resource,
         action: row.action,
         description: row.description,
-        created_at: new Date(row.created_at)
+        createdAt: new Date(row.created_at),
+        updatedAt: new Date(row.created_at)
       }));
     } catch (error:any) {
       console.error('Error getting all permissions:', error);

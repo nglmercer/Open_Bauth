@@ -22,13 +22,17 @@ export class TransactionalService {
    * Create a user with roles in a single transaction
    */
   async createUserWithRoles(
-    userData: Omit<User, 'created_at' | 'updated_at' | 'roles'>,
+    userData: Omit<User, 'id' | 'created_at' | 'updated_at' | 'roles'>,
     roleNames: string[]
   ): Promise<User> {
     return withTransaction(async (transaction) => {
       try {
-        // Create the user
-        const user = await this.userRepository.create(userData, transaction);
+        // Create the user with generated ID
+        const userWithId = {
+          ...userData,
+          id: crypto.randomUUID()
+        };
+        const user = await this.userRepository.create(userWithId, transaction);
 
         // Assign roles to the user
         for (const roleName of roleNames) {
@@ -159,8 +163,12 @@ export class TransactionalService {
 
       try {
         for (const { userData, roles } of userDataList) {
-          // Create user
-          const user = await this.userRepository.create(userData, transaction);
+          // Create user with generated ID
+          const userWithId = {
+            ...userData,
+            id: crypto.randomUUID()
+          };
+          const user = await this.userRepository.create(userWithId, transaction);
 
           // Assign roles
           for (const roleName of roles) {
@@ -196,7 +204,7 @@ export class TransactionalService {
    */
   async updateUserProfileAndRoles(
     userId: string,
-    profileUpdates: Partial<Omit<User, 'id' | 'created_at' | 'roles'>>,
+    profileUpdates: Partial<Omit<User, 'id' | 'created_at' | 'updated_at' | 'roles'>>,
     newRoles: string[]
   ): Promise<User> {
     return withTransaction(async (transaction) => {

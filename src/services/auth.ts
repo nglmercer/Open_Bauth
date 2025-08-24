@@ -94,7 +94,7 @@ export class AuthService {
       }
 
       // Actualizar lastLoginAt
-      await this.userRepository.update(userId, { lastLoginAt: true });
+      await this.userRepository.update(userId, { lastLoginAt: new Date() });
 
       // Generar tokens JWT
       const token = await jwtService.generateToken(user);
@@ -154,7 +154,7 @@ export class AuthService {
       }
 
       // Actualizar última actividad y last_login_at
-      await this.userRepository.update(user.id, { lastLoginAt: true });
+      await this.userRepository.update(user.id, { lastLoginAt: new Date() });
 
       // Obtener usuario actualizado
       const updatedUser = await this.userRepository.findById(user.id, { 

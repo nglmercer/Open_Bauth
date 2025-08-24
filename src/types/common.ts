@@ -81,7 +81,7 @@ export interface DatabaseTransaction {
   commit(): Promise<void>;
   rollback(): Promise<void>;
   isActive(): boolean;
-  getDatabase?(): Database;
+  getDatabase(): Database;
 }
 
 /**
@@ -288,7 +288,7 @@ export type PermissionId = string;
  */
 export type Brand<T, B> = T & { __brand: B };
 export type Email = Brand<string, 'Email'> | string;
-export type HashedPassword = Brand<string, 'HashedPassword'>;
+export type HashedPassword = Brand<string, 'HashedPassword'> | string;
 export type JWT = Brand<string, 'JWT'> | string;
 export type RefreshToken = Brand<string, 'RefreshToken'>;
 

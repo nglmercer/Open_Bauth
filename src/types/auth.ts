@@ -520,7 +520,7 @@ export interface UserQueryOptions {
   activeOnly?: boolean;
   isActive?: boolean;
   search?: string;
-  sortBy?: 'email' | 'created_at' | 'name';
+  sortBy?: 'email' | 'created_at' | 'last_login_at';
   sortOrder?: 'asc' | 'desc';
 }
 

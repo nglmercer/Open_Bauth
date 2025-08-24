@@ -23,7 +23,7 @@ export class RoleRepository {
    */
   async findById(roleId: string, transaction?: DatabaseTransaction): Promise<Role | null> {
     try {
-      const db = transaction?.getDatabase() || getDatabase();
+      const db = transaction ? transaction.getDatabase() : getDatabase();
       
       const query = db.query('SELECT id, name, created_at, is_active FROM roles WHERE id = ?');
       const result = query.get(roleId) as DatabaseRole | null;
@@ -43,7 +43,7 @@ export class RoleRepository {
    */
   async findByName(name: string, transaction?: DatabaseTransaction): Promise<Role | null> {
     try {
-      const db = transaction?.getDatabase() || getDatabase();
+      const db = transaction ? transaction.getDatabase() : getDatabase();
       
       const query = db.query('SELECT id, name, created_at, is_active FROM roles WHERE name = ?');
       const result = query.get(name.toLowerCase()) as DatabaseRole | null;
@@ -67,7 +67,7 @@ export class RoleRepository {
     isActive?: boolean;
   }, transaction?: DatabaseTransaction): Promise<string> {
     try {
-      const db = transaction?.getDatabase() || getDatabase();
+      const db = transaction ? transaction.getDatabase() : getDatabase();
       
       const insertQuery = db.query(`
         INSERT INTO roles (id, name, created_at, is_active)
@@ -91,7 +91,7 @@ export class RoleRepository {
    */
   async userHasRole(userId: string, roleId: string, transaction?: DatabaseTransaction): Promise<boolean> {
     try {
-      const db = transaction?.getDatabase() || getDatabase();
+      const db = transaction ? transaction.getDatabase() : getDatabase();
       
       const query = db.query('SELECT id FROM user_roles WHERE user_id = ? AND role_id = ?');
       const result = query.get(userId, roleId);
@@ -107,7 +107,7 @@ export class RoleRepository {
    */
   async assignToUser(userId: string, roleId: string, transaction?: DatabaseTransaction): Promise<void> {
     try {
-      const db = transaction?.getDatabase() || getDatabase();
+      const db = transaction ? transaction.getDatabase() : getDatabase();
       
       // Check if assignment already exists
       const exists = await this.userHasRole(userId, roleId, transaction);
@@ -131,7 +131,7 @@ export class RoleRepository {
    */
   async removeFromUser(userId: string, roleId: string, transaction?: DatabaseTransaction): Promise<void> {
     try {
-      const db = transaction?.getDatabase() || getDatabase();
+      const db = transaction ? transaction.getDatabase() : getDatabase();
       
       const deleteQuery = db.query('DELETE FROM user_roles WHERE user_id = ? AND role_id = ?');
       deleteQuery.run(userId, roleId);
@@ -201,8 +201,9 @@ export class RoleRepository {
     return {
       id: roleData.id,
       name: roleData.name,
-      created_at: new Date(roleData.created_at),
-      isActive: Boolean(roleData.is_active),
+      createdAt: new Date(roleData.created_at),
+      updatedAt: new Date(roleData.created_at),
+      isDefault: Boolean(roleData.is_active),
       permissions: []
     };
   }
