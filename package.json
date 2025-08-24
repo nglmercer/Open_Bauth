@@ -1,6 +1,6 @@
 {
   "name": "open-bauth",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Framework-agnostic authentication library built with Bun, TypeScript, and SQLite",
   "main": "dist/index.js",
   "types": "dist/src/index.d.ts",
@@ -82,12 +82,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/open-bauth.git"
+    "url": "https://github.com/nglmercer/open-bauth.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/open-bauth/issues"
+    "url": "https://github.com/nglmercer/open-bauth/issues"
   },
-  "homepage": "https://github.com/yourusername/open-bauth#readme",
+  "homepage": "https://github.com/nglmercer/open-bauth#readme",
   "files": [
     "dist",
     "README.md",
