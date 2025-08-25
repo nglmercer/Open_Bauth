@@ -62,7 +62,7 @@ app.get('/health', (c) => {
 app.get('/', (c) => {
   return c.json({
     message: 'Welcome to Blog API with Authentication',
-    version: '1.1.1',
+    version: '1.1.2',
     endpoints: {
       auth: {
         register: 'POST /auth/register',

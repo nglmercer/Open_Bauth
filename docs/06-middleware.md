@@ -1824,7 +1824,7 @@ const metricsCollector = new MetricsCollector({
   // Etiquetas por defecto
   defaultLabels: {
     service: 'auth-service',
-    version: process.env.APP_VERSION || '1.1.1',
+    version: process.env.APP_VERSION || '1.1.2',
     environment: process.env.NODE_ENV || 'development'
   }
 });

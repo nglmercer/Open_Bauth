@@ -841,7 +841,7 @@ app.use(auth.middleware);
 
 // Rutas públicas
 app.get('/', (req, res) => {
-  res.json({ message: 'API funcionando', version: '1.1.1' });
+  res.json({ message: 'API funcionando', version: '1.1.2' });
 });
 
 app.get('/health', (req, res) => {

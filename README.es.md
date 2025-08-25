@@ -384,4 +384,4 @@ app.get('/admin/dashboard',
 
 ---
 
-*Documentación generada automáticamente para la Librería de Autenticación v1.1.1*
+*Documentación generada automáticamente para la Librería de Autenticación v1.1.2*

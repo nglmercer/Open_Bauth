@@ -60,7 +60,7 @@ Toda la documentación está organizada en los archivos numerados del 01 al 09, 
 
 | Característica | Descripción |
 |----------------|-------------|
-| **Versión** | 1.1.1 |
+| **Versión** | 1.1.2 |
 | **Frameworks Soportados** | Hono, Express, WebSockets, Socket.IO, Fastify |
 | **Runtime** | Bun (recomendado), Node.js |
 | **Base de Datos** | SQLite |

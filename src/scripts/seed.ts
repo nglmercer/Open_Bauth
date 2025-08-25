@@ -349,10 +349,7 @@ export async function seedDatabase(dbPath?: string,
     
     for (const user of allUsers) {
       try {
-        const result = await authService.register({
-          email: user.email,
-          password: user.password,
-        });
+        const result = await authService.register(user);
         
         if (result) {
           createdCount++;

@@ -683,7 +683,7 @@ console.log('User registered:', result.success);
 
 ## Library Information
 
-**Version:** 1.1.0  
+**Version:** 1.1.2  
 **Runtime:** Bun  
 **Database:** SQLite  
 **License:** MIT  

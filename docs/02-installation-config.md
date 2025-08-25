@@ -8,7 +8,7 @@ Guía completa para instalar y configurar la Librería de Autenticación en tu p
 
 | Componente | Versión Mínima | Recomendada |
 |------------|----------------|-------------|
-| **Bun** | 1.1.1 | 1.0.25+ |
+| **Bun** | 1.1.2 | 1.0.25+ |
 | **Node.js** | 18.0.0 | 20.0.0+ |
 | **TypeScript** | 4.9.0 | 5.0.0+ |
 | **SQLite** | 3.35.0 | Incluido con Bun |
