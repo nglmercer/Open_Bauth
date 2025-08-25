@@ -4,7 +4,7 @@
 
 ## 📋 Requisitos Previos
 
-- **Bun** >= 1.0.0 (recomendado) o **Node.js** >= 18.0.0
+- **Bun** >= 1.1.1 (recomendado) o **Node.js** >= 18.0.0
 - **TypeScript** >= 4.9.0
 - Conocimientos básicos de JavaScript/TypeScript
 
