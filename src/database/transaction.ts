@@ -330,6 +330,13 @@ export function getTransactionManager(): TransactionManager {
 }
 
 /**
+ * Reset the global transaction manager (useful when database is reinitialized)
+ */
+export function resetTransactionManager(): void {
+  transactionManager = null;
+}
+
+/**
  * Utility function to execute code within a transaction
  */
 export async function withTransaction<T>(

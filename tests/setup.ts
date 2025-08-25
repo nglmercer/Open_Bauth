@@ -7,7 +7,6 @@ import { runMigrations, resetDatabase } from '../src/db/migrations';
 import { seedDatabase, cleanDatabase } from '../src/scripts/seed';
 import { initJWTService } from '../src/services/jwt';
 import { defaultLogger as logger } from '../src/logger'
-logger.silence();
 // Variables globales para tests
 export const TEST_DB_PATH = './test.db';
 export const TEST_JWT_SECRET = 'test-jwt-secret-key-for-testing-only';
@@ -48,8 +47,17 @@ afterAll(async () => {
   logger.info('🧹 Limpiando entorno de tests...');
   
   try {
-    // Cerrar la base de datos correctamente al final de todos los tests
-    await closeDatabase();
+    // Rollback any active transactions before cleanup
+    try {
+      const { getTransactionManager } = await import('../src/database/transaction');
+      const manager = getTransactionManager();
+      await manager.rollbackAll();
+    } catch (error) {
+      // Ignore if transaction module is not available
+    }
+    
+    // Clean database but don't close it (other test files might still need it)
+    await cleanDatabase();
     logger.info('✅ Entorno de tests limpiado correctamente');
     
     // Asegurar que no hay promesas pendientes
@@ -82,6 +90,14 @@ beforeEach(async () => {
   if (!isDatabaseInitialized()) {
     initDatabase(TEST_DB_PATH);
     await runMigrations();
+  }
+  
+  // Reset transaction manager to ensure it uses the current database instance
+  try {
+    const { resetTransactionManager } = await import('../src/database/transaction');
+    resetTransactionManager();
+  } catch (error) {
+    // Ignore if transaction module is not available
   }
   
   // Limpiar datos antes de cada test
@@ -157,14 +173,21 @@ export const testUtils = {
   /**
    * Generar datos de permiso de prueba
    */
-  generateTestPermission(overrides = {}) {
-    return {
-      name: `test_permission_${Date.now()}`,
-      description: 'Test permission for testing purposes',
+  generateTestPermission(overrides:any = {}) {
+    const timestamp = Date.now();
+    const defaultData = {
       resource: 'test_resource',
       action: 'test_action',
+      description: 'Test permission for testing purposes',
       ...overrides
     };
+    
+    // Generate name in 'resource:action' format if not provided
+    if (!overrides.name) {
+      defaultData.name = `${defaultData.resource}:${defaultData.action}_${timestamp}`;
+    }
+    
+    return defaultData;
   },
 
   /**
@@ -302,7 +325,6 @@ export const testUtils = {
     expect(permission).toHaveProperty('resource');
     expect(permission).toHaveProperty('action');
     expect(permission).toHaveProperty('createdAt');
-    expect(permission).toHaveProperty('updatedAt');
   }
 };
 

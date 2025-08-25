@@ -246,6 +246,12 @@ export class AuthErrorFactory {
   static server(message?: string, context?: Record<string, any>): ServerError {
     return new ServerError(message, context);
   }
+  /**
+   * NotFoundError
+   */
+  static notFound(resource: string, identifier?: string): NotFoundError {
+    return new NotFoundError(resource, identifier);
+  }
 }
 
 /**

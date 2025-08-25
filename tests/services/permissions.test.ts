@@ -7,7 +7,8 @@ import { AuthService } from '../../src/services/auth';
 import { testUtils, TEST_TIMEOUTS } from '../setup';
 import type { CreatePermissionData, CreateRoleData } from '../../src/types/auth';
 import { AuthErrorType } from '../../src/types/auth';
-
+import { defaultLogger as logger } from '../../src/logger'
+logger.silence();
 describe('PermissionService', () => {
   let permissionService: PermissionService;
   let authService: AuthService;
@@ -75,7 +76,7 @@ describe('PermissionService', () => {
       // Crear varios permisos
       for (let i = 0; i < 3; i++) {
         const permissionData = testUtils.generateTestPermission({
-          name: `test_permission_${i}`,
+          name: `resource_${i}:action_${i}`,
           resource: `resource_${i}`,
           action: `action_${i}`
         });
@@ -233,6 +234,9 @@ describe('PermissionService', () => {
         updateData
       );
       
+      if (!result.success) {
+        console.error('Role update failed:', result.error);
+      }
       expect(result.success).toBe(true);
       expect(result.role?.description).toBe(updateData.description);
       expect(result.role?.isActive).toBe(updateData.isActive);
@@ -306,7 +310,7 @@ describe('PermissionService', () => {
       const permissions = [];
       for (let i = 0; i < 3; i++) {
         const permissionData = testUtils.generateTestPermission({
-          name: `test_permission_${i}`,
+          name: `resource_${i}:action_${i}`,
           resource: `resource_${i}`,
           action: `action_${i}`
         });
@@ -536,10 +540,18 @@ describe('PermissionService', () => {
       });
       
       const permResult = await permissionService.createPermission(wildcardPerm);
+      if (!permResult.success) {
+        console.error('Permission creation failed:', permResult.error);
+      }
+      expect(permResult.success).toBe(true);
+      expect(permResult.permission).toBeDefined();
       
       // Crear rol admin y asignarlo
       const adminRole = testUtils.generateTestRole({ name: 'admin' });
       const roleResult = await permissionService.createRole(adminRole);
+      expect(roleResult.success).toBe(true);
+      expect(roleResult.role).toBeDefined();
+      
       await permissionService.assignPermissionToRole(roleResult.role!.id, permResult.permission!.id);
       await authService.assignRole(userId, adminRole.name);
       

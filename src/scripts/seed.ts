@@ -20,7 +20,6 @@ import { AuthService } from '../services/auth';
 import { PermissionService } from '../services/permissions';
 import type { CreatePermissionData, CreateRoleData } from '../types/auth';
 import { defaultLogger as logger } from '../logger'
-logger.silence();
 /**
  * Datos iniciales para permisos
  */

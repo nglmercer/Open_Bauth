@@ -44,7 +44,7 @@ describe('Dev CLI Commands', () => {
       
       // Crear un permiso y asignarlo al rol
       const permissionData = testUtils.generateTestPermission({
-        name: 'test_permission',
+        name: 'test_resource:read',
         resource: 'test_resource',
         action: 'read'
       });
@@ -52,7 +52,7 @@ describe('Dev CLI Commands', () => {
       const createdPermission = await permissionService.createPermission(permissionData);
       expect(createdPermission.success).toBe(true);
       expect(createdPermission.permission).toBeDefined();
-      expect(createdPermission.permission!.name).toBe('test_permission');
+      expect(createdPermission.permission!.name).toBe('test_resource:read');
       
       await permissionService.assignPermissionsToRole(
         createdRole.role!.id,
@@ -67,7 +67,7 @@ describe('Dev CLI Commands', () => {
       expect(consoleSpy).toHaveBeenCalledWith('  📋 Nombre: test_role');
       expect(consoleSpy).toHaveBeenCalledWith(`  🆔 ID: ${createdRole.role!.id}`);
       expect(consoleSpy).toHaveBeenCalledWith('  🔐 Permisos:');
-      expect(consoleSpy).toHaveBeenCalledWith('    - test_permission (test_resource:read)');
+      expect(consoleSpy).toHaveBeenCalledWith('    - test_resource:read (test_resource:read)');
     });
 
     test('should display error when role does not exist', async () => {

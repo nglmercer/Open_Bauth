@@ -31,7 +31,6 @@ import type {
   Role
 } from '../types/auth';
 import { defaultLogger as logger } from '../logger';
-logger.silence();
 /**
  * Servicio de autenticación
  * Maneja registro, login y operaciones de usuario

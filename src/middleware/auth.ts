@@ -163,11 +163,21 @@ export async function authorizeRequest(
     }
 
     const permissionService = getPermissionService();
-    const hasPermissions = await permissionService.userHasPermissions(
-      authContext.user.id,
-      requiredPermissions,
-      options
-    );
+    let hasPermissions: boolean;
+    
+    if (options.requireAll) {
+      // Check if user has ALL required permissions (AND logic)
+      hasPermissions = await permissionService.userHasAllPermissions(
+        authContext.user.id,
+        requiredPermissions
+      );
+    } else {
+      // Check if user has ANY of the required permissions (OR logic)
+      hasPermissions = await permissionService.userHasAnyPermission(
+        authContext.user.id,
+        requiredPermissions
+      );
+    }
 
     if (!hasPermissions) {
       return {

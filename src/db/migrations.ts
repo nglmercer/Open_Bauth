@@ -355,6 +355,45 @@ const migrations: Migration[] = [
       
       logger.info('✅ Campo is_active removido de roles');
     }
+  },
+
+  {
+    version: 12,
+    name: 'add_roles_updated_at_field',
+    up: async (db: Database) => {
+      // Agregar campo updated_at a la tabla roles
+      db.exec(`
+        ALTER TABLE roles ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      `);
+      
+      // Actualizar registros existentes para que tengan updated_at igual a created_at
+      db.exec(`
+        UPDATE roles SET updated_at = created_at WHERE updated_at IS NULL
+      `);
+      
+      logger.info('✅ Campo updated_at agregado a roles');
+    },
+    down: async (db: Database) => {
+      // SQLite no soporta DROP COLUMN, necesitamos recrear la tabla
+      db.exec(`
+        CREATE TABLE roles_backup AS SELECT id, name, description, created_at, is_active FROM roles;
+        DROP TABLE roles;
+        CREATE TABLE roles (
+          id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+          name TEXT UNIQUE NOT NULL,
+          description TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          is_active BOOLEAN DEFAULT 1
+        );
+        INSERT INTO roles SELECT * FROM roles_backup;
+        DROP TABLE roles_backup;
+      `);
+      
+      // Recrear índices
+      db.exec("CREATE INDEX IF NOT EXISTS idx_roles_name ON roles(name)");
+      
+      logger.info('✅ Campo updated_at removido de roles');
+    }
   }
 ];
 

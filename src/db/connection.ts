@@ -72,6 +72,15 @@ export function getDatabase(dbPath?: string): Database {
 export function forceReinitDatabase(dbPath?: string): Database {
   console.log("🔄 Force reinitializing database...");
   db = null;
+  
+  // Reset transaction manager to use new database instance
+  try {
+    const { resetTransactionManager } = require('../database/transaction');
+    resetTransactionManager();
+  } catch (error) {
+    // Ignore if transaction module is not available
+  }
+  
   initDatabase(dbPath);
   if (!db) {
     throw new Error("Failed to reinitialize database");

@@ -144,7 +144,7 @@ export interface Role extends BaseEntity {
   description?: string;
   isDefault?: boolean;
   isActive: boolean;
-  permissions: Permission[];
+  permissions?: Permission[];
   metadata?: RoleMetadata;
 }
 

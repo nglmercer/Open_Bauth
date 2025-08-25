@@ -44,7 +44,7 @@ export class LogFileManager {
   private getCurrentLogFileName(): string {
     const date = new Date();
     const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    return path.join(this.config.logDirectory, `webrtc-signaling-${dateStr}.log`);
+    return path.join(this.config.logDirectory, `Bauth-${dateStr}.log`);
   }
 
   private shouldRotateFile(): boolean {

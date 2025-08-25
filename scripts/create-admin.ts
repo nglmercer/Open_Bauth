@@ -10,7 +10,6 @@ import { PermissionService } from '../src/services/permissions'
 import { initDatabase } from '../src/db/connection'
 import { initJWTService } from '../src/services/jwt'
 import { defaultLogger as logger } from '../src/logger'
-logger.silence();
 const BASE_URL = 'http://localhost:3001'
 
 async function makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
