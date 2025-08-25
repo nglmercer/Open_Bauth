@@ -24,6 +24,11 @@ export class JWTService {
    * @returns Token JWT
    */
   async generateToken(user: User): Promise<string> {
+    // FIX: Añadir validación de entrada para el objeto de usuario.
+    if (!user || !user.id || !user.email) {
+      throw new Error('Invalid user object provided. User must have an id and an email.');
+    }
+
     try {
       const now = Math.floor(Date.now() / 1000);
       const expirationTime = this.parseExpirationTime(this.expiresIn);
@@ -31,7 +36,7 @@ export class JWTService {
       const payload: JWTPayload = {
         userId: user.id,
         email: user.email,
-        roles: user.roles.map(role => role.name),
+        roles: user.roles?.map(role => role.name) || [],
         iat: now,
         exp: now + expirationTime
       };
@@ -53,7 +58,6 @@ export class JWTService {
       throw new Error('Failed to generate token');
     }
   }
-
   /**
    * Verifica y decodifica un token JWT
    * @param token Token JWT a verificar

@@ -151,7 +151,7 @@ export function honoRequireRoles(roles: string[]): MiddlewareHandler {
       );
     }
 
-    const userRoles = authContext.user.roles.map(role => role.name);
+    const userRoles = authContext.user.roles?.map(role => role.name) || [];
     const hasRequiredRole = roles.some(role => userRoles.includes(role));
 
     if (!hasRequiredRole) {
@@ -239,9 +239,9 @@ export function honoRequireOwnership(
 
     const resourceUserId = getUserIdFromParams(c);
     const isOwner = authContext.user.id === resourceUserId;
-    const isAdmin = authContext.user.roles.some(role => 
+    const isAdmin = authContext.user.roles?.some(role => 
       ['admin', 'administrator'].includes(role.name)
-    );
+    ) || false;
 
     if (!isOwner && !isAdmin) {
       logAuthEvent('auth.insufficient_ownership', authContext.user.id, {

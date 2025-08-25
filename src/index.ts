@@ -37,7 +37,7 @@ import {
   initDatabase, 
   closeDatabase 
 } from './db/connection';
-import { runMigrations } from './db/migrations';
+import { runMigrations } from './db/newmigrations';
 import { 
   seedDatabase, 
   cleanDatabase, 
@@ -164,10 +164,8 @@ export {
 
 export {
   runMigrations,
-  rollbackMigrations,
-  getMigrationStatus,
   resetDatabase as resetDatabaseMigrations
-} from './db/migrations';
+} from './db/newmigrations';
 
 // Configuración
 export {

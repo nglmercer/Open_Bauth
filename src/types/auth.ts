@@ -60,7 +60,7 @@ export interface User extends BaseEntity {
   isActive: boolean;
   lastLoginAt?: Date;
   emailVerifiedAt?: Date;
-  roles: Role[];
+  roles?: Role[];
   permissions?: Permission[];
   metadata?: UserMetadata;
 }
@@ -395,7 +395,7 @@ export interface AuthResult {
 export interface JWTPayload {
   userId: string;
   email: string;
-  roles: string[];
+  roles?: string[];
   iat?: number;
   exp?: number;
 }

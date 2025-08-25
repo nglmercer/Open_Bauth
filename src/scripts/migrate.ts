@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { initDatabase } from '../db/connection';
-import { runMigrations } from '../db/migrations';
+import { runMigrations } from '../db/newmigrations';
 
 async function main() {
   try {

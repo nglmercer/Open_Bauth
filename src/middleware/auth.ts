@@ -249,7 +249,7 @@ export function userHasAnyRole(authContext: AuthContext, roleNames: string[]): b
   if (!authContext.user) {
     return false;
   }
-  return authContext.user.roles.some(role => roleNames.includes(role.name));
+  return authContext.user.roles?.some(role => roleNames.includes(role.name)) || false;
 }
 
 /**
@@ -260,7 +260,7 @@ export function userHasAllRoles(authContext: AuthContext, roleNames: string[]): 
     return false;
   }
   return roleNames.every(roleName => 
-    authContext.user!.roles.some(role => role.name === roleName)
+    authContext.user!.roles?.some(role => role.name === roleName) || false
   );
 }
 

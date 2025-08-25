@@ -15,7 +15,7 @@
 // });
 
 import { getDatabase, isDatabaseInitialized, initDatabase, forceReinitDatabase } from '../db/connection';
-import { runMigrations } from '../db/migrations';
+import { runMigrations } from '../db/newmigrations';
 import { AuthService } from '../services/auth';
 import { PermissionService } from '../services/permissions';
 import type { CreatePermissionData, CreateRoleData } from '../types/auth';

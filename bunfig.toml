@@ -31,7 +31,7 @@ watchMode = {
 # Variables de entorno para tests
 [test.env]
 NODE_ENV = "test"
-TEST_DB_PATH = "./tests/data/test.db"
+TEST_DB_PATH = "./tests/data/auth.db"
 JWT_SECRET = "test-secret-key-for-development"
 LOG_LEVEL = "error"
 

@@ -1,5 +1,5 @@
 import { Database } from 'bun:sqlite';
-import { getDatabase } from '../db/connection';
+import { getDatabase, isDatabaseInitialized } from '../db/connection';
 import type { DatabaseTransaction } from '../types/common';
 import { AuthErrorFactory } from '../errors/auth';
 
@@ -18,6 +18,31 @@ export class SqliteTransaction implements DatabaseTransaction {
   }
 
   /**
+   * Verifica si la base de datos está disponible y reconecta si es necesario
+   */
+  private ensureDatabaseConnection(): void {
+    try {
+      // Test if current database is still accessible
+      this.db.query("SELECT 1").get();
+    } catch (error: any) {
+      if (error.message && (
+        error.message.includes('closed database') ||
+        error.message.includes('Database has closed') ||
+        error.message.includes('database is closed')
+      )) {
+        console.warn("⚠️ Database connection lost in transaction, attempting to reconnect...");
+        // Get a fresh database connection
+        this.db = getDatabase();
+        // Reset transaction state since the connection was lost
+        this.isTransactionActive = false;
+        this.savepoints = [];
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  /**
    * Begin the transaction
    */
   async begin(): Promise<void> {
@@ -26,10 +51,26 @@ export class SqliteTransaction implements DatabaseTransaction {
     }
 
     try {
+      this.ensureDatabaseConnection();
       this.db.exec('BEGIN TRANSACTION');
       this.isTransactionActive = true;
-    } catch (error) {
-      throw AuthErrorFactory.database(`Failed to begin transaction: ${error}`, 'begin');
+    } catch (error: any) {
+      // If database connection failed, try to get a fresh connection
+      if (error.message && (
+        error.message.includes('closed database') ||
+        error.message.includes('Database has closed') ||
+        error.message.includes('database is closed')
+      )) {
+        try {
+          this.db = getDatabase();
+          this.db.exec('BEGIN TRANSACTION');
+          this.isTransactionActive = true;
+        } catch (retryError) {
+          throw AuthErrorFactory.database(`Failed to begin transaction after reconnection: ${retryError}`, 'begin');
+        }
+      } else {
+        throw AuthErrorFactory.database(`Failed to begin transaction: ${error}`, 'begin');
+      }
     }
   }
 
@@ -42,11 +83,23 @@ export class SqliteTransaction implements DatabaseTransaction {
     }
 
     try {
+      this.ensureDatabaseConnection();
       this.db.exec('COMMIT');
       this.isTransactionActive = false;
       this.savepoints = [];
-    } catch (error) {
-      throw AuthErrorFactory.database(`Failed to commit transaction: ${error}`, 'commit');
+    } catch (error: any) {
+      // If database is closed, consider transaction lost
+      if (error.message && (
+        error.message.includes('closed database') ||
+        error.message.includes('Database has closed') ||
+        error.message.includes('database is closed')
+      )) {
+        this.isTransactionActive = false;
+        this.savepoints = [];
+        throw AuthErrorFactory.database('Transaction lost due to database disconnection', 'commit');
+      } else {
+        throw AuthErrorFactory.database(`Failed to commit transaction: ${error}`, 'commit');
+      }
     }
   }
 
@@ -55,15 +108,31 @@ export class SqliteTransaction implements DatabaseTransaction {
    */
   async rollback(): Promise<void> {
     if (!this.isTransactionActive) {
-      throw AuthErrorFactory.database('No active transaction to rollback', 'rollback');
+      // If not active, there's nothing to rollback
+      return;
     }
 
     try {
+      this.ensureDatabaseConnection();
       this.db.exec('ROLLBACK');
       this.isTransactionActive = false;
       this.savepoints = [];
-    } catch (error) {
-      throw AuthErrorFactory.database(`Failed to rollback transaction: ${error}`, 'rollback');
+    } catch (error: any) {
+      // If database is closed, consider transaction already rolled back
+      if (error.message && (
+        error.message.includes('closed database') ||
+        error.message.includes('Database has closed') ||
+        error.message.includes('database is closed')
+      )) {
+        this.isTransactionActive = false;
+        this.savepoints = [];
+        // Don't throw error for rollback when database is closed
+        console.warn('Transaction rollback skipped due to closed database connection');
+      } else {
+        this.isTransactionActive = false;
+        this.savepoints = [];
+        throw AuthErrorFactory.database(`Failed to rollback transaction: ${error}`, 'rollback');
+      }
     }
   }
 
@@ -71,7 +140,26 @@ export class SqliteTransaction implements DatabaseTransaction {
    * Check if transaction is active
    */
   isActive(): boolean {
-    return this.isTransactionActive;
+    if (!this.isTransactionActive) {
+      return false;
+    }
+
+    // Verify database connection is still valid
+    try {
+      this.db.query("SELECT 1").get();
+      return true;
+    } catch (error: any) {
+      if (error.message && (
+        error.message.includes('closed database') ||
+        error.message.includes('Database has closed') ||
+        error.message.includes('database is closed')
+      )) {
+        this.isTransactionActive = false;
+        this.savepoints = [];
+        return false;
+      }
+      return true; // Other errors don't necessarily mean transaction is inactive
+    }
   }
 
   /**
@@ -85,10 +173,18 @@ export class SqliteTransaction implements DatabaseTransaction {
     const savepointName = name || `sp_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     
     try {
+      this.ensureDatabaseConnection();
       this.db.exec(`SAVEPOINT ${savepointName}`);
       this.savepoints.push(savepointName);
       return savepointName;
-    } catch (error) {
+    } catch (error: any) {
+      if (error.message && (
+        error.message.includes('closed database') ||
+        error.message.includes('Database has closed') ||
+        error.message.includes('database is closed')
+      )) {
+        throw AuthErrorFactory.database('Cannot create savepoint: database connection lost', 'savepoint');
+      }
       throw AuthErrorFactory.database(`Failed to create savepoint: ${error}`, 'savepoint');
     }
   }
@@ -106,11 +202,19 @@ export class SqliteTransaction implements DatabaseTransaction {
     }
 
     try {
+      this.ensureDatabaseConnection();
       this.db.exec(`ROLLBACK TO SAVEPOINT ${name}`);
       // Remove savepoints created after this one
       const index = this.savepoints.indexOf(name);
       this.savepoints = this.savepoints.slice(0, index + 1);
-    } catch (error) {
+    } catch (error: any) {
+      if (error.message && (
+        error.message.includes('closed database') ||
+        error.message.includes('Database has closed') ||
+        error.message.includes('database is closed')
+      )) {
+        throw AuthErrorFactory.database('Cannot rollback to savepoint: database connection lost', 'rollbackToSavepoint');
+      }
       throw AuthErrorFactory.database(`Failed to rollback to savepoint: ${error}`, 'rollbackToSavepoint');
     }
   }
@@ -128,11 +232,19 @@ export class SqliteTransaction implements DatabaseTransaction {
     }
 
     try {
+      this.ensureDatabaseConnection();
       this.db.exec(`RELEASE SAVEPOINT ${name}`);
       // Remove this savepoint and all subsequent ones
       const index = this.savepoints.indexOf(name);
       this.savepoints = this.savepoints.slice(0, index);
-    } catch (error) {
+    } catch (error: any) {
+      if (error.message && (
+        error.message.includes('closed database') ||
+        error.message.includes('Database has closed') ||
+        error.message.includes('database is closed')
+      )) {
+        throw AuthErrorFactory.database('Cannot release savepoint: database connection lost', 'releaseSavepoint');
+      }
       throw AuthErrorFactory.database(`Failed to release savepoint: ${error}`, 'releaseSavepoint');
     }
   }
@@ -146,9 +258,17 @@ export class SqliteTransaction implements DatabaseTransaction {
     }
 
     try {
+      this.ensureDatabaseConnection();
       const statement = this.db.query(sql);
       return params ? statement.all(...params) : statement.all();
-    } catch (error) {
+    } catch (error: any) {
+      if (error.message && (
+        error.message.includes('closed database') ||
+        error.message.includes('Database has closed') ||
+        error.message.includes('database is closed')
+      )) {
+        throw AuthErrorFactory.database('Cannot execute query: database connection lost', 'query');
+      }
       throw AuthErrorFactory.database(`Failed to execute query in transaction: ${error}`, 'query');
     }
   }
@@ -162,8 +282,16 @@ export class SqliteTransaction implements DatabaseTransaction {
     }
 
     try {
+      this.ensureDatabaseConnection();
       this.db.exec(sql);
-    } catch (error) {
+    } catch (error: any) {
+      if (error.message && (
+        error.message.includes('closed database') ||
+        error.message.includes('Database has closed') ||
+        error.message.includes('database is closed')
+      )) {
+        throw AuthErrorFactory.database('Cannot execute statement: database connection lost', 'exec');
+      }
       throw AuthErrorFactory.database(`Failed to execute statement in transaction: ${error}`, 'exec');
     }
   }
@@ -198,6 +326,11 @@ export class TransactionManager {
    * Create a new transaction
    */
   async createTransaction(): Promise<SqliteTransaction> {
+    // Ensure we have a valid database connection
+    if (!isDatabaseInitialized()) {
+      this.db = getDatabase();
+    }
+
     const transaction = new SqliteTransaction(this.db);
     await transaction.begin();
     this.activeTransactions.set(transaction.getId(), transaction);
@@ -313,9 +446,7 @@ let transactionManager: TransactionManager | null = null;
  * Initialize the transaction manager
  */
 export function initTransactionManager(database?: Database): TransactionManager {
-  if (!transactionManager) {
-    transactionManager = new TransactionManager(database);
-  }
+  transactionManager = new TransactionManager(database);
   return transactionManager;
 }
 
@@ -323,7 +454,7 @@ export function initTransactionManager(database?: Database): TransactionManager 
  * Get the global transaction manager
  */
 export function getTransactionManager(): TransactionManager {
-  if (!transactionManager) {
+  if (!transactionManager || !isDatabaseInitialized()) {
     transactionManager = new TransactionManager();
   }
   return transactionManager;
@@ -333,6 +464,12 @@ export function getTransactionManager(): TransactionManager {
  * Reset the global transaction manager (useful when database is reinitialized)
  */
 export function resetTransactionManager(): void {
+  // Rollback any active transactions before resetting
+  if (transactionManager) {
+    transactionManager.rollbackAll().catch(error => {
+      console.error('Error rolling back transactions during reset:', error);
+    });
+  }
   transactionManager = null;
 }
 

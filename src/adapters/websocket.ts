@@ -168,9 +168,9 @@ export function checkWebSocketPermissions(
     return false;
   }
 
-  const userPermissions = ws.auth.user.roles.flatMap(role => 
+  const userPermissions = ws.auth.user.roles?.flatMap(role => 
     role.permissions?.map(p => p.name) || []
-  );
+  ) || [];
   
   if (requireAll) {
     return permissions.every(permission => userPermissions.includes(permission));
@@ -193,7 +193,7 @@ export function checkWebSocketRoles(
     return false;
   }
 
-  const userRoles = ws.auth.user.roles.map(role => role.name);
+  const userRoles = ws.auth.user.roles?.map(role => role.name) || [];
   return roles.some(role => userRoles.includes(role));
 }
 

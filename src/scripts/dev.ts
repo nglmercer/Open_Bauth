@@ -1,6 +1,6 @@
 // src/scripts/dev.ts
 import { seedDatabase, cleanDatabase, resetDatabase, checkDatabaseStatus } from './seed';
-import { runMigrations, rollbackMigrations, getMigrationStatus,type Migration } from '../db/migrations';
+import { runMigrations } from '../db/newmigrations';
 import { getDatabase, initDatabase, closeDatabase } from '../db/connection';
 import { AuthService } from '../services/auth';
 import { PermissionService } from '../services/permissions';
@@ -69,21 +69,6 @@ export async function runDevCommand(command: string, ...args: string[]): Promise
       case 'db:migrate':
         await runMigrations();
         console.log('✅ Migraciones ejecutadas');
-        break;
-        
-      case 'db:rollback':
-        const version = args[0] ? parseInt(args[0]) : 0;
-        await rollbackMigrations(version);
-        console.log('✅ Migraciones revertidas');
-        break;
-        
-      case 'db:status':
-        const data = await getMigrationStatus();
-        console.log('📊 Estado de migraciones:');
-        data.executedMigrations.forEach(migration => {
-          const status = migration ? '✅' : '⏳';
-          console.log(`  ${status} ${migration.version}: ${migration.name}`);
-        });
         break;
         
       case 'db:seed':

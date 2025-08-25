@@ -69,7 +69,7 @@ export class TransactionalService {
         }
 
         // Transfer each role
-        for (const role of fromUser.roles) {
+        for (const role of fromUser.roles || []) {
           // Remove role from source user
           await this.roleRepository.removeFromUser(fromUserId, role.id, transaction);
           
@@ -219,7 +219,7 @@ export class TransactionalService {
         const updatedUser = await this.userRepository.update(userId, profileUpdates, transaction);
 
         // Remove all existing roles
-        for (const role of existingUser.roles) {
+        for (const role of existingUser.roles || []) {
           await this.roleRepository.removeFromUser(userId, role.id, transaction);
         }
 

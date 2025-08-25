@@ -11,7 +11,7 @@ export const DEFAULT_AUTH_CONFIG: AuthConfig = {
   
   // Configuración de base de datos
   database: {
-    path: process.env.DATABASE_PATH || './data/auth.db',
+    path: process.env.DATABASE_PATH || './auth.db',
     enableWAL: process.env.DATABASE_WAL === 'true',
     enableForeignKeys: true,
     busyTimeout: 5000
@@ -272,7 +272,7 @@ JWT_EXPIRATION=1h
 REFRESH_TOKEN_EXPIRATION=7d
 
 # Database Configuration
-DATABASE_PATH=./data/auth.db
+DATABASE_PATH=./auth.db
 DATABASE_WAL=true
 
 # Security Configuration

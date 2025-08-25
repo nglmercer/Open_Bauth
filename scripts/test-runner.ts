@@ -37,7 +37,12 @@ const testConfigs: Record<string, TestConfig> = {
     command: ['bun', 'test', 'tests/adapters'],
     timeout: 45000
   },
-  
+  services: {
+    name: 'Service Tests',
+    description: 'Ejecutar tests de servicios',
+    command: ['bun', 'test', 'tests/services'],
+    timeout: 60000
+  },
   performance: {
     name: 'Performance Tests',
     description: 'Ejecutar tests de rendimiento',

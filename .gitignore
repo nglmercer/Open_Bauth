@@ -13,3 +13,4 @@ build/
 *.db-wal
 *.db
 *.db-wal
+*.log

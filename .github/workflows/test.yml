@@ -62,7 +62,7 @@ jobs:
         run: bun test --coverage --reporter=junit --reporter-outfile=test-results.xml --preload ./tests/setup.ts --timeout 60000
         env:
           NODE_ENV: test
-          TEST_DB_PATH: ./tests/data/test.db
+          TEST_DB_PATH: ./tests/data/auth.db
           JWT_SECRET: test-secret-key-for-ci
           
       - name: Upload test results

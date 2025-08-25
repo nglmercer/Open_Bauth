@@ -3,12 +3,12 @@
 
 import { beforeAll, afterAll, beforeEach, afterEach, expect } from 'bun:test';
 import { initDatabase, closeDatabase, getDatabase, isDatabaseInitialized } from '../src/db/connection';
-import { runMigrations, resetDatabase } from '../src/db/migrations';
+import { runMigrations, resetDatabase } from '../src/db/newmigrations';
 import { seedDatabase, cleanDatabase } from '../src/scripts/seed';
 import { initJWTService } from '../src/services/jwt';
 import { defaultLogger as logger } from '../src/logger'
 // Variables globales para tests
-export const TEST_DB_PATH = './test.db';
+export const TEST_DB_PATH = './auth.db';
 export const TEST_JWT_SECRET = 'test-jwt-secret-key-for-testing-only';
 
 // Configuración de entorno para tests
