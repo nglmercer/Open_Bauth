@@ -9,6 +9,7 @@
 5. [TypeScript Types](#typescript-types)
 6. [Database](#database)
 7. [Configuration](#configuration)
+8. [Convenience Functions](#convenience-functions)
 
 ---
 
@@ -19,15 +20,19 @@ The `AuthLibrary` class is the main entry point for the authentication library. 
 ### Public Methods
 
 | Method | Parameters | Return | Description |
-|--------|------------|--------|--------------|
-| `constructor()` | `config: AuthConfig` | `AuthLibrary` | Initializes the library with the provided configuration |
+|--------|------------|--------|-------------|
+| `constructor()` | `config?: Partial<AuthConfig>` | `AuthLibrary` | Initializes the library with optional configuration |
 | `initialize()` | - | `Promise<void>` | Initializes the database and runs migrations |
 | `getAuthService()` | - | `AuthService` | Gets the authentication service instance |
 | `getJWTService()` | - | `JWTService` | Gets the JWT service instance |
 | `getPermissionService()` | - | `PermissionService` | Gets the permission service instance |
-| `createHonoAdapter()` | `config?: AuthMiddlewareConfig` | `HonoAdapter` | Creates an adapter for the Hono framework |
-| `createExpressAdapter()` | `config?: AuthMiddlewareConfig` | `ExpressAdapter` | Creates an adapter for the Express framework |
-| `createWebSocketAdapter()` | `config?: AuthMiddlewareConfig` | `WebSocketAdapter` | Creates an adapter for WebSockets |
+| `getConfig()` | - | `AuthConfig` | Gets the current configuration |
+| `updateConfig()` | `newConfig: Partial<AuthConfig>` | `void` | Updates the library configuration |
+| `seed()` | - | `Promise<void>` | Populates database with initial data |
+| `clean()` | - | `Promise<void>` | Cleans the database |
+| `reset()` | - | `Promise<void>` | Resets the database |
+| `checkStatus()` | - | `Promise<void>` | Checks database status |
+| `close()` | - | `Promise<void>` | Closes connections and cleans up resources |
 
 ### Usage Example
 
@@ -59,7 +64,7 @@ const permissionService = authLib.getPermissionService();
 Main service for authentication, registration, and user management.
 
 | Method | Parameters | Return | Description |
-|--------|------------|--------|--------------|
+|--------|------------|--------|-------------|
 | `register()` | `data: RegisterData` | `Promise<AuthResult>` | Registers a new user in the system |
 | `login()` | `data: LoginData` | `Promise<AuthResult>` | Authenticates a user with email and password |
 | `findUserById()` | `id: string, options?: UserQueryOptions` | `Promise<User \| null>` | Finds a user by their ID |
@@ -79,7 +84,7 @@ Main service for authentication, registration, and user management.
 Service for JWT token generation, verification, and management.
 
 | Method | Parameters | Return | Description |
-|--------|------------|--------|--------------|
+|--------|------------|--------|-------------|
 | `generateToken()` | `user: User` | `Promise<string>` | Generates a JWT token for a user |
 | `verifyToken()` | `token: string` | `Promise<JWTPayload>` | Verifies and decodes a JWT token |
 | `extractTokenFromHeader()` | `authHeader: string` | `string \| null` | Extracts token from Authorization header (case-insensitive Bearer) |
@@ -94,7 +99,7 @@ Service for JWT token generation, verification, and management.
 Service for role and permission management (RBAC).
 
 | Method | Parameters | Return | Description |
-|--------|------------|--------|--------------|
+|--------|------------|--------|-------------|
 | `createPermission()` | `data: CreatePermissionData` | `Promise<PermissionResult>` | Creates a new permission |
 | `createRole()` | `data: CreateRoleData` | `Promise<RoleResult>` | Creates a new role |
 | `updatePermission()` | `permissionId: string, data: UpdatePermissionData` | `Promise<PermissionResult>` | Updates an existing permission |
@@ -121,7 +126,7 @@ Service for role and permission management (RBAC).
 Specific adapter for the Hono framework.
 
 | Function | Parameters | Return | Description |
-|----------|------------|--------|--------------|
+|----------|------------|--------|-------------|
 | `honoAuthMiddleware()` | `config?: AuthMiddlewareConfig` | `MiddlewareHandler` | Main authentication middleware |
 | `honoOptionalAuth()` | - | `MiddlewareHandler` | Optional authentication middleware |
 | `honoRequireAuth()` | - | `MiddlewareHandler` | Middleware that requires authentication |
@@ -136,13 +141,15 @@ Specific adapter for the Hono framework.
 | `honoRateLimit()` | `maxRequests?: number, windowMs?: number` | `MiddlewareHandler` | Rate limiting middleware |
 | `honoCorsAuth()` | `origins?: string[]` | `MiddlewareHandler` | CORS middleware for authentication |
 | `honoAuthLogger()` | - | `MiddlewareHandler` | Logging middleware for authentication |
+| `honoErrorResponse()` | `error: AuthError` | `Response` | Creates error response for Hono |
+| `honoSuccessResponse()` | `data: any` | `Response` | Creates success response for Hono |
 
 ### Express Adapter
 
 Specific adapter for the Express framework.
 
 | Function | Parameters | Return | Description |
-|----------|------------|--------|--------------|
+|----------|------------|--------|-------------|
 | `expressAuthMiddleware()` | `config?: AuthMiddlewareConfig` | `RequestHandler` | Main authentication middleware |
 | `expressOptionalAuth()` | - | `RequestHandler` | Optional authentication middleware |
 | `expressRequireAuth()` | - | `RequestHandler` | Middleware that requires authentication |
@@ -160,18 +167,31 @@ Specific adapter for the Express framework.
 | `expressAuthErrorHandler()` | - | `ErrorRequestHandler` | Error handling middleware |
 | `expressJsonValidator()` | - | `RequestHandler` | JSON validation middleware |
 | `expressSanitizer()` | - | `RequestHandler` | Data sanitization middleware |
+| `expressErrorResponse()` | `error: AuthError` | `Response` | Creates error response for Express |
+| `expressSuccessResponse()` | `data: any` | `Response` | Creates success response for Express |
 
 ### WebSocket Adapter
 
 Adapter for WebSocket connection authentication.
 
 | Function | Parameters | Return | Description |
-|----------|------------|--------|--------------|
+|----------|------------|--------|-------------|
 | `authenticateWebSocket()` | `ws: WebSocket, request: IncomingMessage` | `Promise<AuthenticatedWebSocket>` | Authenticates a WebSocket connection |
 | `checkWebSocketPermissions()` | `ws: AuthenticatedWebSocket, permissions: string[]` | `boolean` | Checks permissions on WebSocket |
 | `checkWebSocketRoles()` | `ws: AuthenticatedWebSocket, roles: string[]` | `boolean` | Checks roles on WebSocket |
-| `getWebSocketUser()` | `ws: AuthenticatedWebSocket` | `User \| undefined` | Gets user from WebSocket connection |
+| `getWebSocketCurrentUser()` | `ws: AuthenticatedWebSocket` | `User \| undefined` | Gets user from WebSocket connection |
 | `isWebSocketAuthenticated()` | `ws: AuthenticatedWebSocket` | `boolean` | Checks if connection is authenticated |
+| `getWebSocketAuthContext()` | `ws: AuthenticatedWebSocket` | `AuthContext` | Gets authentication context from WebSocket |
+| `sendToUser()` | `userId: string, message: any` | `void` | Sends message to specific user |
+| `sendToUsersWithPermissions()` | `permissions: string[], message: any` | `void` | Sends message to users with permissions |
+| `sendToUsersWithRoles()` | `roles: string[], message: any` | `void` | Sends message to users with roles |
+| `broadcastToAuthenticated()` | `message: any` | `void` | Broadcasts message to all authenticated connections |
+| `getConnectionStats()` | - | `ConnectionStats` | Gets WebSocket connection statistics |
+| `disconnectUser()` | `userId: string` | `void` | Disconnects specific user |
+| `cleanupInactiveConnections()` | - | `void` | Cleans up inactive connections |
+| `handleAuthenticatedMessage()` | `ws: AuthenticatedWebSocket, message: any` | `void` | Handles authenticated WebSocket messages |
+| `createWebSocketResponse()` | `type: string, data: any` | `WebSocketResponse` | Creates WebSocket response |
+| `initializeConnectionCleanup()` | `intervalMs?: number` | `void` | Initializes connection cleanup |
 
 ---
 
@@ -180,8 +200,9 @@ Adapter for WebSocket connection authentication.
 Middleware functions that work independently of the framework.
 
 | Function | Parameters | Return | Description |
-|----------|------------|--------|--------------|
+|----------|------------|--------|-------------|
 | `authenticateRequest()` | `request: AuthRequest, config?: AuthMiddlewareConfig` | `Promise<AuthResult>` | Authenticates a framework-agnostic request |
+| `authorizeRequest()` | `authContext: AuthContext, permissions: string[]` | `Promise<boolean>` | Authorizes request based on permissions |
 | `getCurrentUser()` | `authContext: AuthContext` | `User \| undefined` | Gets current user from context |
 | `createEmptyAuthContext()` | - | `AuthContext` | Creates an empty authentication context |
 | `logAuthEvent()` | `event: string, userId?: string, metadata?: any` | `void` | Logs authentication events |
@@ -193,37 +214,242 @@ Middleware functions that work independently of the framework.
 
 ---
 
+## Convenience Functions
+
+The library provides convenience functions to easily create framework-specific authentication setups.
+
+### createHonoAuth()
+
+Creates a complete Hono authentication setup.
+
+```typescript
+import { createHonoAuth } from './src/index';
+
+const honoAuth = createHonoAuth({
+  jwtSecret: 'your-secret-key'
+});
+
+// Use the middleware
+app.use('*', honoAuth.middleware());
+app.get('/protected', honoAuth.required(), handler);
+```
+
+**Returns:**
+- `middleware`: Main authentication middleware
+- `optional`: Optional authentication middleware
+- `required`: Required authentication middleware
+- `permissions`: Permission-based middleware
+- `roles`: Role-based middleware
+- `admin`: Admin-only middleware
+- `moderator`: Moderator-only middleware
+- `ownership`: Ownership-based middleware
+- `rateLimit`: Rate limiting middleware
+- `cors`: CORS middleware
+- `logger`: Logging middleware
+- `library`: AuthLibrary instance
+
+### createExpressAuth()
+
+Creates a complete Express authentication setup.
+
+```typescript
+import { createExpressAuth } from './src/index';
+
+const expressAuth = createExpressAuth({
+  jwtSecret: 'your-secret-key'
+});
+
+// Use the middleware
+app.use(expressAuth.middleware());
+app.get('/protected', expressAuth.required(), handler);
+```
+
+**Returns:**
+- `middleware`: Main authentication middleware
+- `optional`: Optional authentication middleware
+- `required`: Required authentication middleware
+- `permissions`: Permission-based middleware
+- `roles`: Role-based middleware
+- `admin`: Admin-only middleware
+- `moderator`: Moderator-only middleware
+- `ownership`: Ownership-based middleware
+- `rateLimit`: Rate limiting middleware
+- `cors`: CORS middleware
+- `logger`: Logging middleware
+- `errorHandler`: Error handling middleware
+- `jsonValidator`: JSON validation middleware
+- `sanitizer`: Data sanitization middleware
+- `library`: AuthLibrary instance
+
+### createWebSocketAuth()
+
+Creates a complete WebSocket authentication setup.
+
+```typescript
+import { createWebSocketAuth } from './src/index';
+
+const wsAuth = createWebSocketAuth({
+  jwtSecret: 'your-secret-key'
+});
+
+// Authenticate WebSocket connection
+const authenticatedWs = await wsAuth.authenticate(ws, request);
+```
+
+**Returns:**
+- `authenticate`: WebSocket authentication function
+- `checkPermissions`: Permission checking function
+- `checkRoles`: Role checking function
+- `getCurrentUser`: Get current user function
+- `isAuthenticated`: Authentication status function
+- `getAuthContext`: Get authentication context function
+- `sendToUser`: Send message to specific user
+- `sendToUsersWithPermissions`: Send message to users with permissions
+- `sendToUsersWithRoles`: Send message to users with roles
+- `broadcast`: Broadcast message to all authenticated connections
+- `getStats`: Get connection statistics
+- `disconnect`: Disconnect specific user
+- `cleanup`: Clean up inactive connections
+- `handleMessage`: Handle authenticated messages
+- `createResponse`: Create standardized WebSocket response
+- `initCleanup`: Initialize connection cleanup
+- `library`: AuthLibrary instance
+
+---
+
 ## TypeScript Types
 
-### Main Interfaces
+The library exports comprehensive TypeScript types organized into several categories:
 
-| Interface | Description | Main Properties |
-|-----------|-------------|------------------|
+### Authentication Types
+
+| Type | Description | Key Properties |
+|------|-------------|----------------|
 | `User` | Represents a system user | `id`, `email`, `roles`, `isActive`, `createdAt` |
 | `Role` | Represents a system role | `id`, `name`, `permissions`, `description` |
 | `Permission` | Represents a specific permission | `id`, `name`, `resource`, `action` |
 | `AuthContext` | Authentication context | `user`, `token`, `permissions`, `isAuthenticated` |
 | `AuthConfig` | System configuration | `jwtSecret`, `database`, `security`, `cors` |
 | `AuthRequest` | Framework-agnostic request | `headers`, `url`, `method`, `auth` |
+| `AuthResponse` | Framework-agnostic response | `status`, `headers`, `body` |
 | `AuthResult` | Auth operation result | `success`, `user`, `token`, `error` |
 | `JWTPayload` | JWT token payload | `userId`, `email`, `roles`, `iat`, `exp` |
-
-### Data Types
-
-| Type | Description | Fields |
-|------|-------------|--------|
 | `RegisterData` | Registration data | `email`, `password`, `firstName`, `lastName` |
 | `LoginData` | Login data | `email`, `password` |
 | `CreatePermissionData` | Permission creation data | `name`, `resource`, `action`, `description` |
 | `CreateRoleData` | Role creation data | `name`, `description`, `permissionIds` |
 | `UpdateUserData` | User update data | `email`, `isActive`, `firstName`, `lastName` |
 | `UserQueryOptions` | Query options | `includeRoles`, `includePermissions`, `activeOnly` |
+| `AuthStats` | Authentication statistics | `totalUsers`, `activeUsers`, `totalRoles` |
+| `AuthEvent` | Authentication event | `type`, `userId`, `timestamp`, `metadata` |
+| `SecurityConfig` | Security configuration | `rateLimiting`, `cors`, `helmet` |
+| `SessionInfo` | Session information | `userId`, `sessionId`, `expiresAt` |
+
+### Common Utility Types
+
+| Type | Description | Usage |
+|------|-------------|-------|
+| `ApiResponse<T>` | Generic API response wrapper | `success`, `data`, `error`, `meta` |
+| `PaginatedResponse<T>` | Paginated response interface | `items`, `pagination` |
+| `BaseEntity` | Database entity base | `id`, `createdAt`, `updatedAt` |
+| `SoftDeleteEntity` | Soft delete entity | `deletedAt`, `isDeleted` |
+| `AuditFields` | Audit fields | `createdBy`, `updatedBy`, `deletedBy` |
+| `QueryOptions` | Query options | `page`, `limit`, `sortBy`, `filters` |
+| `ValidationResult` | Validation result | `isValid`, `errors`, `warnings` |
+| `Optional<T, K>` | Make specific fields optional | Utility type |
+| `RequiredFields<T, K>` | Make specific fields required | Utility type |
+| `DeepPartial<T>` | Deep partial type | Utility type |
+| `DeepRequired<T>` | Deep required type | Utility type |
+
+### Service Types
+
+| Type | Description | Purpose |
+|------|-------------|----------|
+| `BaseService` | Base service interface | Service foundation |
+| `ServiceHealthStatus` | Service health status | Health monitoring |
+| `AuthServiceInterface` | Auth service interface | Service contract |
+| `RegisterServiceData` | Registration service data | Service input |
+| `AuthServiceResult` | Auth service result | Service output |
+| `TokenServiceResult` | Token service result | Token operations |
+
+### Middleware Types
+
+| Type | Description | Framework |
+|------|-------------|----------|
+| `ExtendedRequest` | Extended request object | Framework-agnostic |
+| `ExtendedResponse` | Extended response object | Framework-agnostic |
+| `MiddlewareFunction` | Middleware function type | Framework-agnostic |
+| `ErrorMiddlewareFunction` | Error middleware function | Framework-agnostic |
+| `AuthMiddlewareOptions` | Auth middleware options | Configuration |
+| `AuthorizationOptions` | Authorization options | Permission checking |
+
+### Database Types
+
+| Type | Description | Usage |
+|------|-------------|-------|
+| `DatabaseConfig` | Database configuration | Connection setup |
+| `DatabaseConnection` | Database connection | Connection management |
+| `DatabaseTransaction` | Database transaction | Transaction handling |
+| `QueryParams` | Query parameters | SQL queries |
+| `QueryMetadata` | Query metadata | Query information |
+| `PreparedStatement` | Prepared statement | SQL execution |
+| `Migration` | Database migration | Schema changes |
+| `MigrationStatus` | Migration status | Migration tracking |
+| `BaseRepository<T>` | Base repository interface | Data access |
+| `SoftDeleteRepository<T>` | Soft delete repository | Soft delete operations |
+
+### API Request/Response Types
+
+| Type | Description | HTTP Method |
+|------|-------------|-------------|
+| `RegisterRequest` | Registration request | POST |
+| `LoginRequest` | Login request | POST |
+| `RefreshTokenRequest` | Refresh token request | POST |
+| `CreateUserRequest` | Create user request | POST |
+| `UpdateUserRequest` | Update user request | PUT/PATCH |
+| `CreateRoleRequest` | Create role request | POST |
+| `LoginResponse` | Login response | POST |
+| `RegisterResponse` | Registration response | POST |
+| `GetUsersResponse` | Get users response | GET |
+| `ValidationErrorResponse` | Validation error response | 400 |
+| `AuthErrorResponse` | Auth error response | 401/403 |
+| `NotFoundErrorResponse` | Not found error response | 404 |
+| `RateLimitErrorResponse` | Rate limit error response | 429 |
+
+### Error Types
+
+| Type | Description | Usage |
+|------|-------------|-------|
+| `AuthError` | Base authentication error | Error handling |
+| `ValidationError` | Validation error | Input validation |
+| `AuthenticationError` | Authentication error | Login failures |
+| `AuthorizationError` | Authorization error | Permission denied |
+| `UserNotFoundError` | User not found error | User lookup |
+| `DatabaseError` | Database error | Database operations |
+| `TokenError` | Token error | JWT operations |
+| `RateLimitError` | Rate limit error | Rate limiting |
 
 ### Enums
 
 | Enum | Values | Description |
 |------|--------|-------------|
 | `AuthErrorType` | `INVALID_CREDENTIALS`, `USER_NOT_FOUND`, `TOKEN_EXPIRED`, etc. | Authentication error types |
+| `HttpStatusCode` | `OK`, `CREATED`, `BAD_REQUEST`, `UNAUTHORIZED`, etc. | HTTP status codes |
+| `Environment` | `development`, `test`, `staging`, `production` | Environment types |
+| `LogLevel` | `debug`, `info`, `warn`, `error` | Logging levels |
+
+### Brand Types
+
+| Type | Description | Purpose |
+|------|-------------|----------|
+| `Email` | Email string type | Type safety |
+| `HashedPassword` | Hashed password type | Security |
+| `JWT` | JWT token type | Token handling |
+| `RefreshToken` | Refresh token type | Token refresh |
+| `EntityId` | Entity ID type | Entity identification |
+| `UserId` | User ID type | User identification |
+| `RoleId` | Role ID type | Role identification |
+| `PermissionId` | Permission ID type | Permission identification |
 
 ---
 
@@ -248,6 +474,10 @@ Middleware functions that work independently of the framework.
 | `runMigrations()` | - | Runs pending migrations |
 | `seedDatabase()` | - | Populates database with initial data |
 | `closeDatabase()` | - | Closes database connection |
+| `testConnection()` | - | Tests database connection |
+| `getDatabaseInfo()` | - | Gets database information |
+| `rollbackMigrations()` | - | Rolls back migrations |
+| `getMigrationStatus()` | - | Gets migration status |
 
 ---
 
@@ -286,7 +516,7 @@ interface AuthConfig {
 |--------|-------------|-------|
 | `seed.ts` | Populates database with initial data | `bun run src/scripts/seed.ts` |
 | `migrate.ts` | Runs database migrations | `bun run src/scripts/migrate.ts` |
-| `reset.ts` | Resets database | `bun run src/scripts/reset.ts` |
+| `dev.ts` | Development utilities | `bun run src/scripts/dev.ts` |
 
 ---
 
@@ -327,18 +557,19 @@ await authLib.initialize();
 
 ```typescript
 import { Hono } from 'hono';
-import { honoAuthMiddleware, honoRequirePermissions } from './src/adapters/hono';
+import { createHonoAuth } from './src/index';
 
 const app = new Hono();
+const auth = createHonoAuth({ jwtSecret: 'your-secret' });
 
 // Global authentication middleware
-app.use('*', honoAuthMiddleware());
+app.use('*', auth.middleware());
 
 // Protected route with permissions
 app.get('/admin/users', 
-  honoRequirePermissions(['users.read']),
+  auth.permissions(['users.read']),
   async (c) => {
-    const authService = authLib.getAuthService();
+    const authService = auth.library.getAuthService();
     const users = await authService.getUsers();
     return c.json(users);
   }
@@ -349,22 +580,48 @@ app.get('/admin/users',
 
 ```typescript
 import express from 'express';
-import { expressAuthMiddleware, expressRequireRoles } from './src/adapters/express';
+import { createExpressAuth } from './src/index';
 
 const app = express();
+const auth = createExpressAuth({ jwtSecret: 'your-secret' });
 
 // Global authentication middleware
-app.use(expressAuthMiddleware());
+app.use(auth.middleware());
 
 // Protected route with roles
 app.get('/admin/dashboard', 
-  expressRequireRoles(['admin', 'moderator']),
+  auth.roles(['admin', 'moderator']),
   async (req, res) => {
-    const permissionService = authLib.getPermissionService();
+    const permissionService = auth.library.getPermissionService();
     const stats = await permissionService.getAuthStats();
     res.json(stats);
   }
 );
+```
+
+### Usage with WebSockets
+
+```typescript
+import { createWebSocketAuth } from './src/index';
+
+const wsAuth = createWebSocketAuth({ jwtSecret: 'your-secret' });
+
+// Initialize cleanup
+wsAuth.initCleanup(30000); // 30 seconds
+
+// Handle WebSocket connections
+wss.on('connection', async (ws, request) => {
+  try {
+    const authenticatedWs = await wsAuth.authenticate(ws, request);
+    
+    // Check permissions
+    if (wsAuth.checkPermissions(authenticatedWs, ['chat.read'])) {
+      wsAuth.sendToUser(authenticatedWs.userId, { type: 'welcome' });
+    }
+  } catch (error) {
+    ws.close(1008, 'Authentication failed');
+  }
+});
 ```
 
 ---
@@ -381,6 +638,9 @@ app.get('/admin/dashboard',
 - ✅ **Advanced Logging**: Detailed security event logging
 - ✅ **Robust Validation**: Data sanitization and validation
 - ✅ **Flexible Configuration**: Highly customizable
+- ✅ **WebSocket Support**: Real-time authentication and authorization
+- ✅ **Convenience Functions**: Easy framework integration
+- ✅ **Database Utilities**: Migration and seeding tools
 
 ---
 
@@ -421,10 +681,47 @@ const result = await authService.register({
 console.log('User registered:', result.success);
 ```
 
+## Library Information
+
+**Version:** 1.1.0  
+**Runtime:** Bun  
+**Database:** SQLite  
+**License:** MIT  
+
+### Supported Frameworks
+- Hono
+- Express
+- WebSockets
+- Socket.IO
+- Fastify (via Express adapter)
+
+### Security Features
+- Bcrypt password hashing with Bun.password
+- JWT token validation with Web Crypto API
+- CSRF protection
+- Rate limiting
+- Input sanitization
+- SQL injection prevention
+- XSS protection
+
+### Performance Features
+- Optimized for Bun runtime
+- Connection pooling
+- Efficient SQLite queries
+- Minimal memory footprint
+- Fast startup time
+
+---
+
 ## License
 
 MIT License - see LICENSE file for details.
 
-#### changes:
-- isDefault [] optional, not included on database,
-  - default ever is user, implement change default userRole. only exist one(?)
+---
+
+## Notes
+
+- The library uses optional configuration parameters for maximum flexibility
+- Default user role implementation allows for single default role per system
+- All database operations are transactional for data integrity
+- WebSocket connections are automatically cleaned up to prevent memory leaks
