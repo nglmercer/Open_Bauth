@@ -336,6 +336,93 @@ describe('PermissionService', () => {
       expect(result2.success).toBe(false);
       expect(result2.error?.type).toBe(AuthErrorType.NOT_FOUND_ERROR);
     });
+
+    test('should replace all role permissions', async () => {
+      // Crear múltiples permisos iniciales
+      const initialPermissions = [];
+      for (let i = 0; i < 3; i++) {
+        const permissionData = testUtils.generateTestPermission({
+          name: `initial_permission_${i}`,
+          resource: `initial_resource_${i}`,
+          action: `initial_action_${i}`
+        });
+        const result = await permissionService.createPermission(permissionData);
+        initialPermissions.push(result.permission!);
+        await permissionService.assignPermissionToRole(roleId, result.permission!.id);
+      }
+      
+      // Verificar que los permisos iniciales están asignados
+      let rolePermissions = await permissionService.getRolePermissions(roleId);
+      expect(rolePermissions.length).toBe(3);
+      
+      // Crear nuevos permisos para reemplazar
+      const newPermissions = [];
+      for (let i = 0; i < 2; i++) {
+        const permissionData = testUtils.generateTestPermission({
+          name: `new_permission_${i}`,
+          resource: `new_resource_${i}`,
+          action: `new_action_${i}`
+        });
+        const result = await permissionService.createPermission(permissionData);
+        newPermissions.push(result.permission!);
+      }
+      
+      // Reemplazar todos los permisos
+      const replaceResult = await permissionService.replaceRolePermissions(
+        roleId,
+        newPermissions.map(p => p.id)
+      );
+      
+      expect(replaceResult.success).toBe(true);
+      
+      // Verificar que solo los nuevos permisos están asignados
+      rolePermissions = await permissionService.getRolePermissions(roleId);
+      expect(rolePermissions.length).toBe(2);
+      
+      // Verificar que los permisos iniciales ya no están
+      initialPermissions.forEach(perm => {
+        expect(rolePermissions.some(p => p.id === perm.id)).toBe(false);
+      });
+      
+      // Verificar que los nuevos permisos están presentes
+      newPermissions.forEach(perm => {
+        expect(rolePermissions.some(p => p.id === perm.id)).toBe(true);
+      });
+    });
+
+    test('should replace role permissions with empty array', async () => {
+      // Asignar permiso inicial
+      await permissionService.assignPermissionToRole(roleId, permissionId);
+      
+      // Verificar que el permiso está asignado
+      let rolePermissions = await permissionService.getRolePermissions(roleId);
+      expect(rolePermissions.length).toBe(1);
+      
+      // Reemplazar con array vacío
+      const result = await permissionService.replaceRolePermissions(roleId, []);
+      
+      expect(result.success).toBe(true);
+      
+      // Verificar que no hay permisos asignados
+      rolePermissions = await permissionService.getRolePermissions(roleId);
+      expect(rolePermissions.length).toBe(0);
+    });
+
+    test('should handle non-existent role in replace permissions', async () => {
+      const result = await permissionService.replaceRolePermissions('99999', [permissionId]);
+      
+      expect(result.success).toBe(false);
+      expect(result.error?.type).toBe(AuthErrorType.NOT_FOUND_ERROR);
+      expect(result.error?.message).toContain('Role not found');
+    });
+
+    test('should handle non-existent permissions in replace', async () => {
+      const result = await permissionService.replaceRolePermissions(roleId, ['99999', '88888']);
+      
+      expect(result.success).toBe(false);
+      expect(result.error?.type).toBe(AuthErrorType.NOT_FOUND_ERROR);
+      expect(result.error?.message).toContain('Permissions not found');
+    });
   });
 
   describe('User Permission Checking', () => {

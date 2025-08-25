@@ -168,7 +168,9 @@ export function checkWebSocketPermissions(
     return false;
   }
 
-  const userPermissions = ws.auth.user.roles.flatMap(role => role.permissions.map(p => p.name));
+  const userPermissions = ws.auth.user.roles.flatMap(role => 
+    role.permissions?.map(p => p.name) || []
+  );
   
   if (requireAll) {
     return permissions.every(permission => userPermissions.includes(permission));

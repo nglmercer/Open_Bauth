@@ -447,6 +447,110 @@ interface PermissionCache {
   }
 
   /**
+   * Replaces all permissions for a role with a new set of permissions
+   * @param roleId Role ID
+   * @param permissionIds Array of permission IDs to replace existing ones
+   * @param transaction Optional transaction
+   */
+  async replaceRolePermissions(
+    roleId: string,
+    permissionIds: string[],
+    transaction?: DatabaseTransaction
+  ): Promise<PermissionResult> {
+    const startTime = Date.now();
+    const operationId = `replace-role-permissions-${Date.now()}`;
+    
+    this.logger.info('Replacing role permissions', { operationId, roleId, permissionCount: permissionIds.length });
+    
+    const operation = async (tx?: DatabaseTransaction) => {
+      try {
+        const db = tx?.getDatabase() || getDatabase();
+
+        // Validate batch size
+        if (permissionIds.length > this.MAX_BATCH_SIZE) {
+          throw AuthErrorFactory.validation(`Cannot assign more than ${this.MAX_BATCH_SIZE} permissions at once`, 'batchSize');
+        }
+
+        // Verify that role exists
+        const roleExists = await this.checkRoleExists(roleId, tx);
+        if (!roleExists) {
+          throw AuthErrorFactory.notFound('Role not found');
+        }
+
+        // Verify that all permissions exist in batch (if any provided)
+        if (permissionIds.length > 0) {
+          const permissionCheckQuery = db.query(
+            `SELECT id FROM permissions WHERE id IN (${permissionIds.map(() => '?').join(',')})`
+          );
+          const existingPermissions = permissionCheckQuery.all(...permissionIds) as Array<{ id: string }>;
+          
+          if (existingPermissions.length !== permissionIds.length) {
+            const existingIds = new Set(existingPermissions.map(p => p.id));
+            const missingIds = permissionIds.filter(id => !existingIds.has(id));
+            throw AuthErrorFactory.notFound(`Permissions not found: ${missingIds.join(', ')}`);
+          }
+        }
+
+        // Remove all existing permissions for the role
+        const deleteQuery = db.query(
+          "DELETE FROM role_permissions WHERE role_id = ?"
+        );
+        deleteQuery.run(roleId);
+
+        // Insert new permissions (if any provided)
+        if (permissionIds.length > 0) {
+          const insertQuery = db.query(
+            "INSERT INTO role_permissions (id, role_id, permission_id, created_at) VALUES (?, ?, ?, datetime('now'))"
+          );
+          
+          for (const permissionId of permissionIds) {
+            insertQuery.run(crypto.randomUUID(), roleId, permissionId);
+          }
+        }
+
+        // Clear cache
+        this.clearCache();
+
+        const duration = Date.now() - startTime;
+        this.updatePerformanceMetrics('replaceRolePermissions', duration);
+        
+        this.logger.info('Role permissions replaced successfully', {
+          operationId,
+          roleId,
+          permissionCount: permissionIds.length,
+          duration: `${duration}ms`
+        });
+
+        return { success: true };
+      } catch (error: any) {
+        const duration = Date.now() - startTime;
+        
+        this.logger.error('Failed to replace role permissions', {
+          operationId,
+          roleId,
+          permissionCount: permissionIds.length,
+          error: error instanceof Error ? error.message : String(error),
+          duration: `${duration}ms`
+        });
+        
+        if (error.type) {
+          return {
+            success: false,
+            error
+          };
+        }
+        throw AuthErrorFactory.fromUnknown(error, 'Failed to replace role permissions');
+      }
+    };
+
+    if (transaction) {
+      return operation(transaction);
+    }
+    
+    return withTransaction(async (tx) => operation(tx));
+  }
+
+  /**
    * Optimized permission checking with caching
    * @param userId User ID
    * @param permissionName Permission name
