@@ -28,6 +28,18 @@ export function createPublicRoutes(deps: { authService: AuthService }) {
     const result = await authService.register(body);
     const user_id = result.user?.id;
     if (user_id) {
+      await authService.assignRole(user_id, 'user');
+    }
+    if (!result.success) {
+      return c.json(result, 400);
+    }
+    return c.json({ ...result, message: 'User registered successfully' }, 201);
+  });
+    router.post('/register/admin', async (c) => {
+    const body = await c.req.json();
+    const result = await authService.register(body);
+    const user_id = result.user?.id;
+    if (user_id) {
       await authService.assignRole(user_id, 'admin');
       await authService.assignRole(user_id,'moderator')
     }

@@ -38,7 +38,13 @@ export function createAdminRoutes(
     const { users, total } = await authService.getUsers();
     return c.json({ users, total });
   });
-
+  router.put('/users/:id', async (c) => {
+    const id = c.req.param('id');
+    const UserData = await c.req.json();
+    const transaccion = await authService.updateUser(id,UserData);
+    const { user, error, success} = transaccion;
+    return c.json({ user, data: user,success:success || false,error });
+  })
   // Endpoint para obtener roles CON sus permisos mapeados
   router.get('/roles', async (c) => {
     const roles = await permissionService.getAllRoles();
