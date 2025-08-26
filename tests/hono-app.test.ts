@@ -1,5 +1,5 @@
 import { test, expect, describe } from 'bun:test';
-import app from '../scripts/newhono.sample';
+import app from '../examples/hono';
 
 describe('Public Routes', () => {
   test('GET / returns welcome message for guest', async () => {

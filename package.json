@@ -9,11 +9,9 @@
     "build": "tsc && bun build src/index.ts --outdir dist --target bun --format esm --sourcemap",
     "test": "bun test --preload ./tests/setup.ts",
     "test:watch": "bun test --watch --preload ./tests/setup.ts",
-    "test:coverage": "bun test --coverage --preload ./tests/setup.ts",
     "test:unit": "bun test tests/services tests/middleware --preload ./tests/setup.ts",
     "test:adapters": "bun test tests/adapters --preload ./tests/setup.ts",
     "test:services": "bun test tests/services/ --preload ./tests/setup.ts",
-    "test:ci": "bun test --reporter=junit --reporter-outfile=test-results.xml --coverage",
     "test:debug": "bun test --timeout=0 --preload ./tests/setup.ts",
     "test:bail": "bun test --bail --preload ./tests/setup.ts",
     "test:rerun": "bun test --rerun-each=3 --preload ./tests/setup.ts",
@@ -22,7 +20,6 @@
     "type-check": "tsc --noEmit",
     "format": "echo 'Formatting not configured yet - add Prettier or Biome'",
     "format:check": "echo 'Format check not configured yet'",
-    "clean": "rm -rf dist coverage test-results.xml reports logs tmp",
     "prepare": "bun run build",
     "prepublishOnly": "bun test --preload ./tests/setup.ts && bun run build",
     "migration:create": "bun run scripts/migrations.ts create",
@@ -38,27 +35,11 @@
     "ci": "bun install && bun run test:build:types"
   },
   "dependencies": {
-    "hono": "^4.9.2",
-    "ws": "^8.16.0",
-    "express": "^4.18.0"
+    "hono": "^4.9.2"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/express": "^4.17.21",
-    "@types/ws": "^8.5.10",
     "typescript": "^5.3.3"
-  },
-  "peerDependencies": {
-    "express": "^4.18.0",
-    "ws": "^8.16.0"
-  },
-  "peerDependenciesMeta": {
-    "express": {
-      "optional": true
-    },
-    "ws": {
-      "optional": true
-    }
   },
   "keywords": [
     "authentication",
@@ -102,18 +83,6 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/src/index.d.ts"
-    },
-    "./adapters/hono": {
-      "import": "./dist/adapters/hono.js",
-      "types": "./dist/src/adapters/hono.d.ts"
-    },
-    "./adapters/express": {
-      "import": "./dist/adapters/express.js",
-      "types": "./dist/src/adapters/express.d.ts"
-    },
-    "./adapters/websocket": {
-      "import": "./dist/adapters/websocket.js",
-      "types": "./dist/src/adapters/websocket.d.ts"
     }
   },
   "trustedDependencies": [
