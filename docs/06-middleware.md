@@ -583,8 +583,8 @@ const sanitized = ValidationUtils.sanitizeInput(userInput);
 const userValidation = ValidationUtils.validateUserData({
   email: 'user@example.com',
   password: 'password123',
-  firstName: 'John',
-  lastName: 'Doe'
+  first_name: 'John',
+  last_name: 'Doe'
 });
 
 // Validar permisos
@@ -1142,7 +1142,7 @@ const userRegistrationSchema: ValidationSchema = {
     ]
   },
   
-  firstName: {
+  first_name: {
     type: 'string',
     required: true,
     minLength: 1,
@@ -1151,7 +1151,7 @@ const userRegistrationSchema: ValidationSchema = {
     sanitize: true
   },
   
-  lastName: {
+  last_name: {
     type: 'string',
     required: true,
     minLength: 1,

@@ -77,8 +77,8 @@ app.post('/auth/register', async (c) => {
   const result = await authLib.getAuthService().register({
     email,
     password,
-    firstName: 'Usuario',
-    lastName: 'Nuevo'
+    first_name: 'Usuario',
+    last_name: 'Nuevo'
   });
   
   if (result.success) {
@@ -156,8 +156,8 @@ app.post('/auth/register', async (req, res) => {
   const result = await authLib.getAuthService().register({
     email,
     password,
-    firstName: 'Usuario',
-    lastName: 'Nuevo'
+    first_name: 'Usuario',
+    last_name: 'Nuevo'
   });
   
   if (result.success) {

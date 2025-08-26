@@ -57,8 +57,8 @@ class BlogApiTester {
     const userData = {
       email: `test${Date.now()}@example.com`,
       password: 'Password123',
-      firstName: 'John',
-      lastName: 'Doe'
+      first_name: 'John',
+      last_name: 'Doe'
     }
 
     const result = await this.makeRequest('/auth/register', {
@@ -85,8 +85,8 @@ class BlogApiTester {
       body: JSON.stringify({
         email,
         password: 'Password123',
-        firstName: 'Jane',
-        lastName: 'Smith'
+        first_name: 'Jane',
+        last_name: 'Smith'
       })
     })
 

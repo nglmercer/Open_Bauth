@@ -325,7 +325,7 @@ The library exports comprehensive TypeScript types organized into several catego
 
 | Type | Description | Key Properties |
 |------|-------------|----------------|
-| `User` | Represents a system user | `id`, `email`, `roles`, `isActive`, `createdAt` |
+| `User` | Represents a system user | `id`, `email`, `roles`, `is_active`, `created_at` |
 | `Role` | Represents a system role | `id`, `name`, `permissions`, `description` |
 | `Permission` | Represents a specific permission | `id`, `name`, `resource`, `action` |
 | `AuthContext` | Authentication context | `user`, `token`, `permissions`, `isAuthenticated` |
@@ -334,11 +334,11 @@ The library exports comprehensive TypeScript types organized into several catego
 | `AuthResponse` | Framework-agnostic response | `status`, `headers`, `body` |
 | `AuthResult` | Auth operation result | `success`, `user`, `token`, `error` |
 | `JWTPayload` | JWT token payload | `userId`, `email`, `roles`, `iat`, `exp` |
-| `RegisterData` | Registration data | `email`, `password`, `firstName`, `lastName` |
+| `RegisterData` | Registration data | `email`, `password`, `first_name`, `last_name` |
 | `LoginData` | Login data | `email`, `password` |
 | `CreatePermissionData` | Permission creation data | `name`, `resource`, `action`, `description` |
 | `CreateRoleData` | Role creation data | `name`, `description`, `permissionIds` |
-| `UpdateUserData` | User update data | `email`, `isActive`, `firstName`, `lastName` |
+| `UpdateUserData` | User update data | `email`, `is_active`, `first_name`, `last_name` |
 | `UserQueryOptions` | Query options | `includeRoles`, `includePermissions`, `activeOnly` |
 | `AuthStats` | Authentication statistics | `totalUsers`, `activeUsers`, `totalRoles` |
 | `AuthEvent` | Authentication event | `type`, `userId`, `timestamp`, `metadata` |
@@ -351,7 +351,7 @@ The library exports comprehensive TypeScript types organized into several catego
 |------|-------------|-------|
 | `ApiResponse<T>` | Generic API response wrapper | `success`, `data`, `error`, `meta` |
 | `PaginatedResponse<T>` | Paginated response interface | `items`, `pagination` |
-| `BaseEntity` | Database entity base | `id`, `createdAt`, `updatedAt` |
+| `BaseEntity` | Database entity base | `id`, `created_at`, `updated_at` |
 | `SoftDeleteEntity` | Soft delete entity | `deletedAt`, `isDeleted` |
 | `AuditFields` | Audit fields | `createdBy`, `updatedBy`, `deletedBy` |
 | `QueryOptions` | Query options | `page`, `limit`, `sortBy`, `filters` |
@@ -674,8 +674,8 @@ const authService = auth.getAuthService();
 const result = await authService.register({
   email: 'user@example.com',
   password: 'securepassword',
-  firstName: 'John',
-  lastName: 'Doe'
+  first_name: 'John',
+  last_name: 'Doe'
 });
 
 console.log('User registered:', result.success);

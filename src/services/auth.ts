@@ -1,590 +1,298 @@
-// src/services/auth.ts
-import { getJWTService } from './jwt';
-import { UserRepository } from '../repositories/user';
-import { RoleRepository } from '../repositories/role';
+import type { DatabaseInitializer } from '../database/database-initializer';
+import type { BaseController } from '../database/base-controller';
+import type { JWTService } from './jwt';
 import {
-  RegisterDataValidator,
-  LoginDataValidator,
-  UpdateUserDataValidator,
-  UserIdValidator,
-  RoleNameValidator,
-  PasswordValidator
-} from '../validators/auth';
-import {
-  AuthError,
-  ValidationError,
-  AuthenticationError,
-  UserNotFoundError,
-  DatabaseError,
-  ErrorHandler,
-  AuthErrorFactory
-} from '../errors/auth';
-import { AUTH_CONFIG } from '../config/constants';
-import type { 
-  User, 
-  RegisterData, 
-  LoginData, 
-  AuthResult, 
-  UserQueryOptions,
+  AuthResult,
+  LoginData,
+  RegisterData,
   UpdateUserData,
+  User,
+  Role,
+  UserQueryOptions,
   AuthErrorType,
-  Role
 } from '../types/auth';
-import { defaultLogger as logger } from '../logger';
+
 /**
- * Servicio de autenticación
- * Maneja registro, login y operaciones de usuario
+ * Main service for authentication, registration, and user management.
  */
 export class AuthService {
-  private userRepository: UserRepository;
-  private roleRepository: RoleRepository;
-  
-  constructor() {
-    this.userRepository = new UserRepository();
-    this.roleRepository = new RoleRepository();
+  private userController: BaseController<User>;
+  private roleController: BaseController<Role>;
+  private userRoleController: BaseController<{ id: string; user_id: string; role_id: string }>;
+  private jwtService: JWTService;
+
+  constructor(dbInitializer: DatabaseInitializer, jwtService: JWTService) {
+    this.userController = dbInitializer.createController<User>('users');
+    this.roleController = dbInitializer.createController<Role>('roles');
+    this.userRoleController = dbInitializer.createController('user_roles');
+    this.jwtService = jwtService;
   }
-  /**
-   * Registra un nuevo usuario
-   * @param data Datos de registro
-   * @returns Usuario creado y token
-   */
+
+  private sanitizeUser(user: User): User {
+    const { password_hash, ...sanitizedUser } = user;
+    return sanitizedUser as User;
+  }
+
+  private async attachRolesToUser(user: User): Promise<User> {
+    if (!user || !user.id) {
+      return { ...user, roles: [] };
+    }
+    const assignments = await this.userRoleController.search({ user_id: user.id });
+    if (!assignments.data || assignments.data.length === 0) {
+      return { ...user, roles: [] };
+    }
+
+    const roleIds = assignments.data.map(a => a.role_id);
+    const rolesResult = await this.roleController.search({ id: roleIds });
+
+    return { ...user, roles: rolesResult.data || [] };
+  }
+
+  async getRoleByName(roleName: string): Promise<Role | null> {
+    const result = await this.roleController.findFirst({ name: roleName });
+    return result.data || null;
+  }
+
+  // --- Core Authentication Methods ---
+
   async register(data: RegisterData): Promise<AuthResult> {
+    if (typeof data.email !== 'string' || !data.email) {
+      return { success: false, error: { type: AuthErrorType.VALIDATION_ERROR, message: 'Email is required' } };
+    }
+    if (typeof data.password !== 'string' || !data.password) {
+      return { success: false, error: { type: AuthErrorType.VALIDATION_ERROR, message: 'Password is required' } };
+    }
+
     try {
-      const jwtService = getJWTService();
-
-      // Validar y normalizar datos de entrada
-      RegisterDataValidator.validate(data);
-      const normalizedData = RegisterDataValidator.normalize(data);
-
-      // Verificar si el usuario ya existe
-      const existingUser = await this.userRepository.findByEmail(normalizedData.email);
-      if (existingUser) {
-        throw AuthErrorFactory.validation(AUTH_CONFIG.ERROR_MESSAGES.USER_EXISTS);
+      const existingUser = await this.userController.findFirst({ email: data.email.toLowerCase() });
+      if (existingUser.data) {
+        return { success: false, error: { type: AuthErrorType.USER_ALREADY_EXISTS, message: 'A user with this email already exists' } };
       }
 
-      // Hash de la contraseña usando Bun
-      const passwordHash = await Bun.password.hash(normalizedData.password, {
-        algorithm: AUTH_CONFIG.SECURITY.HASH_ALGORITHM,
-        cost: AUTH_CONFIG.SECURITY.SALT_ROUNDS
+      const password_hash = await Bun.password.hash(data.password);
+
+      const createResult = await this.userController.create({
+        email: data.email.toLowerCase(),
+        password_hash,
+        first_name: data.first_name,
+        last_name: data.last_name,
+        is_active: true,
       });
 
-      // Crear usuario en la base de datos
-      const userId = crypto.randomUUID();
-      await this.userRepository.create({
-        id: userId,
-        email: normalizedData.email,
-        passwordHash,
-        firstName: normalizedData.firstName,
-        lastName: normalizedData.lastName,
-        isActive: normalizedData.isActive !== false
-      });
-
-      // Asignar rol por defecto
-      await this.assignDefaultRole(userId);
-
-      // Obtener el usuario completo con roles
-      const user = await this.userRepository.findById(userId, { 
-        includeRoles: true, 
-        includePermissions: true 
-      });
-      
-      if (!user) {
-        throw AuthErrorFactory.database('Failed to create user', 'register');
+      if (!createResult.success || !createResult.data) {
+        return { success: false, error: { type: AuthErrorType.DATABASE_ERROR, message: createResult.error || 'Failed to create user' } };
       }
 
-      // Actualizar lastLoginAt
-      await this.userRepository.update(userId, { lastLoginAt: new Date() });
+      const newUser = createResult.data;
+      const userWithRoles = await this.attachRolesToUser(newUser);
+      const token = await this.jwtService.generateToken(userWithRoles);
 
-      // Generar tokens JWT
-      const token = await jwtService.generateToken(user);
-      const refreshToken = await jwtService.generateRefreshToken(Number(user.id));
-
-      // Obtener usuario actualizado
-      const updatedUser = await this.userRepository.findById(user.id, { 
-        includeRoles: true, 
-        includePermissions: true 
-      });
-
-      logger.info(`✅ ${AUTH_CONFIG.SUCCESS_MESSAGES.USER_REGISTERED}: ${updatedUser?.email}`);
-
-      return { 
-        success: true, 
-        user: updatedUser || user, 
-        token, 
-        refreshToken 
+      return {
+        success: true,
+        user: this.sanitizeUser(userWithRoles),
+        token,
       };
-    } catch (error) {
-      return ErrorHandler.handle(error, 'register');
+    } catch (error: any) {
+      return { success: false, error: { type: AuthErrorType.DATABASE_ERROR, message: error.message } };
     }
   }
 
-  /**
-   * Autentica un usuario
-   * @param data Datos de login
-   * @returns Usuario y token si la autenticación es exitosa
-   */
   async login(data: LoginData): Promise<AuthResult> {
+    if (typeof data.email !== 'string' || !data.email) {
+      return { success: false, error: { type: AuthErrorType.VALIDATION_ERROR, message: 'Email is required' } };
+    }
+    if (typeof data.password !== 'string' || !data.password) {
+      return { success: false, error: { type: AuthErrorType.VALIDATION_ERROR, message: 'Password is required' } };
+    }
+
     try {
-      const jwtService = getJWTService();
+      const userResult = await this.userController.findFirst({ email: data.email.toLowerCase() });
+      const user = userResult.data;
 
-      // Validar y normalizar datos de entrada
-      LoginDataValidator.validate(data);
-      const normalizedData = LoginDataValidator.normalize(data);
-
-      // Buscar usuario por email (incluye password hash para autenticación)
-      const user = await this.userRepository.findByEmailForAuth(normalizedData.email, { 
-        includeRoles: true, 
-        includePermissions: true 
-      });
-
-      if (!user) {
-        throw AuthErrorFactory.authentication(AUTH_CONFIG.ERROR_MESSAGES.INVALID_CREDENTIALS);
+      if (!user || !user.password_hash) {
+        return { success: false, error: { type: AuthErrorType.INVALID_CREDENTIALS, message: 'Invalid credentials' } };
       }
 
-      // Verificar si el usuario está activo
-      if (!user.isActive) {
-        throw AuthErrorFactory.authentication(AUTH_CONFIG.ERROR_MESSAGES.ACCOUNT_INACTIVE);
+      if (!user.is_active) {
+        return { success: false, error: { type: AuthErrorType.ACCOUNT_INACTIVE, message: 'User account is deactivated' } };
       }
 
-      // Verificar contraseña
-      const isValidPassword = await Bun.password.verify(normalizedData.password, user.passwordHash);
-      if (!isValidPassword) {
-        throw AuthErrorFactory.authentication(AUTH_CONFIG.ERROR_MESSAGES.INVALID_CREDENTIALS);
+      const isPasswordValid = await Bun.password.verify(data.password, user.password_hash);
+      if (!isPasswordValid) {
+        return { success: false, error: { type: AuthErrorType.INVALID_CREDENTIALS, message: 'Invalid credentials' } };
       }
 
-      // Actualizar última actividad y last_login_at
-      await this.userRepository.update(user.id, { lastLoginAt: new Date() });
+      const userWithRoles = await this.attachRolesToUser(user);
+      const token = await this.jwtService.generateToken(userWithRoles);
 
-      // Obtener usuario actualizado
-      const updatedUser = await this.userRepository.findById(user.id, { 
-        includeRoles: true, 
-        includePermissions: true 
-      });
-      
-      if (!updatedUser) {
-        throw AuthErrorFactory.database('User not found after update', 'login');
-      }
+      this.userController.update(user.id, { last_login_at: new Date().toISOString() });
 
-      // Generar tokens JWT
-      const token = await jwtService.generateToken(updatedUser);
-      const refreshToken = await jwtService.generateRefreshToken(Number(updatedUser.id));
-
-      logger.info(`✅ ${AUTH_CONFIG.SUCCESS_MESSAGES.USER_LOGGED_IN}: ${updatedUser.email}`);
-
-      return { 
-        success: true, 
-        user: updatedUser, 
-        token, 
-        refreshToken 
+      return {
+        success: true,
+        user: this.sanitizeUser(userWithRoles),
+        token,
       };
-    } catch (error) {
-      return ErrorHandler.handle(error, 'login');
+    } catch (error: any) {
+      return { success: false, error: { type: AuthErrorType.DATABASE_ERROR, message: error.message } };
     }
   }
 
-  /**
-   * Busca un usuario por ID
-   * @param id ID del usuario
-   * @param options Opciones de consulta
-   * @returns Usuario o null si no se encuentra
-   */
+  // --- User Management Methods ---
+
   async findUserById(id: string, options: UserQueryOptions = {}): Promise<User | null> {
-    try {
-      UserIdValidator.validate(id);
-      return await this.userRepository.findById(id, options);
-    } catch (error) {
-      if (error instanceof ValidationError) {
-        throw error;
-      }
-      throw AuthErrorFactory.database(`Failed to find user: ${ErrorHandler.getMessage(error)}`, 'findUserById');
+    const userResult = await this.userController.findById(id);
+    if (!userResult.data) return null;
+
+    let user = userResult.data;
+    if (options.includeRoles) {
+      user = await this.attachRolesToUser(user);
     }
+
+    return this.sanitizeUser(user);
   }
 
-  /**
-   * Busca un usuario por email
-   * @param email Email del usuario
-   * @param options Opciones de consulta
-   * @returns Usuario o null si no se encuentra
-   */
   async findUserByEmail(email: string, options: UserQueryOptions = {}): Promise<User | null> {
-    try {
-      return await this.userRepository.findByEmail(email, options);
-    } catch (error) {
-      throw AuthErrorFactory.database(`Failed to find user: ${ErrorHandler.getMessage(error)}`, 'findUserByEmail');
+    const userResult = await this.userController.findFirst({ email: email.toLowerCase() });
+    if (!userResult.data) return null;
+
+    let user = userResult.data;
+    if (options.includeRoles) {
+      user = await this.attachRolesToUser(user);
     }
+    
+    return this.sanitizeUser(user);
   }
 
-  /**
-   * Obtiene los roles de un usuario
-   * @param userId ID del usuario
-   * @param includePermissions Si incluir permisos en los roles
-   * @returns Array de roles del usuario
-   */
-  async getUserRoles(userId: string, includePermissions: boolean = false): Promise<Role[]> {
-    try {
-      UserIdValidator.validate(userId);
-      return await this.userRepository.getUserRoles(userId, includePermissions);
-    } catch (error) {
-      if (error instanceof ValidationError) {
-        throw error;
-      }
-      throw AuthErrorFactory.database(`Failed to get user roles: ${ErrorHandler.getMessage(error)}`, 'getUserRoles');
+  async updateUser(userId: string, data: UpdateUserData): Promise<{ success: boolean; user?: User; error?: any }> {
+    const result = await this.userController.update(userId, data);
+    if (!result.success || !result.data) {
+      return { success: false, error: { type: AuthErrorType.DATABASE_ERROR, message: result.error || 'Failed to update user' } };
     }
+    return { success: true, user: this.sanitizeUser(result.data) };
   }
 
-  /**
-   * Asigna un rol específico a un usuario
-   * @param userId ID del usuario
-   * @param roleName Nombre del rol a asignar
-   * @returns true si se asignó correctamente
-   */
-  async assignRole(userId: string, roleName: string): Promise<boolean> {
-    try {
-      UserIdValidator.validate(userId);
-      RoleNameValidator.validate(roleName);
-      
-      // Verificar que el usuario existe
-      const userExists = await this.userRepository.findById(userId);
-      if (!userExists) {
-        throw AuthErrorFactory.userNotFound(AUTH_CONFIG.ERROR_MESSAGES.USER_NOT_FOUND);
-      }
-      
-      // Verificar que el rol existe
-      const role = await this.roleRepository.findByName(roleName);
-      if (!role) {
-        return false; // Role doesn't exist
-      }
-      
-      // Verificar si el usuario ya tiene el rol
-      const hasRole = await this.roleRepository.userHasRole(userId, role.id);
-      if (hasRole) {
-        return false; // User already has the role (duplicate)
-      }
-      
-      // Asignar el rol
-      await this.roleRepository.assignToUser(userId, role.id);
-      
-      logger.info(`✅ Rol ${roleName} asignado al usuario: ${userId}`);
-      return true;
-    } catch (error) {
-      if (error instanceof AuthError) {
-        throw error;
-      }
-      throw AuthErrorFactory.database(`Failed to assign role: ${ErrorHandler.getMessage(error)}`, 'assignRole');
+  async updatePassword(userId: string, newPassword: string): Promise<{ success: boolean; error?: any }> {
+    if (typeof newPassword !== 'string' || !newPassword) {
+      return { success: false, error: { type: AuthErrorType.VALIDATION_ERROR, message: 'New password cannot be empty' } };
     }
+    const password_hash = await Bun.password.hash(newPassword);
+    const result = await this.userController.update(userId, { password_hash });
+    if (!result.success) {
+      return { success: false, error: { type: AuthErrorType.DATABASE_ERROR, message: result.error } };
+    }
+    return { success: true };
   }
 
-  /**
-   * Asigna el rol por defecto a un usuario
-   * @param userId ID del usuario
-   */
-  private async assignDefaultRole(userId: string): Promise<void> {
-    try {
-      UserIdValidator.validate(userId);
-      
-      // Buscar o crear el rol por defecto
-      const defaultRole = await this.roleRepository.getOrCreateDefaultRole();
-      
-      // Verificar si el usuario ya tiene el rol
-      const hasRole = await this.roleRepository.userHasRole(userId, defaultRole.id);
-      if (hasRole) {
-        return; // Ya tiene el rol
-      }
-      
-      // Asignar el rol
-      await this.roleRepository.assignToUser(userId, defaultRole.id);
-    } catch (error) {
-      if (error instanceof ValidationError) {
-        throw error;
-      }
-      throw AuthErrorFactory.database(`Failed to assign default role: ${ErrorHandler.getMessage(error)}`, 'assignDefaultRole');
+  async deactivateUser(userId: string): Promise<{ success: boolean; error?: any }> {
+    const result = await this.userController.update(userId, { is_active: false });
+    if (!result.success) {
+      return { success: false, error: { type: AuthErrorType.DATABASE_ERROR, message: result.error } };
     }
+    return { success: true };
   }
 
-
-
-
-
-  /**
-   * Actualiza la contraseña de un usuario
-   * @param userId ID del usuario
-   * @param newPassword Nueva contraseña
-   * @returns true si se actualizó correctamente
-   */
-  async updatePassword(userId: string, newPassword: string): Promise<boolean> {
-    try {
-      UserIdValidator.validate(userId);
-      PasswordValidator.validate(newPassword);
-      
-      // Verificar que el usuario existe
-      const user = await this.userRepository.findById(userId);
-      if (!user) {
-        throw AuthErrorFactory.userNotFound(AUTH_CONFIG.ERROR_MESSAGES.USER_NOT_FOUND);
-      }
-      
-      // Hash de la nueva contraseña
-      const hashedPassword = await Bun.password.hash(newPassword);
-      
-      // Actualizar la contraseña
-      await this.userRepository.update(userId, { passwordHash: hashedPassword });
-      
-      return true;
-    } catch (error) {
-      if (error instanceof AuthError) {
-        throw error;
-      }
-      throw AuthErrorFactory.database(`Failed to update password: ${ErrorHandler.getMessage(error)}`, 'updatePassword');
+  async activateUser(userId: string): Promise<{ success: boolean; error?: any }> {
+    const result = await this.userController.update(userId, { is_active: true });
+    if (!result.success) {
+      return { success: false, error: { type: AuthErrorType.DATABASE_ERROR, message: result.error } };
     }
+    return { success: true };
   }
 
-  /**
-   * Actualiza los datos de un usuario
-   * @param userId ID del usuario
-   * @param updateData Datos a actualizar
-   * @returns Usuario actualizado
-   */
-  async updateUser(userId: string, updateData: Partial<User>): Promise<User> {
+  async deleteUser(userId: string): Promise<{ success: boolean; error?: any }> {
     try {
-      const validatedData = UpdateUserDataValidator.validate(updateData);
-      const normalizedData = UpdateUserDataValidator.normalize(validatedData);
-      UserIdValidator.validate(userId);
-      
-      // Verificar que el usuario existe
-      const existingUser = await this.userRepository.findById(userId);
-      if (!existingUser) {
-        throw AuthErrorFactory.userNotFound(AUTH_CONFIG.ERROR_MESSAGES.USER_NOT_FOUND);
-      }
-      
-      // Verificar email único si se está actualizando
-      if (normalizedData.email && normalizedData.email !== existingUser.email) {
-        const emailExists = await this.userRepository.findByEmail(normalizedData.email);
-        if (emailExists) {
-          // Return user with isActive: false to indicate failed update
-          return { ...existingUser, isActive: false };
+      // Idealmente, esto debería estar en una transacción.
+      const assignments = await this.userRoleController.search({ user_id: userId }, { limit: 1000 });
+      if (assignments.data) {
+        for (const assignment of assignments.data) {
+          await this.userRoleController.delete(assignment.id);
         }
       }
       
-      // Preparar datos para actualización
-      const updateFields: any = {};
-      
-      if (normalizedData.email) {
-        updateFields.email = normalizedData.email;
+      const result = await this.userController.delete(userId);
+      if (!result.success) {
+        return { success: false, error: { type: AuthErrorType.DATABASE_ERROR, message: result.error } };
       }
-      
-      if (normalizedData.firstName !== undefined) {
-        updateFields.firstName = normalizedData.firstName;
-      }
-      
-      if (normalizedData.lastName !== undefined) {
-        updateFields.lastName = normalizedData.lastName;
-      }
-      
-      if (normalizedData.isActive !== undefined) {
-        updateFields.isActive = normalizedData.isActive;
-      }
-      
-      // Password updates should be handled through a separate changePassword method
-      // lastLoginAt is managed automatically by the system
-      
-      // Actualizar usuario
-      await this.userRepository.update(userId, updateFields);
-      
-      // Retornar usuario actualizado
-      const updatedUser = await this.userRepository.findById(userId);
-      if (!updatedUser) {
-        throw AuthErrorFactory.database('Failed to retrieve updated user', 'updateUser');
-      }
-      
-      return updatedUser;
-    } catch (error) {
-      if (error instanceof AuthError) {
-        throw error;
-      }
-      throw AuthErrorFactory.database(`Failed to update user: ${ErrorHandler.getMessage(error)}`, 'updateUser');
+      return { success: true };
+    } catch(error: any) {
+      return { success: false, error: { type: AuthErrorType.DATABASE_ERROR, message: error.message } };
     }
   }
 
-  /**
-   * Desactiva un usuario
-   * @param userId ID del usuario
-   * @returns Usuario antes de la desactivación
-   */
-  async deactivateUser(userId: string): Promise<User> {
+  // --- Role Management Methods ---
+
+  async assignRole(userId: string, roleName: string): Promise<{ success: boolean; error?: any }> {
     try {
-      UserIdValidator.validate(userId);
-      
-      // Verificar que el usuario existe
-      const user = await this.userRepository.findById(userId);
-      if (!user) {
-        throw AuthErrorFactory.userNotFound(AUTH_CONFIG.ERROR_MESSAGES.USER_NOT_FOUND);
+      const roleResult = await this.roleController.findFirst({ name: roleName });
+      if (!roleResult.data) {
+        return { success: false, error: { type: AuthErrorType.NOT_FOUND_ERROR, message: `Role '${roleName}' not found` } };
       }
       
-      // Desactivar usuario
-      await this.userRepository.update(userId, { isActive: false });
-      
-      logger.info(`✅ Usuario desactivado: ${userId}`);
-      // Retornar usuario antes de la actualización (como espera el test)
-      return user;
-    } catch (error) {
-      if (error instanceof AuthError) {
-        throw error;
+      const userResult = await this.userController.findById(userId);
+      if (!userResult.data) {
+        return { success: false, error: { type: AuthErrorType.USER_NOT_FOUND, message: 'User not found' } };
       }
-      throw AuthErrorFactory.database(`Failed to deactivate user: ${ErrorHandler.getMessage(error)}`, 'deactivateUser');
+
+      const existing = await this.userRoleController.findFirst({ user_id: userId, role_id: roleResult.data.id });
+      if (existing.data) {
+        return { success: true }; // El rol ya está asignado, operación exitosa.
+      }
+
+      const result = await this.userRoleController.create({ user_id: userId, role_id: roleResult.data.id });
+      if (!result.success) {
+        return { success: false, error: { type: AuthErrorType.DATABASE_ERROR, message: result.error } };
+      }
+      return { success: true };
+    } catch(error: any) {
+      return { success: false, error: { type: AuthErrorType.DATABASE_ERROR, message: error.message } };
     }
   }
 
-  /**
-   * Activa un usuario
-   * @param userId ID del usuario
-   * @returns Usuario activado
-   */
-  async activateUser(userId: string): Promise<User> {
+  async removeRole(userId: string, roleName: string): Promise<{ success: boolean; error?: any }> {
     try {
-      UserIdValidator.validate(userId);
-      
-      // Verificar que el usuario existe
-      const user = await this.userRepository.findById(userId);
-      if (!user) {
-        throw AuthErrorFactory.userNotFound(AUTH_CONFIG.ERROR_MESSAGES.USER_NOT_FOUND);
+      const roleResult = await this.roleController.findFirst({ name: roleName });
+      if (!roleResult.data) {
+        return { success: false, error: { type: AuthErrorType.NOT_FOUND_ERROR, message: `Role '${roleName}' not found` } };
       }
       
-      // Activar usuario
-      await this.userRepository.update(userId, { isActive: true });
-      
-      // Retornar usuario actualizado
-      const updatedUser = await this.userRepository.findById(userId);
-      if (!updatedUser) {
-        throw AuthErrorFactory.database('Failed to retrieve updated user', 'activateUser');
+      const assignment = await this.userRoleController.findFirst({ user_id: userId, role_id: roleResult.data.id });
+      if (!assignment.data) {
+        return { success: false, error: { type: AuthErrorType.NOT_FOUND_ERROR, message: 'User does not have this role' } };
       }
       
-      logger.info(`✅ Usuario activado: ${userId}`);
-      return updatedUser;
-    } catch (error) {
-      if (error instanceof AuthError) {
-        throw error;
+      const result = await this.userRoleController.delete(assignment.data.id);
+      if (!result.success) {
+        return { success: false, error: { type: AuthErrorType.DATABASE_ERROR, message: result.error } };
       }
-      throw AuthErrorFactory.database(`Failed to activate user: ${ErrorHandler.getMessage(error)}`, 'activateUser');
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: { type: AuthErrorType.DATABASE_ERROR, message: error.message } };
     }
   }
 
-  /**
-   * Elimina un usuario
-   * @param userId ID del usuario
-   * @returns true si se eliminó correctamente
-   */
-  async deleteUser(userId: string): Promise<boolean> {
-    try {
-      UserIdValidator.validate(userId);
-      
-      // Verificar que el usuario existe
-      const user = await this.userRepository.findById(userId);
-      if (!user) {
-        throw AuthErrorFactory.userNotFound(AUTH_CONFIG.ERROR_MESSAGES.USER_NOT_FOUND);
-      }
-      
-      // Eliminar usuario (esto también eliminará las relaciones en cascada)
-      await this.userRepository.delete(userId);
-      
-      logger.info(`✅ Usuario eliminado: ${userId}`);
-      return true;
-    } catch (error) {
-      if (error instanceof AuthError) {
-        throw error;
-      }
-      throw AuthErrorFactory.database(`Failed to delete user: ${ErrorHandler.getMessage(error)}`, 'deleteUser');
+  // --- Data Retrieval Methods ---
+
+  async getUsers(page: number = 1, limit: number = 20, options: UserQueryOptions = {}): Promise<{ users: User[]; total: number }> {
+    const offset = (page - 1) * limit;
+    const result = await this.userController.findAll({ limit, offset });
+
+    let users = result.data || [];
+    const total = result.total || 0;
+
+    if (options.includeRoles && users.length > 0) {
+      users = await Promise.all(users.map(user => this.attachRolesToUser(user)));
     }
+
+    return { users: users.map(this.sanitizeUser), total };
   }
 
-  /**
-   * Remueve un rol de un usuario
-   * @param userId ID del usuario
-   * @param roleName Nombre del rol
-   * @returns true si se removió correctamente
-   */
-  async removeRole(userId: string, roleName: string): Promise<boolean> {
-    try {
-      UserIdValidator.validate(userId);
-      RoleNameValidator.validate(roleName);
-      
-      // Verificar que el usuario existe
-      const user = await this.userRepository.findById(userId);
-      if (!user) {
-        throw AuthErrorFactory.userNotFound(AUTH_CONFIG.ERROR_MESSAGES.USER_NOT_FOUND);
-      }
-      
-      // Verificar que el rol existe
-      const role = await this.roleRepository.findByName(roleName);
-      if (!role) {
-        throw AuthErrorFactory.validation(AUTH_CONFIG.ERROR_MESSAGES.ROLE_NOT_FOUND);
-      }
-      
-      // Remover el rol
-      await this.roleRepository.removeFromUser(userId, role.id);
-      
-      logger.info(`✅ Rol ${roleName} removido del usuario: ${userId}`);
-      return true;
-    } catch (error) {
-      if (error instanceof AuthError) {
-        throw error;
-      }
-      throw AuthErrorFactory.database(`Failed to remove role: ${ErrorHandler.getMessage(error)}`, 'removeRole');
+  async getUserRoles(userId: string): Promise<Role[]> {
+    const user = await this.userController.findById(userId);
+    if (!user.data) {
+      return [];
     }
+    
+    const userWithRoles = await this.attachRolesToUser(user.data);
+    return userWithRoles.roles || [];
   }
-
-  /**
-   * Obtiene todos los usuarios con paginación
-   * @param page Página (empezando en 1)
-   * @param limit Límite por página
-   * @param options Opciones de consulta
-   * @returns Array de usuarios y total
-   */
-  async getUsers(
-    page: number = 1, 
-    limit: number = 10, 
-    options: UserQueryOptions = {}
-  ): Promise<{ users: User[], total: number }> {
-    try {
-      // Filter options to match repository interface
-      const repositoryOptions = {
-        activeOnly: options.activeOnly,
-        search: options.search,
-        sortBy: options.sortBy as 'email' | 'created_at' | 'last_login_at' | undefined,
-        sortOrder: options.sortOrder,
-        includeRoles: options.includeRoles,
-        includePermissions: options.includePermissions
-      };
-      
-      return await this.userRepository.getUsers({ page, limit, ...repositoryOptions });
-    } catch (error) {
-      throw AuthErrorFactory.database(`Failed to get users: ${ErrorHandler.getMessage(error)}`, 'getUsers');
-    }
-  }
-
-
-}
-
-/**
- * Instancia singleton del servicio de autenticación
- */
-let authServiceInstance: AuthService | null = null;
-
-/**
- * Inicializa el servicio de autenticación
- * @returns Instancia del servicio de autenticación
- */
-export function initAuthService(): AuthService {
-  authServiceInstance = new AuthService();
-  return authServiceInstance;
-}
-
-/**
- * Obtiene la instancia del servicio de autenticación
- * @returns Instancia del servicio de autenticación
- * @throws Error si no ha sido inicializado
- */
-export function getAuthService(): AuthService {
-  if (!authServiceInstance) {
-    throw new Error('Auth Service not initialized. Call initAuthService() first.');
-  }
-  return authServiceInstance;
 }

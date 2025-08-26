@@ -56,8 +56,8 @@ Registra un nuevo usuario en el sistema.
 interface RegisterData {
   email: string;
   password: string;
-  firstName: string;
-  lastName: string;
+  first_name: string;
+  last_name: string;
   metadata?: Record<string, any>;
 }
 
@@ -75,8 +75,8 @@ const authService = authLib.getAuthService();
 const result = await authService.register({
   email: 'usuario@ejemplo.com',
   password: 'MiPassword123!',
-  firstName: 'Juan',
-  lastName: 'Pérez',
+  first_name: 'Juan',
+  last_name: 'Pérez',
   metadata: {
     department: 'IT',
     position: 'Developer'
@@ -142,7 +142,7 @@ if (result.success) {
 
 **Características de seguridad:**
 - Validación de datos con LoginDataValidator
-- Verificación de cuenta activa (isActive)
+- Verificación de cuenta activa (is_active)
 - Validación de contraseña con Bun.password.verify
 - Actualización automática de lastLoginAt
 - Generación de tokens JWT seguros
@@ -150,9 +150,9 @@ if (result.success) {
 
 **Proceso interno:**
 1. Valida y normaliza datos con LoginDataValidator
-2. Busca usuario por email usando findByEmailForAuth (incluye passwordHash)
+2. Busca usuario por email usando findByEmailForAuth (incluye password_hash)
 3. Verifica que el usuario existe
-4. Verifica que la cuenta esté activa (isActive = true)
+4. Verifica que la cuenta esté activa (is_active = true)
 5. Compara contraseña con hash usando Bun.password.verify
 6. Actualiza lastLoginAt con fecha actual
 7. Obtiene usuario actualizado con roles y permisos
@@ -238,7 +238,7 @@ Obtiene lista paginada de usuarios con opciones de filtrado.
 ```typescript
 interface UserFilters {
   role?: string;
-  isActive?: boolean;
+  is_active?: boolean;
   search?: string;
 }
 
@@ -260,13 +260,13 @@ console.log(result.total); // Total de usuarios
 // Obtener usuarios con filtros
 const adminUsers = await authService.getUsers(1, 10, {
   role: 'admin',
-  isActive: true
+  is_active: true
 });
 
 // Búsqueda con paginación
 const searchResult = await authService.getUsers(2, 5, {
   search: 'john',
-  isActive: true
+  is_active: true
 });
 ```
 
@@ -284,7 +284,7 @@ if (user) {
 ```typescript
 const user = await authService.findUserByEmail('usuario@ejemplo.com');
 if (user) {
-  console.log('Usuario encontrado:', user.firstName);
+  console.log('Usuario encontrado:', user.first_name);
 }
 ```
 
@@ -292,7 +292,7 @@ if (user) {
 
 ```typescript
 const updatedUser = await authService.updateUser('user-123', {
-  firstName: 'Juan Carlos',
+  first_name: 'Juan Carlos',
   metadata: {
     department: 'Engineering',
     position: 'Senior Developer'
@@ -339,7 +339,7 @@ Busca un usuario por su dirección de email.
 ```typescript
 const user = await authService.findUserByEmail('user@example.com');
 if (user) {
-  console.log(user.firstName);
+  console.log(user.first_name);
 }
 ```
 
@@ -387,8 +387,8 @@ Actualiza los datos de un usuario existente.
 
 ```typescript
 const updatedUser = await authService.updateUser('user-uuid-123', {
-  firstName: 'Juan Carlos',
-  lastName: 'García',
+  first_name: 'Juan Carlos',
+  last_name: 'García',
   phone: '+1234567890'
 });
 ```
@@ -700,8 +700,8 @@ interface Role {
   id: string;
   name: string;
   description?: string;
-  createdAt: Date;
-  updatedAt: Date;
+ created_at: string;;
+  updated_at: string;
 }
 
 // Ejemplo de uso
@@ -767,7 +767,7 @@ interface Permission {
   resource: string;
   action: string;
   description?: string;
-  createdAt: Date;
+ created_at: string;;
 }
 
 // Ejemplo de uso
@@ -1271,8 +1271,8 @@ class AuditedAuthService {
         success: result.success,
         details: {
           duration: Date.now() - startTime,
-          firstName: userData.firstName,
-          lastName: userData.lastName
+          first_name: userData.first_name,
+          last_name: userData.last_name
         }
       });
       
@@ -1414,11 +1414,11 @@ function validateRegistrationData(data: any): string[] {
     errors.push('Contraseña debe tener al menos 8 caracteres');
   }
   
-  if (!data.firstName || data.firstName.trim().length === 0) {
+  if (!data.first_name || data.first_name.trim().length === 0) {
     errors.push('Nombre es requerido');
   }
   
-  if (!data.lastName || data.lastName.trim().length === 0) {
+  if (!data.last_name || data.last_name.trim().length === 0) {
     errors.push('Apellido es requerido');
   }
   

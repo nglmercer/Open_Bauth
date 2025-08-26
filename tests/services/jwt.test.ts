@@ -11,13 +11,13 @@ describe('JWTService', () => {
   const testUser = {
     id: '1',
     email: 'test@example.com',
-    passwordHash: 'test-hash',
-    firstName: 'Test',
-    lastName: 'User',
-    isActive: true,
-    roles: [{ id: '1', name: 'user', permissions: [], isActive: true, createdAt: new Date(), updatedAt: new Date() }],
-    createdAt: new Date(),
-    updatedAt: new Date()
+    password_hash: 'test-hash',
+    first_name: 'Test',
+    last_name: 'User',
+    is_active: true,
+    roles: [{ id: '1', name: 'user', permissions: [], is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
   };
 
   beforeEach(() => {

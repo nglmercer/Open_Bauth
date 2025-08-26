@@ -21,8 +21,8 @@ export interface BaseRequest {
 export interface RegisterRequest extends BaseRequest {
   email: string;
   password: string;
-  firstName: string;
-  lastName: string;
+  first_name: string;
+  last_name: string;
   acceptTerms: boolean;
 }
 
@@ -56,26 +56,26 @@ export interface ChangePasswordRequest extends BaseRequest {
  * User management request types
  */
 export interface UpdateUserProfileRequest extends BaseRequest {
-  firstName?: string;
-  lastName?: string;
+  first_name?: string;
+  last_name?: string;
   email?: string;
-  isActive?: boolean;
+  is_active?: boolean;
 }
 
 export interface CreateUserRequest extends BaseRequest {
   email: string;
   password: string;
-  firstName: string;
-  lastName: string;
+  first_name: string;
+  last_name: string;
   roles?: string[];
-  isActive?: boolean;
+  is_active?: boolean;
 }
 
 export interface UpdateUserRequest extends BaseRequest {
-  firstName?: string;
-  lastName?: string;
+  first_name?: string;
+  last_name?: string;
   email?: string;
-  isActive?: boolean;
+  is_active?: boolean;
   roles?: string[];
 }
 
@@ -84,8 +84,8 @@ export interface GetUsersRequest extends BaseRequest {
   limit?: number;
   search?: string;
   role?: string;
-  isActive?: boolean;
-  sortBy?: 'firstName' | 'lastName' | 'email' | 'created_at' | 'updated_at';
+  is_active?: boolean;
+  sortBy?: 'first_name' | 'last_name' | 'email' | 'created_at' | 'updated_at';
   sortOrder?: 'asc' | 'desc';
 }
 
@@ -96,14 +96,14 @@ export interface CreateRoleRequest extends BaseRequest {
   name: string;
   description?: string;
   permissions?: string[];
-  isActive?: boolean;
+  is_active?: boolean;
 }
 
 export interface UpdateRoleRequest extends BaseRequest {
   name?: string;
   description?: string;
   permissions?: string[];
-  isActive?: boolean;
+  is_active?: boolean;
 }
 
 export interface AssignRoleRequest extends BaseRequest {

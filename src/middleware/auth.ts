@@ -1,734 +1,178 @@
 // src/middleware/auth.ts
-import { getJWTService } from '../services/jwt';
-import { getAuthService } from '../services/auth';
-import { getPermissionService } from '../services/permissions';
-import type { 
-  AuthRequest, 
-  AuthResponse, 
-  AuthContext, 
-  PermissionOptions,
-  AuthErrorType 
-} from '../types/auth';
-import { AuthError } from '../errors/auth';
+
+import { JWTService } from '../services/jwt';
+import { AuthService } from '../services/auth';
+import { PermissionService } from '../services/permissions';
+import type { AuthContext, PermissionOptions, AuthRequest, User } from '../types/auth';
+
+// --- Dependencias (Singleton Pattern) ---
+// En una aplicación real, usarías inyección de dependencias.
+// Para este ejemplo, asumiremos que los servicios se pueden instanciar aquí.
+// ESTO REQUIERE QUE EXPORTES TUS CLASES DE SERVICIO.
+
+// Esta es una simplificación. En una app real, inicializarías esto en tu index.ts
+// y lo pasarías a los middlewares. Para mantenerlo simple, lo instanciamos aquí.
+// ¡ASEGÚRATE DE QUE LAS DEPENDENCIAS (dbInitializer) ESTÉN DISPONIBLES!
+// let jwtService: JWTService;
+// let authService: AuthService;
+// let permissionService: PermissionService;
+
+// export function initMiddlewareServices(dbInitializer: any) {
+//   jwtService = new JWTService(process.env.JWT_SECRET || 'dev-secret');
+//   authService = new AuthService(dbInitializer, jwtService);
+//   permissionService = new PermissionService(dbInitializer);
+// }
 
 /**
- * Configuración del middleware de autenticación
- */
-export interface AuthMiddlewareConfig {
-  required?: boolean; // Si la autenticación es requerida
-  permissions?: string[]; // Permisos requeridos
-  permissionOptions?: PermissionOptions; // Opciones de verificación de permisos
-  skipPaths?: string[]; // Rutas que se saltan la autenticación
-  tokenHeader?: string; // Header del token (default: 'authorization')
-  extractToken?: (req: any) => string | null; // Custom token extraction function
-  userProperty?: string; // Property name to attach user to request (default: 'user')
-  contextProperty?: string; // Property name to attach auth context to request (default: 'authContext')
-  jwtSecret?: string; // JWT secret for testing
-  authService?: any; // Auth service instance for testing
-  jwtService?: any; // JWT service instance for testing
-  permissionService?: any; // Permission service instance for testing
-  onError?: (error: Error, req: any, res: any) => void; // Custom error handler
-  onSuccess?: (user: any, context: AuthContext, req: any) => void; // Custom success handler
-  config?: { // Nested config object for backward compatibility
-    tokenHeader?: string;
-    userProperty?: string;
-    contextProperty?: string;
-  };
-}
-
-/**
- * Función de middleware agnóstica para autenticación
- * Esta función puede ser adaptada a cualquier framework
+ * Función de middleware central para autenticar una petición.
+ * Es agnóstica al framework.
+ *
+ * @param request Objeto que representa la petición entrante.
+ * @param services Instancias de los servicios necesarios para el testeo o inyección.
+ * @returns Un objeto con el resultado de la autenticación.
  */
 export async function authenticateRequest(
   request: AuthRequest,
-  config: AuthMiddlewareConfig = {}
+  services: { jwtService: JWTService, authService: AuthService, permissionService: PermissionService }
 ): Promise<{ success: boolean; context?: AuthContext; error?: string; statusCode?: number }> {
-  const {
-    required = true,
-    permissions = [],
-      permissionOptions = {},
-      tokenHeader = 'authorization',
-      extractToken
-    } = config;
 
-    let token: string | null = null;
-    
-    // Use custom token extraction if provided
-    if (extractToken) {
-      token = extractToken(request);
-    } else {
-      // Try multiple token extraction methods
-      token = extractTokenFromRequest(request, tokenHeader, config);
-    }
-    
-    if (!token) {
-      if (!required) {
-        return { success: true, context: { permissions: [], isAuthenticated: false } };
-      }
-      return {
-        success: false,
-        error: extractToken ? 'Token not found' : 'Authentication token required. Provide token via Authorization header (Bearer <token>) or query parameter.',
-        statusCode: 401
-      };
-    }
+  const tokenHeader = request.headers['authorization'];
+  if (!tokenHeader) {
+    return { success: false, error: 'Authorization header is missing', statusCode: 401 };
+  }
 
-    // Verificar token
-    const jwtService = config.jwtService || getJWTService();
-    const result = await jwtService.verifyToken(token)
-      .then((payload:any) => ({ success: true, payload }))
-      .catch((error: any) => ({ success: false, error: error.message }));
-    
-    if (!result.success) {
-      if (!required) {
-        return { success: true, context: { permissions: [], isAuthenticated: false } };
-      }
-      return {
-        success: false,
-        error: 'Invalid or expired token',
-        statusCode: 401
-      };
-    }
-    
-    const payload = result.payload;
+  const token = services.jwtService.extractTokenFromHeader(tokenHeader);
+  if (!token) {
+    return { success: false, error: 'Bearer token is missing or malformed', statusCode: 401 };
+  }
 
-    // Obtener usuario completo
-    const authService = config.authService || getAuthService();
-    const user = await authService.findUserById(payload.userId, {
-      includeRoles: true,
-      includePermissions: true,
-      activeOnly: true
-    });
-
-    if (!user) {
-      return {
-        success: false,
-        error: 'User not found or inactive',
-        statusCode: 401
-      };
-    }
-
-    // Obtener permisos del usuario
-    const permissionService = config.permissionService || getPermissionService();
-    const userPermissions = await permissionService.getUserPermissions(user.id);
-    const permissionNames = userPermissions.map((p:any) => p.name);
-
-    // Crear contexto de autenticación
-    const authContext: AuthContext = {
-      user,
-      token,
-      permissions: permissionNames,
-      isAuthenticated: true
-    };
-
-    // Verificar permisos si se requieren
-    if (permissions.length > 0) {
-      const hasPermissions = await permissionService.userHasPermissions(
-        user.id,
-        permissions,
-        permissionOptions
-      );
-
-      if (!hasPermissions) {
-        return {
-          success: false,
-          error: `Insufficient permissions. Required: ${permissions.join(', ')}`,
-          statusCode: 403
-        };
-      }
-    }
-
-    return { success: true, context: authContext };
-}
-
-/**
- * Middleware para verificar solo permisos (asume que ya está autenticado)
- */
-export async function authorizeRequest(
-  authContext: AuthContext,
-  requiredPermissions: string[],
-  options: PermissionOptions = {}
-): Promise<{ success: boolean; error?: string; statusCode?: number }> {
   try {
-    if (!authContext.user) {
-      return {
-        success: false,
-        error: 'User not authenticated',
-        statusCode: 401
-      };
+    const payload = await services.jwtService.verifyToken(token);
+    const user = await services.authService.findUserById(payload.userId, { includeRoles: true });
+
+    if (!user || !user.is_active) {
+      return { success: false, error: 'User not found or is inactive', statusCode: 401 };
     }
 
-    if (requiredPermissions.length === 0) {
-      return { success: true };
+    // Obtener todos los permisos del usuario a través de sus roles
+    const userRoles = await services.authService.getUserRoles(user.id);
+    let userPermissions: string[] = [];
+    for (const role of userRoles) {
+        const rolePermissions = await services.permissionService.getRolePermissions(role.id);
+        userPermissions.push(...rolePermissions.map(p => p.name));
     }
+    // Eliminar duplicados
+    userPermissions = [...new Set(userPermissions)];
 
-    const permissionService = getPermissionService();
-    let hasPermissions: boolean;
-    
-    if (options.requireAll) {
-      // Check if user has ALL required permissions (AND logic)
-      hasPermissions = await permissionService.userHasAllPermissions(
-        authContext.user.id,
-        requiredPermissions
-      );
-    } else {
-      // Check if user has ANY of the required permissions (OR logic)
-      hasPermissions = await permissionService.userHasAnyPermission(
-        authContext.user.id,
-        requiredPermissions
-      );
-    }
-
-    if (!hasPermissions) {
-      return {
-        success: false,
-        error: `Insufficient permissions. Required: ${requiredPermissions.join(', ')}`,
-        statusCode: 403
-      };
-    }
-
-    return { success: true };
-  } catch (error:any) {
-    console.error('Authorization error:', error);
-    return {
-      success: false,
-      error: 'Internal authorization error',
-      statusCode: 500
+    const context: AuthContext = {
+      user: user,
+      token: token,
+      permissions: userPermissions,
+      isAuthenticated: true,
     };
+
+    return { success: true, context: context };
+
+  } catch (error: any) {
+    return { success: false, error: 'Invalid or expired token', statusCode: 401 };
   }
 }
 
 /**
- * Función helper para verificar si una ruta debe ser saltada
+ * Factory para crear un middleware de autenticación para un framework específico (ej. Elysia, Hono).
+ *
+ * @param services - Instancias de los servicios.
+ * @param required - Si es `true`, la autenticación es obligatoria y fallará si no hay token.
+ *                   Si es `false`, intentará autenticar pero continuará si no hay token.
  */
-export function shouldSkipAuth(path: string, skipPaths: string[] = []): boolean {
-  return skipPaths.some(skipPath => {
-    // Soporte para wildcards simples
-    if (skipPath.endsWith('*')) {
-      const basePath = skipPath.slice(0, -1);
-      return path.startsWith(basePath);
-    }
-    return path === skipPath;
-  });
-}
-
-/**
- * Función helper para extraer información del usuario del contexto
- */
-export function getCurrentUser(authContext?: AuthContext) {
-  return authContext?.user || null;
-}
-
-/**
- * Función helper para verificar si el usuario tiene un rol específico
- */
-export function userHasRole(authContext: AuthContext, roleName: string): boolean {
-  // Check roles in authContext.roles (Role objects or string array)
-  if (authContext.roles) {
-    // Handle both Role objects and string arrays
-    const hasRole = authContext.roles.some(role => 
-      typeof role === 'string' ? role === roleName : role.name === roleName
-    );
-    if (hasRole) {
-      return true;
-    }
-  }
-  
-  // Check roles in authContext.user.roles (Role objects)
-  if (authContext.user && authContext.user.roles) {
-    return authContext.user.roles.some(role => role.name === roleName);
-  }
-  
-  return false;
-}
-
-/**
- * Función helper para verificar si el usuario tiene alguno de los roles especificados
- */
-export function userHasAnyRole(authContext: AuthContext, roleNames: string[]): boolean {
-  if (!authContext.user) {
-    return false;
-  }
-  return authContext.user.roles?.some(role => roleNames.includes(role.name)) || false;
-}
-
-/**
- * Función helper para verificar si el usuario tiene todos los roles especificados
- */
-export function userHasAllRoles(authContext: AuthContext, roleNames: string[]): boolean {
-  if (!authContext.user) {
-    return false;
-  }
-  return roleNames.every(roleName => 
-    authContext.user!.roles?.some(role => role.name === roleName) || false
-  );
-}
-
-/**
- * Función helper para verificar si el usuario tiene un permiso específico
- */
-export function userHasPermission(authContext: AuthContext, permissionName: string): boolean {
-  if (!authContext.permissions) {
-    return false;
-  }
-  return authContext.permissions.includes(permissionName);
-}
-
-/**
- * Función helper para verificar si el usuario tiene alguno de los permisos especificados
- */
-export function userHasAnyPermission(authContext: AuthContext, permissionNames: string[]): boolean {
-  if (!authContext.permissions) {
-    return false;
-  }
-  return permissionNames.some(permission => authContext.permissions!.includes(permission));
-}
-
-/**
- * Función helper para verificar si el usuario tiene todos los permisos especificados
- */
-export function userHasAllPermissions(authContext: AuthContext, permissionNames: string[]): boolean {
-  if (!authContext.permissions) {
-    return false;
-  }
-  return permissionNames.every(permission => authContext.permissions!.includes(permission));
-}
-
-/**
- * Función helper para verificar si el usuario es el propietario de un recurso
- */
-export function isResourceOwner(authContext: AuthContext, resourceUserId: string): boolean {
-  if (!authContext.user) {
-    return false;
-  }
-  return authContext.user.id === resourceUserId;
-}
-
-/**
- * Función helper para verificar si el usuario es admin
- */
-export function isAdmin(authContext: AuthContext): boolean {
-  return userHasRole(authContext, 'admin') || userHasRole(authContext, 'administrator');
-}
-
-/**
- * Función helper para verificar si el usuario es moderador
- */
-export function isModerator(authContext: AuthContext): boolean {
-  return userHasRole(authContext, 'moderator') || isAdmin(authContext);
-}
-
-/**
- * Función helper para crear un contexto de autenticación vacío
- */
-export function createEmptyAuthContext(): AuthContext {
-  return {
-    permissions: [],
-    isAuthenticated: false
-  };
-}
-
-/**
- * Función helper para refrescar el token si está próximo a expirar
- */
-export async function refreshTokenIfNeeded(authContext: AuthContext): Promise<string | null> {
-  try {
-    if (!authContext.user || !authContext.token) {
-      return null;
-    }
-
-    const jwtService = getJWTService();
-    const newToken = await jwtService.refreshTokenIfNeeded(
-      authContext.token,
-      authContext.user,
-      3600 // 1 hora antes de expirar
-    );
-
-    return newToken !== authContext.token ? newToken : null;
-  } catch (error:any) {
-    console.error('Error refreshing token:', error);
-    return null;
-  }
-}
-
-/**
- * Función helper para validar permisos de recursos específicos
- */
-export async function validateResourcePermission(
-  authContext: AuthContext,
-  resource: string,
-  action: string,
-  resourceUserId?: string
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    // Verificar si es el propietario del recurso
-    if (resourceUserId && isResourceOwner(authContext, resourceUserId)) {
-      return { success: true };
-    }
-
-    // Verificar si es admin (puede hacer todo)
-    if (isAdmin(authContext)) {
-      return { success: true };
-    }
-
-    // Verificar permiso específico
-    const permissionName = `${resource}.${action}`;
-    if (userHasPermission(authContext, permissionName)) {
-      return { success: true };
-    }
-
-    // Verificar permiso genérico
-    const genericPermission = `${resource}.*`;
-    if (userHasPermission(authContext, genericPermission)) {
-      return { success: true };
-    }
-
-    return {
-      success: false,
-      error: `Insufficient permissions for ${resource}.${action}`
-    };
-  } catch (error:any) {
-    console.error('Error validating resource permission:', error);
-    return {
-      success: false,
-      error: 'Internal error validating permissions'
-    };
-  }
-}
-
-/**
- * Función helper para crear respuestas de error estandarizadas
- */
-export function createAuthErrorResponse(
-  error: string,
-  statusCode: number = 401,
-  type: AuthErrorType = 'INVALID_CREDENTIALS' as AuthErrorType
+export function createAuthMiddleware(
+    services: { jwtService: JWTService, authService: AuthService, permissionService: PermissionService },
+    required: boolean = true
 ) {
-  return {
-    success: false,
-    error: {
-      type,
-      message: error,
-      statusCode,
-      timestamp: new Date().toISOString()
+  return async (context: any) => { // 'context' es 'c' en Hono, o el objeto de contexto en Elysia
+    const request: AuthRequest = { headers: context.request.headers };
+    
+    const result = await authenticateRequest(request, services);
+
+    if (result.success) {
+      context.auth = result.context; // Adjuntar el contexto de autenticación a la petición
+      return; // Continuar con el siguiente handler
     }
-  };
-}
 
-/**
- * Función helper para logging de eventos de autenticación
- */
-export function logAuthEvent(
-  event: string,
-  userId?: string,
-  metadata?: Record<string, any>
-): void {
-  const logData = {
-    event,
-    userId,
-    timestamp: new Date().toISOString(),
-    metadata
-  };
-  
-  console.log(`🔐 Auth Event: ${JSON.stringify(logData)}`);
-}
-
-/**
- * Función helper para extraer IP del request (framework agnóstico)
- */
-export function extractClientIP(headers: Record<string, string>): string {
-  return (
-    headers['x-forwarded-for'] ||
-    headers['x-real-ip'] ||
-    headers['x-client-ip'] ||
-    headers['cf-connecting-ip'] ||
-    'unknown'
-  );
-}
-
-/**
- * Función helper para extraer User-Agent del request
- */
-export function extractUserAgent(headers: Record<string, string>): string {
-  return headers['user-agent'] || headers['User-Agent'] || 'Unknown';
-}
-
-/**
- * Función helper para extraer token de diferentes fuentes del request
- * @param request Request object
- * @param tokenHeader Header name for token
- * @param config Auth middleware config
- * @returns Token string or null
- */
-function extractTokenFromRequest(
-  request: AuthRequest,
-  tokenHeader: string,
-  config: AuthMiddlewareConfig
-): string | null {
-  const jwtService = config.jwtService || getJWTService();
-  
-  // 1. Try to extract from headers (case-insensitive)
-  const authHeader = request.headers[tokenHeader] || 
-                    request.headers[tokenHeader.toLowerCase()] ||
-                    request.headers[tokenHeader.toUpperCase()];
-  
-  if (authHeader) {
-    // For authorization header, extract from Bearer format
-    if (tokenHeader.toLowerCase() === 'authorization') {
-      const token = jwtService.extractTokenFromHeader(authHeader);
-      if (token) return token;
+    if (required) {
+        context.set.status = result.statusCode || 401;
+        return { success: false, error: result.error };
     } else {
-      // For custom headers, use token directly
-      return authHeader;
+        // Autenticación opcional: si falla, simplemente crea un contexto de invitado y continúa
+        context.auth = { user: undefined, isAuthenticated: false, permissions: [] };
+        return;
     }
-  }
-  
-  // 2. Try to extract from query parameters (useful for GET requests)
-  if (request.query) {
-    const queryToken = request.query.token || request.query.access_token || request.query.auth_token;
-    if (queryToken) {
-      return Array.isArray(queryToken) ? queryToken[0] : queryToken;
+  };
+}
+
+
+/**
+ * Factory para crear un middleware de autorización basado en permisos.
+ * DEBE usarse DESPUÉS del middleware de autenticación.
+ *
+ * @param services - Instancias de los servicios.
+ * @param requiredPermissions - Array de nombres de permisos requeridos.
+ * @param options - Opciones como `requireAll`.
+ */
+export function createPermissionMiddleware(
+  services: { permissionService: PermissionService },
+  requiredPermissions: string[],
+  options: PermissionOptions = { requireAll: false }
+) {
+  return async (context: any) => {
+    const authContext: AuthContext | undefined = context.auth;
+
+    if (!authContext?.isAuthenticated || !authContext.user) {
+        context.set.status = 401;
+        return { success: false, error: 'Authentication required' };
     }
-  }
-  
-  // 3. Try to extract from URL parameters (for WebSocket or other protocols)
-  if (request.url) {
-    try {
-      const url = new URL(request.url, 'http://localhost');
-      const urlToken = url.searchParams.get('token') || 
-                      url.searchParams.get('access_token') || 
-                      url.searchParams.get('auth_token');
-      if (urlToken) return urlToken;
-    } catch (error) {
-      // Ignore URL parsing errors
+
+    let hasPermission = false;
+    if (options.requireAll) {
+      // El usuario debe tener TODOS los permisos de la lista
+      hasPermission = requiredPermissions.every(p => authContext.permissions.includes(p));
+    } else {
+      // El usuario debe tener AL MENOS UNO de los permisos de la lista
+      hasPermission = requiredPermissions.some(p => authContext.permissions.includes(p));
     }
-  }
-  
-  return null;
+
+    if (!hasPermission) {
+        context.set.status = 403; // Forbidden
+        return { success: false, error: 'Insufficient permissions' };
+    }
+
+    return; // El usuario tiene permiso, continuar
+  };
 }
 
 /**
- * Crea un middleware de autenticación para frameworks específicos
+ * Factory para crear un middleware de autorización basado en roles.
+ * DEBE usarse DESPUÉS del middleware de autenticación.
+ *
+ * @param requiredRoles - Array de nombres de roles requeridos.
  */
-export function createAuthMiddleware(config: AuthMiddlewareConfig = {}) {
-  return async (req: any, res: any, next: any) => {
-    try {
-      // Handle nested config for backward compatibility
-      const finalConfig = {
-        ...config,
-        tokenHeader: config.config?.tokenHeader || config.tokenHeader || 'authorization',
-        userProperty: config.config?.userProperty || config.userProperty || 'user',
-        contextProperty: config.config?.contextProperty || config.contextProperty || 'authContext'
-      };
+export function createRoleMiddleware(requiredRoles: string[]) {
+    return async (context: any) => {
+        const authContext: AuthContext | undefined = context.auth;
 
-      const authRequest: AuthRequest = {
-        headers: req.headers || {},
-        url: req.url || '',
-        method: req.method || 'GET',
-        query: req.query
-      };
-
-      const result = await authenticateRequest(authRequest, finalConfig);
-      
-      if (!result.success) {
-        if (config.onError) {
-          const error = new Error(result.error || 'Authentication failed');
-          return config.onError(error, req, res);
+        if (!authContext?.isAuthenticated || !authContext.user?.roles) {
+            context.set.status = 401;
+            return { success: false, error: 'Authentication required' };
         }
-        return res.status(result.statusCode || 401).json({
-          success: false,
-          error: result.error
-        });
-      }
 
-      // Agregar contexto de autenticación al request usando propiedades configurables
-      req[finalConfig.contextProperty] = result.context;
-      req[finalConfig.userProperty] = result.context?.user;
-      
-      // Call success callback if provided
-      if (config.onSuccess && result.context) {
-        config.onSuccess(result.context.user, result.context, req);
-      }
-      
-      next();
-    } catch (error: any) {
-      // Only catch unexpected errors, not authentication errors
-      console.error('Unexpected error in auth middleware:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Internal server error'
-      });
+        const userRoleNames = authContext.user.roles.map(r => r.name);
+        const hasRole = requiredRoles.some(requiredRole => userRoleNames.includes(requiredRole));
+        
+        if (!hasRole) {
+            context.set.status = 403;
+            return { success: false, error: 'Access denied. Required role not found.' };
+        }
+
+        return; // El usuario tiene el rol, continuar
     }
-  };
-}
-
-/**
- * Crea un middleware de autenticación opcional
- */
-export function createOptionalAuthMiddleware(config: AuthMiddlewareConfig = {}) {
-  return createAuthMiddleware({ ...config, required: false });
-}
-
-/**
- * Crea un middleware de verificación de permisos
- */
-export function createPermissionMiddleware(config: { permissions: string[], permissionService?: any, options?: PermissionOptions }) {
-  return async (req: any, res: any, next: any) => {
-    try {
-      const authContext = req.authContext;
-      if (!authContext) {
-        return res.status(401).json({
-          success: false,
-          error: 'Authentication required'
-        });
-      }
-
-      const result = await authorizeRequest(authContext, config.permissions, config.options || {});
-      
-      if (!result.success) {
-        return res.status(result.statusCode || 403).json({
-          success: false,
-          error: result.error
-        });
-      }
-
-      next();
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        error: 'Internal server error'
-      });
-    }
-  };
-}
-
-/**
- * Crea un middleware de verificación de roles
- */
-export function createRoleMiddleware(config: { roles: string[], requireAll?: boolean, permissionService?: any }) {
-  return async (req: any, res: any, next: any) => {
-    try {
-      const authContext = req.authContext;
-      if (!authContext) {
-        return res.status(401).json({
-          success: false,
-          error: 'Authentication required'
-        });
-      }
-
-      const { roles, requireAll = false } = config;
-      let hasRole: boolean;
-      
-      if (requireAll) {
-        hasRole = roles.every(role => userHasRole(authContext, role));
-      } else {
-        hasRole = roles.some(role => userHasRole(authContext, role));
-      }
-      
-      if (!hasRole) {
-        return res.status(403).json({
-          success: false,
-          error: 'Insufficient permissions'
-        });
-      }
-
-      next();
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        error: 'Internal server error'
-      });
-    }
-  };
-}
-
-/**
- * Crea un middleware de verificación de propiedad de recursos
- */
-export function createOwnershipMiddleware(config: {
-  getResourceOwnerId: (req: any) => number | string | Promise<number | string>;
-  allowAdmin?: boolean;
-  adminRoles?: string[];
-}) {
-  return async (req: any, res: any, next: any) => {
-    try {
-      const authContext = req.authContext;
-      if (!authContext) {
-        return res.status(401).json({
-          success: false,
-          error: 'Authentication required'
-        });
-      }
-
-      // Get the resource owner ID using the provided function
-      const resourceOwnerId = await config.getResourceOwnerId(req);
-      
-      // Check if user is the resource owner
-      const isOwner = authContext.user && authContext.user.id.toString() === resourceOwnerId.toString();
-      
-      // Check if user is admin (if admin access is allowed)
-      let isAdminUser = false;
-      if (config.allowAdmin) {
-        const adminRoles = config.adminRoles || ['admin'];
-        isAdminUser = adminRoles.some(role => userHasRole(authContext, role));
-      }
-      
-      if (!isOwner && !isAdminUser) {
-        return res.status(403).json({
-          success: false,
-          error: 'Access denied'
-        });
-      }
-
-      next();
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        error: 'Internal server error'
-      });
-    }
-  };
-}
-
-/**
- * Crea un middleware de rate limiting (implementación básica)
- */
-export function createRateLimitMiddleware(config: {
-  windowMs: number;
-  maxRequests: number;
-  keyGenerator?: (req: any) => string;
-}) {
-  const { windowMs, maxRequests, keyGenerator } = config;
-  const requests = new Map<string, { count: number; resetTime: number }>();
-
-  return async (req: any, res: any, next: any) => {
-    try {
-      const key = keyGenerator ? keyGenerator(req) : extractClientIP(req.headers);
-      const now = Date.now();
-      
-      const clientData = requests.get(key) || { count: 0, resetTime: now + windowMs };
-      
-      if (now > clientData.resetTime) {
-        clientData.count = 0;
-        clientData.resetTime = now + windowMs;
-      }
-      
-      clientData.count++;
-      requests.set(key, clientData);
-      
-      if (clientData.count > maxRequests) {
-        return res.status(429).json({
-          success: false,
-          error: 'Too many requests'
-        });
-      }
-      
-      next();
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        error: 'Internal server error'
-      });
-    }
-  };
 }

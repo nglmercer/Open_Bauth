@@ -2,9 +2,6 @@
 // Configuración global para tests con Bun
 
 import { beforeAll, afterAll, beforeEach, afterEach, expect } from 'bun:test';
-import { initDatabase, closeDatabase, getDatabase, isDatabaseInitialized } from '../src/db/connection';
-import { runMigrations, resetDatabase } from '../src/db/newmigrations';
-import { seedDatabase, cleanDatabase } from '../src/scripts/seed';
 import { initJWTService } from '../src/services/jwt';
 import { defaultLogger as logger } from '../src/logger'
 // Variables globales para tests
@@ -24,12 +21,6 @@ beforeAll(async () => {
   logger.info('🧪 Configurando entorno de tests...');
   
   try {
-    // Inicializar base de datos en memoria
-    initDatabase(TEST_DB_PATH);
-    
-    // Ejecutar migraciones
-    await runMigrations();
-    
     // Inicializar servicio JWT
     initJWTService(TEST_JWT_SECRET);
     
@@ -46,27 +37,6 @@ beforeAll(async () => {
 afterAll(async () => {
   logger.info('🧹 Limpiando entorno de tests...');
   
-  try {
-    // Rollback any active transactions before cleanup
-    try {
-      const { getTransactionManager } = await import('../src/database/transaction');
-      const manager = getTransactionManager();
-      await manager.rollbackAll();
-    } catch (error) {
-      // Ignore if transaction module is not available
-    }
-    
-    // Clean database but don't close it (other test files might still need it)
-    await cleanDatabase();
-    logger.info('✅ Entorno de tests limpiado correctamente');
-    
-    // Asegurar que no hay promesas pendientes
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-  } catch (error:any) {
-    console.error('❌ Error limpiando entorno de tests:', error);
-    // No lanzar el error para evitar exit code 1
-  }
 });
 
 // Manejar promesas rechazadas no capturadas en tests
@@ -86,22 +56,7 @@ if (process.env.NODE_ENV === 'test') {
  * Setup antes de cada test
  */
 beforeEach(async () => {
-  // Asegurar que la base de datos esté inicializada
-  if (!isDatabaseInitialized()) {
-    initDatabase(TEST_DB_PATH);
-    await runMigrations();
-  }
-  
-  // Reset transaction manager to ensure it uses the current database instance
-  try {
-    const { resetTransactionManager } = await import('../src/database/transaction');
-    resetTransactionManager();
-  } catch (error) {
-    // Ignore if transaction module is not available
-  }
-  
-  // Limpiar datos antes de cada test
-  await cleanDatabase();
+
 });
 
 /**
@@ -116,33 +71,6 @@ afterEach(async () => {
  * Utilidades para tests
  */
 export const testUtils = {
-  /**
-   * Crear datos de prueba
-   */
-  async seedTestData() {
-    await seedDatabase();
-  },
-
-  /**
-   * Limpiar base de datos
-   */
-  async cleanTestData() {
-    await cleanDatabase();
-  },
-
-  /**
-   * Resetear base de datos completamente
-   */
-  async resetTestData() {
-    await resetDatabase();
-  },
-
-  /**
-   * Obtener instancia de base de datos para tests
-   */
-  getTestDatabase() {
-    return getDatabase();
-  },
 
   /**
    * Generar datos de usuario de prueba
@@ -151,9 +79,9 @@ export const testUtils = {
     return {
       email: `test${Date.now()}@example.com`,
       password: 'TestPassword123!',
-      firstName: 'Test',
-      lastName: 'User',
-      isActive: true,
+      first_name: 'Test',
+      last_name: 'User',
+      is_active: true,
       ...overrides
     };
   },
@@ -165,7 +93,7 @@ export const testUtils = {
     return {
       name: `test_role_${Date.now()}`,
       description: 'Test role for testing purposes',
-      isActive: true,
+      is_active: true,
       ...overrides
     };
   },
@@ -210,13 +138,13 @@ export const testUtils = {
       const defaultUser = {
         id: 1,
         email: 'test@example.com',
-        firstName: 'Test',
-        lastName: 'User',
-        isActive: true,
+        first_name: 'Test',
+        last_name: 'User',
+        is_active: true,
         roles: [{ name: 'user' }],
         permissions: ['read'],
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
         ...payload
       };
       
@@ -238,13 +166,13 @@ export const testUtils = {
       const mockUser = {
         id: 1,
         email: 'test@example.com',
-        firstName: 'Test',
-        lastName: 'User',
-        isActive: true,
+        first_name: 'Test',
+        last_name: 'User',
+        is_active: true,
         roles: [{ name: 'user' }],
         permissions: ['read'],
-        createdAt: new Date(),
-        updatedAt: new Date()
+        created_at: new Date(),
+        updated_at: new Date()
       };
       
       try {
@@ -291,16 +219,16 @@ export const testUtils = {
   validateUserStructure(user: any) {
     expect(user).toHaveProperty('id');
     expect(user).toHaveProperty('email');
-    // firstName and lastName are optional
-    if (user.firstName !== undefined) {
-      expect(typeof user.firstName).toBe('string');
+    // first_name and last_name are optional
+    if (user.first_name !== undefined) {
+      expect(typeof user.first_name).toBe('string');
     }
-    if (user.lastName !== undefined) {
-      expect(typeof user.lastName).toBe('string');
+    if (user.last_name !== undefined) {
+      expect(typeof user.last_name).toBe('string');
     }
-    expect(user).toHaveProperty('isActive');
-    expect(user).toHaveProperty('createdAt');
-    expect(user).toHaveProperty('updatedAt');
+    expect(user).toHaveProperty('is_active');
+    expect(user).toHaveProperty('created_at');
+    expect(user).toHaveProperty('updated_at');
     // No debe incluir password
     expect(user).not.toHaveProperty('password');
   },
@@ -311,9 +239,9 @@ export const testUtils = {
   validateRoleStructure(role: any) {
     expect(role).toHaveProperty('id');
     expect(role).toHaveProperty('name');
-    expect(role).toHaveProperty('createdAt');
-    expect(role).toHaveProperty('updatedAt');
-    expect(role).toHaveProperty('isActive');
+    expect(role).toHaveProperty('created_at');
+    expect(role).toHaveProperty('updated_at');
+    expect(role).toHaveProperty('is_active');
   },
 
   /**
@@ -324,7 +252,7 @@ export const testUtils = {
     expect(permission).toHaveProperty('name');
     expect(permission).toHaveProperty('resource');
     expect(permission).toHaveProperty('action');
-    expect(permission).toHaveProperty('createdAt');
+    expect(permission).toHaveProperty('created_at');
   }
 };
 

@@ -794,12 +794,12 @@ app.get('/protected', auth.required(), (c) => {
 interface User {
   id: string;
   email: string;
-  passwordHash: string;
+  password_hash: string;
   profile: UserProfile;
   active: boolean;
   emailVerified: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+ created_at: string;;
+  updated_at: string;
   lastLoginAt?: Date;
 }
 ```
@@ -824,8 +824,8 @@ interface Role {
   name: string;
   description?: string;
   permissions: string[];
-  createdAt: Date;
-  updatedAt: Date;
+ created_at: string;;
+  updated_at: string;
 }
 ```
 
@@ -838,7 +838,7 @@ interface Permission {
   description?: string;
   resource: string;
   action: string;
-  createdAt: Date;
+ created_at: string;;
 }
 ```
 
@@ -921,7 +921,7 @@ interface GetUsersOptions {
   search?: string;
   role?: string;
   active?: boolean;
-  sortBy?: 'name' | 'email' | 'createdAt' | 'lastLoginAt';
+  sortBy?: 'name' | 'email' | 'created_at' | 'lastLoginAt';
   sortOrder?: 'asc' | 'desc';
 }
 ```

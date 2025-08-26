@@ -41,15 +41,15 @@ export interface PaginatedResponse<T> {
  */
 export interface BaseEntity {
   id: string;
-  createdAt: Date;
-  updatedAt: Date;
+  created_at?: string;
+  updated_at?: string;
 }
 
 /**
  * Soft delete entity interface
  */
 export interface SoftDeleteEntity extends BaseEntity {
-  deletedAt?: Date;
+  deletedAt?: string;
   isDeleted: boolean;
 }
 
@@ -80,7 +80,7 @@ export interface QueryOptions {
 export interface DatabaseTransaction {
   commit(): Promise<void>;
   rollback(): Promise<void>;
-  isActive(): boolean;
+  is_active(): boolean;
   getDatabase(): Database;
 }
 
@@ -313,7 +313,7 @@ export interface DomainEvent {
   aggregateId: string;
   aggregateType: string;
   version: number;
-  timestamp: Date;
+  timestamp: string;
   data: Record<string, any>;
   metadata?: Record<string, any>;
 }
@@ -324,7 +324,7 @@ export interface DomainEvent {
 export interface Command {
   id: string;
   type: string;
-  timestamp: Date;
+  timestamp: string;
   userId?: string;
   data: Record<string, any>;
   metadata?: Record<string, any>;
@@ -336,7 +336,7 @@ export interface Command {
 export interface Query {
   id: string;
   type: string;
-  timestamp: Date;
+  timestamp: string;
   userId?: string;
   parameters: Record<string, any>;
   metadata?: Record<string, any>;

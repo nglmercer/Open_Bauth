@@ -51,19 +51,19 @@ export interface PermissionMetadata {
 /**
  * User interface with enhanced type safety
  */
-export interface User extends BaseEntity {
-  id: UserId;
-  email: Email;
-  passwordHash: HashedPassword;
-  firstName?: string;
-  lastName?: string;
-  isActive: boolean;
-  lastLoginAt?: Date;
-  emailVerifiedAt?: Date;
+export interface User {
+  id: string;
+  email: string;
+  password_hash?: string; // Es opcional porque lo eliminamos en las respuestas
+  first_name?: string | null;
+  last_name?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  last_login_at?: string | null;
+  is_active: boolean;
   roles?: Role[];
-  permissions?: Permission[];
-  metadata?: UserMetadata;
 }
+
 
 /**
  * User creation data interface
@@ -71,9 +71,9 @@ export interface User extends BaseEntity {
 export interface CreateUserData {
   email: string;
   password: string;
-  firstName?: string;
-  lastName?: string;
-  isActive?: boolean;
+  first_name?: string;
+  last_name?: string;
+  is_active?: boolean;
   roles?: string[];
 }
 
@@ -82,9 +82,9 @@ export interface CreateUserData {
  */
 export interface UpdateUserData {
   email?: string;
-  firstName?: string;
-  lastName?: string;
-  isActive?: boolean;
+  first_name?: string;
+  last_name?: string;
+  is_active?: boolean;
 }
 
 /**
@@ -123,16 +123,13 @@ export interface LegacyUser {
   id: string;
   email: string;
   password_hash: string;
-  firstName?: string;
-  lastName?: string;
+  first_name?: string;
+  last_name?: string;
   roles: Role[];
-  created_at: Date;
-  updated_at: Date;
-  createdAt?: Date;
-  updatedAt?: Date;
-  is_active: boolean;
-  isActive?: boolean;
-  lastLoginAt?: Date;
+  created_at: string;
+  updated_at: string;
+  is_active?: boolean;
+  lastLoginAt?: string;
 }
 
 /**
@@ -143,7 +140,7 @@ export interface Role extends BaseEntity {
   name: string;
   description?: string;
   isDefault?: boolean;
-  isActive: boolean;
+  is_active: boolean;
   permissions?: Permission[];
   metadata?: RoleMetadata;
 }
@@ -165,7 +162,7 @@ export interface UpdateRoleData {
   name?: string;
   description?: string;
   isDefault?: boolean;
-  isActive?: boolean;
+  is_active?: boolean;
 }
 
 /**
@@ -200,8 +197,8 @@ export interface LegacyRole {
   name: string;
   permissions: Permission[];
   description?: string;
-  created_at: Date;
-  isActive?: boolean;
+  created_at: string;
+  is_active?: boolean;
 }
 
 /**
@@ -213,7 +210,8 @@ export interface Permission extends BaseEntity {
   resource: string;
   action: string;
   description?: string;
-  metadata?: PermissionMetadata;
+  created_at?: string;
+  updated_at?: string;
 }
 
 /**
@@ -266,7 +264,7 @@ export interface LegacyPermission {
   name: string;
   resource: string;
   action: string;
-  created_at: Date;
+  created_at: string;
   description?: string;
 }
 
@@ -362,9 +360,8 @@ export interface AuthResponse {
 export interface RegisterData {
   email: string;
   password: string;
-  firstName?: string;
-  lastName?: string;
-  isActive?: boolean;
+  first_name?: string;
+  last_name?: string;
 }
 
 /**
@@ -494,7 +491,7 @@ export type AuthEvent =
 export interface AuthEventData {
   event: AuthEvent;
   userId?: string;
-  timestamp: Date;
+  timestamp: string;
   metadata?: Record<string, any>;
 }
 
@@ -542,9 +539,9 @@ export interface SessionInfo {
   id: string;
   userId: string;
   token: string;
-  createdAt: Date;
-  expiresAt: Date;
-  lastActivity: Date;
+  created_at: string;
+  expiresAt: string;
+  lastActivity: string;
   ipAddress?: string;
   userAgent?: string;
 }
@@ -570,7 +567,9 @@ export enum AuthErrorType {
   RATE_LIMIT_ERROR = 'RATE_LIMIT_ERROR',
   TOKEN_ERROR = 'TOKEN_ERROR',
   ACCOUNT_ERROR = 'ACCOUNT_ERROR',
-  SERVER_ERROR = 'SERVER_ERROR'
+  SERVER_ERROR = 'SERVER_ERROR',
+  PERMISSION_ERROR = 'PERMISSION_ERROR',
+  ROLE_ERROR = 'ROLE_ERROR',
 }
 
 // Note: The main AuthError class is defined in src/errors/auth.ts
@@ -591,5 +590,43 @@ export class LegacyAuthError extends Error {
     this.type = type;
     this.statusCode = statusCode;
     this.metadata = metadata;
+  }
+}
+export abstract class AuthError extends Error {
+  public abstract readonly type: AuthErrorType;
+  public readonly timestamp: Date;
+  public readonly context?: Record<string, any>;
+  
+  constructor(message: string, context?: Record<string, any>) {
+    super(message);
+    this.name = this.constructor.name;
+    this.timestamp = new Date();
+    this.context = context;
+    
+    // Ensure proper prototype chain for instanceof checks
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+  
+  /**
+   * Convert error to API response format
+   */
+  toResponse(): {
+    success: false;
+    error: {
+      type: AuthErrorType;
+      message: string;
+      timestamp: string;
+      context?: Record<string, any>;
+    };
+  } {
+    return {
+      success: false as const,
+      error: {
+        type: this.type,
+        message: this.message,
+        timestamp: this.timestamp.toISOString(),
+        ...(this.context && { context: this.context })
+      }
+    };
   }
 }

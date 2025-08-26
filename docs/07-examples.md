@@ -258,7 +258,7 @@ export default function createProtectedRoutes(auth: ExpressAuthAdapter) {
         id: req.user.id,
         email: req.user.email,
         name: req.user.profile?.name,
-        createdAt: req.user.createdAt
+        created_at: req.user.created_at
       }
     });
   });

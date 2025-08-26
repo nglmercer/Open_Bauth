@@ -152,8 +152,8 @@ const authService = authLib.getAuthService();
 const result = await authService.register({
   email: 'usuario@ejemplo.com',
   password: 'password123',
-  firstName: 'Juan',
-  lastName: 'Pérez'
+  first_name: 'Juan',
+  last_name: 'Pérez'
 });
 
 // Hacer login
@@ -823,8 +823,8 @@ describe('AuthLibrary', () => {
     const result = await authLib.getAuthService().register({
       email: 'test@example.com',
       password: 'password123',
-      firstName: 'Test',
-      lastName: 'User'
+      first_name: 'Test',
+      last_name: 'User'
     });
     
     expect(result.success).toBe(true);

@@ -133,7 +133,7 @@ Middleware que requiere autenticación obligatoria.
 app.get('/dashboard', auth.required, (c) => {
   const user = auth.getCurrentUser(c);
   return c.json({ 
-    message: `Bienvenido ${user.firstName}`,
+    message: `Bienvenido ${user.first_name}`,
     user 
   });
 });
@@ -244,8 +244,8 @@ app.get('/me', auth.required, (c) => {
   return c.json({
     id: user.id,
     email: user.email,
-    firstName: user.firstName,
-    lastName: user.lastName,
+    first_name: user.first_name,
+    last_name: user.last_name,
     roles: user.roles,
     permissions: user.permissions
   });
@@ -624,7 +624,7 @@ Middleware que requiere autenticación.
 app.get('/dashboard', auth.required, (req, res) => {
   // req.user está garantizado aquí
   res.json({ 
-    message: `Bienvenido ${req.user.firstName}`,
+    message: `Bienvenido ${req.user.first_name}`,
     user: req.user 
   });
 });
@@ -1462,7 +1462,7 @@ app.use(auth.middleware);
 // Rutas protegidas
 app.get('/protected', auth.required, (context) => {
   const user = auth.getCurrentUser(context);
-  return { message: `Hola ${user.firstName}` };
+  return { message: `Hola ${user.first_name}` };
 });
 
 // Rutas con permisos
@@ -1632,8 +1632,8 @@ describe('Hono Adapter', () => {
     const result = await authLib.getAuthService().register({
       email: 'test@example.com',
       password: 'password123',
-      firstName: 'Test',
-      lastName: 'User'
+      first_name: 'Test',
+      last_name: 'User'
     });
     
     // Simular contexto de Hono

@@ -199,7 +199,7 @@ Funciones de middleware que funcionan independientemente del framework.
 
 | Interface | Descripción | Propiedades Principales |
 |-----------|-------------|------------------------|
-| `User` | Representa un usuario del sistema | `id`, `email`, `roles`, `isActive`, `createdAt` |
+| `User` | Representa un usuario del sistema | `id`, `email`, `roles`, `is_active`, `created_at` |
 | `Role` | Representa un rol en el sistema | `id`, `name`, `permissions`, `description` |
 | `Permission` | Representa un permiso específico | `id`, `name`, `resource`, `action` |
 | `AuthContext` | Contexto de autenticación | `user`, `token`, `permissions`, `isAuthenticated` |
@@ -212,11 +212,11 @@ Funciones de middleware que funcionan independientemente del framework.
 
 | Tipo | Descripción | Campos |
 |------|-------------|--------|
-| `RegisterData` | Datos para registro | `email`, `password`, `firstName`, `lastName` |
+| `RegisterData` | Datos para registro | `email`, `password`, `first_name`, `last_name` |
 | `LoginData` | Datos para login | `email`, `password` |
 | `CreatePermissionData` | Datos para crear permiso | `name`, `resource`, `action`, `description` |
 | `CreateRoleData` | Datos para crear rol | `name`, `description`, `permissionIds` |
-| `UpdateUserData` | Datos para actualizar usuario | `email`, `isActive`, `firstName`, `lastName` |
+| `UpdateUserData` | Datos para actualizar usuario | `email`, `is_active`, `first_name`, `last_name` |
 | `UserQueryOptions` | Opciones de consulta | `includeRoles`, `includePermissions`, `activeOnly` |
 
 ### Enums
