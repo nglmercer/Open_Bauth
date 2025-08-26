@@ -43,9 +43,12 @@ export class AuthService {
     }
 
     const roleIds = assignments.data.map(a => a.role_id);
-    const rolesResult = await this.roleController.search({ id: roleIds });
+    const roles = await Promise.all(roleIds.map(async (id) => {
+      const role = await this.roleController.findById(id);
+      return role.data;
+    }));
 
-    return { ...user, roles: rolesResult.data || [] };
+    return { ...user, roles: roles.filter((r): r is Role => r !== null) };
   }
 
   async getRoleByName(roleName: string): Promise<Role | null> {
@@ -76,7 +79,7 @@ export class AuthService {
         password_hash,
         first_name: data.first_name,
         last_name: data.last_name,
-        is_active: true,
+        is_active: data.is_active !== undefined ? data.is_active : true,
       });
 
       if (!createResult.success || !createResult.data) {

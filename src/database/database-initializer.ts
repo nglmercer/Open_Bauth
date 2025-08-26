@@ -5,7 +5,7 @@
 
 import type { Database } from 'bun:sqlite';
 import { BaseController, type TableSchema, type ControllerResponse } from './base-controller';
-//import type { User, Role } from '../types/auth';
+import type { User, Role,Permission } from '../types/auth';
 // Type definitions for better type safety
 export interface DatabaseConfig {
   database: Database;
@@ -41,7 +41,11 @@ const defaultLogger: Logger = {
   warn: (msg: string, ...args: any[]) => console.warn(`[WARN] ${msg}`, ...args),
   error: (msg: string, ...args: any[]) => console.error(`[ERROR] ${msg}`, ...args)
 };
-
+const silenceLogger: Logger = {
+  info: (msg: string, ...args: any[]) => {},
+  warn: (msg: string, ...args: any[]) => {},
+  error: (msg: string, ...args: any[]) => {}
+};
 // Database table schemas using your existing structure
 export const DATABASE_SCHEMAS: TableSchema[] = [
   {
@@ -152,7 +156,7 @@ export class DatabaseInitializer {
 
   constructor(config: DatabaseConfig) {
     this.database = config.database;
-    this.logger = config.logger || defaultLogger;
+    this.logger = config.logger || silenceLogger;
     this.enableWAL = config.enableWAL ?? true;
     this.enableForeignKeys = config.enableForeignKeys ?? true;
   }
@@ -160,6 +164,57 @@ export class DatabaseInitializer {
   /**
    * Initialize database with all required tables and indexes
    */
+  async seedDefaults() {
+    const roleController = this.createController<Role>('roles');
+    const permissionController = this.createController<Permission>('permissions');
+    const rolePermissionController = this.createController<RolePermission>('role_permissions');
+
+    // Seed default roles
+    const roles = [
+      { name: 'admin', description: 'Administrator role' },
+      { name: 'moderator', description: 'Moderator role' },
+      { name: 'user', description: 'Standard user role' }
+    ];
+
+    for (const role of roles) {
+      const existing = await roleController.findFirst({ name: role.name });
+      if (!existing.data) {
+        await roleController.create(role);
+      }
+    }
+
+    // Seed default permissions
+    const permissions = [
+      { name: 'manage:users', resource: 'users', action: 'manage', description: 'Manage users' },
+      { name: 'edit:content', resource: 'content', action: 'edit', description: 'Edit content' }
+    ];
+
+    for (const perm of permissions) {
+      const existing = await permissionController.findFirst({ name: perm.name });
+      if (!existing.data) {
+        await permissionController.create(perm);
+      }
+    }
+
+    // Assign permissions to roles
+    const adminRole = await roleController.findFirst({ name: 'admin' });
+    const moderatorRole = await roleController.findFirst({ name: 'moderator' });
+
+    if (adminRole.data) {
+      const manageUsers = await permissionController.findFirst({ name: 'manage:users' });
+      if (manageUsers.data) {
+        await rolePermissionController.create({ role_id: adminRole.data.id, permission_id: manageUsers.data.id });
+      }
+    }
+
+    if (moderatorRole.data) {
+      const editContent = await permissionController.findFirst({ name: 'edit:content' });
+      if (editContent.data) {
+        await rolePermissionController.create({ role_id: moderatorRole.data.id, permission_id: editContent.data.id });
+      }
+    }
+  }
+
   async initialize(schemas: TableSchema[] = DATABASE_SCHEMAS): Promise<MigrationResult> {
     const startTime = Date.now();
     const result: MigrationResult = {
@@ -310,47 +365,22 @@ export class DatabaseInitializer {
   /**
    * Reset database completely
    */
-  async reset(): Promise<MigrationResult> {
-    this.logger.info('Starting database reset...');
-
-    const startTime = Date.now();
-    const result: MigrationResult = {
-      success: false,
-      tablesCreated: [],
-      indexesCreated: [],
-      errors: [],
-      duration: 0
-    };
-
+  async reset(schemas: TableSchema[] = DATABASE_SCHEMAS): Promise<MigrationResult> {
     try {
-      // Drop all tables in reverse order (due to foreign keys)
-      const tableNames = DATABASE_SCHEMAS.map(s => s.tableName).reverse();
-      
-      this.database.exec("BEGIN TRANSACTION");
-
-      for (const tableName of tableNames) {
-        this.database.exec(`DROP TABLE IF EXISTS ${tableName}`);
-        this.logger.info(`Dropped table: ${tableName}`);
+      for (const schema of schemas) {
+        this.database.exec(`DROP TABLE IF EXISTS ${schema.tableName}`);
       }
-
-      this.database.exec("COMMIT");
-
-      // Reinitialize
-      const initResult = await this.initialize();
-      
-      result.success = initResult.success;
-      result.tablesCreated = initResult.tablesCreated;
-      result.indexesCreated = initResult.indexesCreated;
-      result.errors = initResult.errors;
-
+      return await this.initialize(schemas);
     } catch (error: any) {
-      this.database.exec("ROLLBACK");
-      result.errors.push(error.message);
-      this.logger.error('Database reset failed:', error);
+      this.logger.error('Error during reset:', error);
+      return {
+        success: false,
+        tablesCreated: [],
+        indexesCreated: [],
+        errors: [error.message],
+        duration: 0
+      };
     }
-
-    result.duration = Date.now() - startTime;
-    return result;
   }
 
   /**

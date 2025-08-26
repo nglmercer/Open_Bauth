@@ -147,7 +147,7 @@ export class PermissionService {
   async assignPermissionToRole(roleId: string, permissionId: string): Promise<PermissionResult> {
     try {
       const existing = await this.rolePermissionController.findFirst({ role_id: roleId, permission_id: permissionId });
-      if (existing.data) return { success: true }; // Ya está asignado
+      if (existing.data) return { success: true }; // Already assigned
       
       const result = await this.rolePermissionController.create({ role_id: roleId, permission_id: permissionId });
       if (!result.success) {
@@ -172,6 +172,46 @@ export class PermissionService {
       return { success: true };
     } catch (error: any) {
       return { success: false, error: { type: AuthErrorType.DATABASE_ERROR, message: error.message } };
+    }
+  }
+
+  async updateRolePermissions(roleId: string, permissionIds: string[]): Promise<PermissionResult> {
+    try {
+      // First remove all existing permissions for this role
+      const existingAssignments = await this.rolePermissionController.search({ role_id: roleId });
+      if (existingAssignments.data) {
+        for (const assignment of existingAssignments.data) {
+          await this.rolePermissionController.delete(assignment.id);
+        }
+      }
+
+      // Then assign all new permissions
+      for (const permissionId of permissionIds) {
+        const result = await this.rolePermissionController.create({
+          role_id: roleId,
+          permission_id: permissionId
+        });
+        
+        if (!result.success) {
+          return {
+            success: false,
+            error: {
+              type: AuthErrorType.DATABASE_ERROR,
+              message: result.error || `Failed to assign permission ${permissionId} to role`
+            }
+          };
+        }
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: {
+          type: AuthErrorType.DATABASE_ERROR,
+          message: error.message
+        }
+      };
     }
   }
 

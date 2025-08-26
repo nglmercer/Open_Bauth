@@ -4,6 +4,8 @@
 import { beforeAll, afterAll, beforeEach, afterEach, expect } from 'bun:test';
 import { initJWTService } from '../src/services/jwt';
 import { defaultLogger as logger } from '../src/logger'
+import { Database } from 'bun:sqlite';
+import { DatabaseInitializer } from '../src/database/database-initializer';
 // Variables globales para tests
 export const TEST_DB_PATH = './auth.db';
 export const TEST_JWT_SECRET = 'test-jwt-secret-key-for-testing-only';
@@ -56,7 +58,11 @@ if (process.env.NODE_ENV === 'test') {
  * Setup antes de cada test
  */
 beforeEach(async () => {
-
+  const db = new Database(TEST_DB_PATH, { create: true });
+  const initializer = new DatabaseInitializer({ database: db });
+  await initializer.reset();
+  // Seed default roles and permissions so role-based tests work after reset
+  await initializer.seedDefaults();
 });
 
 /**
@@ -254,9 +260,8 @@ export const testUtils = {
     expect(permission).toHaveProperty('action');
     expect(permission).toHaveProperty('created_at');
   }
-};
+}
 
-// Configuración de timeouts para tests
 export const TEST_TIMEOUTS = {
   SHORT: 1000,    // 1 segundo
   MEDIUM: 5000,   // 5 segundos
@@ -264,29 +269,36 @@ export const TEST_TIMEOUTS = {
   VERY_LONG: 30000 // 30 segundos
 };
 
-// Configuración de mocks
 export const mockConfig = {
-  // Mock para logger.info en tests
+  // Configuración adicional para tests
   silentLogs: false,
-  
-  // Mock para Date.now() para tests determinísticos
+  // Controlar si se mockea la fecha
   mockDate: false,
   fixedDate: new Date('2024-01-01T00:00:00.000Z')
 };
 
-// Aplicar mocks si están habilitados
+// Silenciar logs si está activado
 if (mockConfig.silentLogs) {
-  console = {
-    ...console,
-    log: () => {},
-    info: () => {},
-    warn: () => {},
-    error: console.error // Mantener errores visibles
-  };
+  const noop = () => {};
+  (logger as any).info = noop;
+  (logger as any).warn = noop;
+  (logger as any).error = noop;
 }
 
+// Mock de fecha global si está activado
 if (mockConfig.mockDate) {
-  Date.now = () => mockConfig.fixedDate.getTime();
+  const OriginalDate = Date;
+  // @ts-ignore
+  global.Date = class extends OriginalDate {
+    constructor(...args: any[]) {
+      if (args.length === 0) {
+        super(mockConfig.fixedDate);
+      } else {
+        // @ts-ignore
+        super(...args);
+      }
+    }
+  };
 }
 
 logger.info('🧪 Setup de tests cargado correctamente');

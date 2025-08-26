@@ -446,10 +446,10 @@ export class BaseController<T = Record<string, any>> {
   async create(data: Record<string, any>): Promise<ControllerResponse<T>> {
     try {
       const validatedData = this.validateData(data, 'create');
+      // Removed auto-generating an 'id' to let the database handle primary key generation (e.g., AUTOINCREMENT in SQLite)
       const cleanData = Object.fromEntries(
         Object.entries(validatedData).filter(([_, value]) => value !== null && value !== undefined)
       );
-
       if (Object.keys(cleanData).length === 0) {
         return { success: false, error: 'No valid data provided' };
       }
