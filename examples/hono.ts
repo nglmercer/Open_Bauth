@@ -1,4 +1,4 @@
-// src/index.ts (FINAL VERSION)
+// dist/index.ts (FINAL VERSION)
 
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
@@ -7,10 +7,10 @@ import { prettyJSON } from 'hono/pretty-json';
 import { Database } from 'bun:sqlite';
 
 // Core Application Imports
-import { DatabaseInitializer } from '../src/index';
-import { JWTService } from '../src/index';
-import { AuthService } from '../src/index';
-import { PermissionService } from '../src/index';
+import { DatabaseInitializer } from '../dist/index';
+import { JWTService } from '../dist/index';
+import { AuthService } from '../dist/index';
+import { PermissionService } from '../dist/index';
 import { AppContext, AppDependencies, Services } from './app';
 import { createMiddlewareFactory } from './middleware/factory';
 

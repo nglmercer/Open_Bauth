@@ -1,12 +1,11 @@
 // src/middleware/auth.ts (FUNCIONES DE MIDDLEWARE CORREGIDAS PARA HONO)
 
-import { JWTService } from '../../src';
-import { AuthService } from '../../src';
-import { PermissionService } from '../../src';
-import type { AuthContext, PermissionOptions, AuthRequest, User } from '../../src';
+import { JWTService } from '../../dist/index';
+import { AuthService } from '../../dist/index';
+import { PermissionService } from '../../dist/index';
+import type { AuthContext, PermissionOptions, AuthRequest, User } from '../../dist/index';
 import type { Context, Next } from 'hono'; // <-- Importar tipos de Hono
 
-// ... (la función interna `authenticateRequest` no necesita cambios)
 async function authenticateRequest(
   request: AuthRequest,
   services: { jwtService: JWTService, authService: AuthService, permissionService: PermissionService }

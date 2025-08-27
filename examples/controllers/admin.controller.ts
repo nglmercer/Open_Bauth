@@ -1,6 +1,6 @@
 // src/controllers/admin.controller.ts
 import { Context } from 'hono';
-import { AuthService } from '../../src';
+import { AuthService } from '../../dist/index';
 
 export class AdminController {
   constructor(private authService: AuthService) {}

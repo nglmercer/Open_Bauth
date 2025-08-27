@@ -22,11 +22,11 @@
   },
   "include": [
     "src/**/*",
-    "tests/**/*",
-    "examples/**/*"
   ],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "examples/**/*",
+    "tests/**/*"
   ]
 }

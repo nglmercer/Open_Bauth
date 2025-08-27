@@ -1,10 +1,10 @@
 // src/types/app.ts
 
 import { MiddlewareHandler } from 'hono';
-import { AuthContext } from '../src/index';
-import { AuthService } from '../src/index';
-import { JWTService } from '../src/index';
-import { PermissionService } from '../src/index';
+import { AuthContext } from '../dist/index';
+import { AuthService } from '../dist/index';
+import { JWTService } from '../dist/index';
+import { PermissionService } from '../dist/index';
 
 // Hono's context typing for this specific application
 export type AppContext = {

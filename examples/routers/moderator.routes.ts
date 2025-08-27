@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Context, Next } from 'hono';
-import type { AuthContext } from '../../src';
+import type { AuthContext } from '../../dist/index';
 
 export type AppContext = {
   Variables: {

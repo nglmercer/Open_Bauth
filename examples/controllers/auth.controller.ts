@@ -1,8 +1,8 @@
 // src/controllers/auth.controller.ts
 import { Context } from 'hono';
-import { AuthService } from '../../src';
+import { AuthService } from '../../dist/index';
 import { ApiError } from '../api.types';
-import { AuthErrorType } from '../../src/';
+import { AuthErrorType } from '../../dist/index';
 
 export class AuthController {
   constructor(private authService: AuthService) {}
