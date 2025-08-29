@@ -10,7 +10,7 @@ import { Database } from 'bun:sqlite';
 import { DatabaseInitializer } from '../dist/index';
 import { JWTService } from '../dist/index';
 import { AuthService } from '../dist/index';
-import { PermissionService } from '../dist/index';
+import { PermissionService,TableSchema } from '../dist/index';
 import { AppContext, AppDependencies, Services } from './app';
 import { createMiddlewareFactory } from './middleware/factory';
 
@@ -20,11 +20,24 @@ import { createProtectedRoutes } from './routers/protected.routes';
 import { createModeratorRoutes } from './routers/moderator.routes';
 import { createAdminRoutes } from './routers/admin.routes';
 
-
+const pointsSchema: TableSchema = {
+  tableName: 'points',
+  columns: [
+    { name: 'id', type: 'TEXT', primaryKey: true, defaultValue: '(lower(hex(randomblob(16))))' },
+    { name: 'user_id', type: 'TEXT', notNull: true, references: { table: 'users', column: 'id' } },
+    { name: 'points', type: 'INTEGER', notNull: true, defaultValue: 0 },
+    { name: 'reason', type: 'TEXT' },
+    { name: 'created_at', type: 'DATETIME', defaultValue: 'CURRENT_TIMESTAMP' }
+  ],
+  indexes: [
+    { name: 'idx_points_user_id', columns: ['user_id'] },
+    { name: 'idx_points_created_at', columns: ['created_at'] }
+  ]
+};
 // --- 1. Service Initialization ---
 console.log('🚀 Initializing application...');
 const db = new Database('auth.db');
-const dbInitializer = new DatabaseInitializer({ database: db });
+const dbInitializer = new DatabaseInitializer({ database: db,externalSchemas: [pointsSchema] });
 await dbInitializer.initialize();
 await dbInitializer.seedDefaults();
 

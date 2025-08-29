@@ -12,6 +12,8 @@ export interface DatabaseConfig {
   logger?: Logger;
   enableWAL?: boolean;
   enableForeignKeys?: boolean;
+  // Permite pasar esquemas externos desde fuera de la librería
+  externalSchemas?: TableSchema[];
 }
 
 interface Logger {
@@ -148,17 +150,80 @@ export const DATABASE_SCHEMAS: TableSchema[] = [
   }
 ];
 
+// Alias público para el conjunto por defecto (retrocompatibilidad y claridad)
+export const DEFAULT_SCHEMAS = DATABASE_SCHEMAS;
+
+// API ligera para registrar y combinar esquemas desde fuera de la librería
+export class SchemaRegistry {
+  private schemas: Map<string, TableSchema> = new Map();
+
+  constructor(initial: TableSchema[] = []) {
+    this.registerMany(initial);
+  }
+
+  register(schema: TableSchema) {
+    this.schemas.set(schema.tableName, schema);
+  }
+
+  registerMany(schemas: TableSchema[]) {
+    for (const s of schemas) this.register(s);
+  }
+
+  remove(tableName: string) {
+    this.schemas.delete(tableName);
+  }
+
+  has(tableName: string) {
+    return this.schemas.has(tableName);
+  }
+
+  get(tableName: string) {
+    return this.schemas.get(tableName);
+  }
+
+  getAll(): TableSchema[] {
+    return Array.from(this.schemas.values());
+  }
+
+  static merge(...registries: SchemaRegistry[]) {
+    const merged = new SchemaRegistry();
+    for (const r of registries) merged.registerMany(r.getAll());
+    return merged;
+  }
+}
+
 export class DatabaseInitializer {
   private database: Database;
   private logger: Logger;
   private enableWAL: boolean;
   private enableForeignKeys: boolean;
+  // Fuente efectiva de esquemas (base + externos)
+  private schemas: TableSchema[];
 
   constructor(config: DatabaseConfig) {
     this.database = config.database;
     this.logger = config.logger || silenceLogger;
     this.enableWAL = config.enableWAL ?? true;
     this.enableForeignKeys = config.enableForeignKeys ?? true;
+    // Combina los esquemas por defecto con los externos provistos por el consumidor
+    this.schemas = [...DATABASE_SCHEMAS, ...(config.externalSchemas ?? [])];
+  }
+
+  // Permite gestionar esquemas de manera dinámica
+  getSchemas(): TableSchema[] {
+    return [...this.schemas];
+  }
+
+  setSchemas(schemas: TableSchema[]) {
+    this.schemas = [...schemas];
+  }
+
+  registerSchemas(schemas: TableSchema[] | TableSchema) {
+    const list = Array.isArray(schemas) ? schemas : [schemas];
+    // Dedupe por tableName
+    const map = new Map(this.schemas.map(s => [s.tableName, s] as const));
+    for (const s of list) map.set(s.tableName, s);
+    this.schemas = Array.from(map.values());
   }
 
   /**
@@ -215,7 +280,7 @@ export class DatabaseInitializer {
     }
   }
 
-  async initialize(schemas: TableSchema[] = DATABASE_SCHEMAS): Promise<MigrationResult> {
+  async initialize(schemas?: TableSchema[]): Promise<MigrationResult> {
     const startTime = Date.now();
     const result: MigrationResult = {
       success: false,
@@ -224,6 +289,8 @@ export class DatabaseInitializer {
       errors: [],
       duration: 0
     };
+
+    const effectiveSchemas = schemas ?? this.schemas ?? DATABASE_SCHEMAS;
 
     this.logger.info('Starting database initialization...');
 
@@ -234,7 +301,7 @@ export class DatabaseInitializer {
       // Use BaseController's initialization method
       const initResult = await BaseController.initializeDatabase(
         this.database,
-        schemas,
+        effectiveSchemas,
         true // isSQLite
       );
 
@@ -244,8 +311,8 @@ export class DatabaseInitializer {
       }
 
       // Track what was created
-      result.tablesCreated = schemas.map(schema => schema.tableName);
-      result.indexesCreated = schemas.flatMap(schema => 
+      result.tablesCreated = effectiveSchemas.map(schema => schema.tableName);
+      result.indexesCreated = effectiveSchemas.flatMap(schema => 
         schema.indexes?.map(idx => idx.name) || []
       );
 
@@ -267,7 +334,8 @@ export class DatabaseInitializer {
   /**
    * Check database integrity
    */
-  async checkIntegrity(schemas: TableSchema[] = DATABASE_SCHEMAS): Promise<IntegrityCheckResult> {
+  async checkIntegrity(schemas?: TableSchema[]): Promise<IntegrityCheckResult> {
+    const effectiveSchemas = schemas ?? this.schemas ?? DATABASE_SCHEMAS;
     const result: IntegrityCheckResult = {
       isValid: true,
       missingTables: [],
@@ -277,7 +345,7 @@ export class DatabaseInitializer {
 
     try {
       // Check tables
-      for (const schema of schemas) {
+      for (const schema of effectiveSchemas) {
         const tableExists = await this.checkTableExists(schema.tableName);
         if (!tableExists) {
           result.missingTables.push(schema.tableName);
@@ -300,9 +368,7 @@ export class DatabaseInitializer {
       if (result.isValid) {
         this.logger.info('Database integrity check passed');
       } else {
-        this.logger.warn(`Database integrity issues found:
-          - Missing tables: ${result.missingTables.join(', ')}
-          - Missing indexes: ${result.missingIndexes.join(', ')}`);
+        this.logger.warn(`Database integrity issues found:\n          - Missing tables: ${result.missingTables.join(', ')}\n          - Missing indexes: ${result.missingIndexes.join(', ')}`);
       }
 
     } catch (error: any) {
@@ -365,12 +431,13 @@ export class DatabaseInitializer {
   /**
    * Reset database completely
    */
-  async reset(schemas: TableSchema[] = DATABASE_SCHEMAS): Promise<MigrationResult> {
+  async reset(schemas?: TableSchema[]): Promise<MigrationResult> {
+    const effectiveSchemas = schemas ?? this.schemas ?? DATABASE_SCHEMAS;
     try {
-      for (const schema of schemas) {
+      for (const schema of effectiveSchemas) {
         this.database.exec(`DROP TABLE IF EXISTS ${schema.tableName}`);
       }
-      return await this.initialize(schemas);
+      return await this.initialize(effectiveSchemas);
     } catch (error: any) {
       this.logger.error('Error during reset:', error);
       return {
@@ -390,7 +457,7 @@ export class DatabaseInitializer {
     const stats: Record<string, any> = {};
 
     try {
-      for (const schema of DATABASE_SCHEMAS) {
+      for (const schema of this.schemas) {
         const controller = new BaseController(schema.tableName, {
           database: this.database,
           isSQLite: true
