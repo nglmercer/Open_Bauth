@@ -47,4 +47,4 @@ const r1 = new SchemaRegistry([pointsSchema]);
 const r2 = new SchemaRegistry([processesSchema]);
 const r3 = new SchemaRegistry([notificationsSchema]);
 const merged = SchemaRegistry.merge(r1, r2, r3);
-export { merged };
+export { merged, pointsSchema, processesSchema, notificationsSchema };
