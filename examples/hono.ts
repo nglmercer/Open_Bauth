@@ -89,5 +89,3 @@ console.log('✅ Routes configured.');
 
 // --- 5. Export for Bun ---
 export default app;
-
-console.log('🔥 Hono server is running on http://localhost:3000');

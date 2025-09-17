@@ -108,5 +108,17 @@ export function createAdminRoutes(
       return c.json({ error: 'Error updating role',message:error?.message || '' }, 400);
     }
   })
+  router.get('/stats', async (c) => {
+    const { users, total } = await authService.getUsers();
+    /*{
+        totalUsers: response.data?.totalUsers || 0,
+        activeUsers: response.data?.activeUsers || 0,
+        inactiveUsers: response.data?.inactiveUsers || 0,
+        totalPosts: response.data?.totalPosts || 0,
+        publishedPosts: response.data?.publishedPosts || 0,
+        unpublishedPosts: response.data?.unpublishedPosts || 0
+      }*/
+    return c.json({ success: true, users, totalUsers: total });
+  })
   return router;
 }
