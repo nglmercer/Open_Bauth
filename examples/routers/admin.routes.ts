@@ -120,5 +120,18 @@ export function createAdminRoutes(
       }*/
     return c.json({ success: true, users, totalUsers: total });
   })
+  router.put('/users/:id', async (c) => {
+    const id = c.req.param('id');
+    const UserData = await c.req.json();
+    const transaccion = await authService.updateUser(id,UserData);
+    const { user, error, success} = transaccion;
+    return c.json({ user, data: user,success:success || false,error });
+  })
+    router.put('/users/:id/deactivate', async (c) => {
+      const id = c.req.param('id');
+      const transaccion = await authService.deactivateUser(id);
+      const {  error, success} = transaccion;
+      return c.json({ id, data: id,success:success || false,error });
+    })
   return router;
 }
