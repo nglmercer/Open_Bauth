@@ -32,9 +32,17 @@ export class AuthController {
       });
     }
     
+    // Generate refresh token
+    const jwtService = (this.authService as any).jwtService;
+    const refreshToken = await jwtService.generateRefreshToken(result.user?.id);
+    
     return c.json({
         success: true,
-        data: { user: result.user, token: result.token }
+        data: { 
+          user: result.user, 
+          token: result.token,
+          refreshToken: refreshToken
+        }
     }, 201);
   };
 
@@ -61,9 +69,17 @@ export class AuthController {
       });
     }
     
+    // Generate refresh token
+    const jwtService = (this.authService as any).jwtService;
+    const refreshToken = await jwtService.generateRefreshToken(result.user?.id);
+    
     return c.json({
         success: true,
-        data: { user: result.user, token: result.token }
+        data: { 
+          user: result.user, 
+          token: result.token,
+          refreshToken: refreshToken
+        }
     });
   };
 
@@ -79,6 +95,120 @@ export class AuthController {
     });
   };
   refreshToken = async (c: Context) => {
-    
-  }
+    try {
+      const body = await c.req.json();
+      const { refreshToken } = body;
+
+      if (!refreshToken) {
+        throw new ApiError(400, { 
+          name: 'AuthError',
+          message: 'Refresh token is required',
+          type: AuthErrorType.INVALID_CREDENTIALS,
+          timestamp: new Date(),
+          toResponse(): { success: false; error: { type: AuthErrorType; message: string; timestamp: string; context?: Record<string, any> } } {
+            return {
+              success: false,
+              error: {
+                message: 'Refresh token is required',
+                type: AuthErrorType.INVALID_CREDENTIALS,
+                timestamp: new Date().toISOString(),
+              },
+            };
+          }
+        });
+      }
+
+      // Get JWT service from auth service (we need to access it)
+      const jwtService = (this.authService as any).jwtService;
+      
+      // Verify refresh token and get user ID
+      const userId = await jwtService.verifyRefreshToken(refreshToken);
+      
+      // Get user data with roles
+      const user = await this.authService.findUserById(userId, { includeRoles: true });
+      
+      if (!user || !user.is_active) {
+        throw new ApiError(401, { 
+          name: 'AuthError',
+          message: 'User not found or inactive',
+          type: AuthErrorType.USER_NOT_FOUND,
+          timestamp: new Date(),
+          toResponse(): { success: false; error: { type: AuthErrorType; message: string; timestamp: string; context?: Record<string, any> } } {
+            return {
+              success: false,
+              error: {
+                message: 'User not found or inactive',
+                type: AuthErrorType.USER_NOT_FOUND,
+                timestamp: new Date().toISOString(),
+              },
+            };
+          }
+        });
+      }
+
+      // Generate new access token and refresh token
+      const newAccessToken = await jwtService.generateToken(user);
+      const newRefreshToken = await jwtService.generateRefreshToken(user.id);
+
+      return c.json({
+        success: true,
+        data: { 
+          user: {
+            id: user.id,
+            email: user.email,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            is_active: user.is_active,
+            roles: user.roles
+          },
+          token: newAccessToken,
+          refreshToken: newRefreshToken
+        }
+      });
+
+    } catch (error: any) {
+      // Handle JWT-specific errors
+      if (error.message.includes('refresh token')) {
+        throw new ApiError(401, { 
+          name: 'AuthError',
+          message: 'Invalid or expired refresh token',
+          type: AuthErrorType.TOKEN_EXPIRED,
+          timestamp: new Date(),
+          toResponse(): { success: false; error: { type: AuthErrorType; message: string; timestamp: string; context?: Record<string, any> } } {
+            return {
+              success: false,
+              error: {
+                message: 'Invalid or expired refresh token',
+                type: AuthErrorType.TOKEN_EXPIRED,
+                timestamp: new Date().toISOString(),
+              },
+            };
+          }
+        });
+      }
+      
+      // Re-throw ApiError instances
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      
+      // Handle unexpected errors
+      throw new ApiError(500, { 
+        name: 'AuthError',
+        message: 'Internal server error during token refresh',
+        type: AuthErrorType.TOKEN_ERROR,
+        timestamp: new Date(),
+        toResponse(): { success: false; error: { type: AuthErrorType; message: string; timestamp: string; context?: Record<string, any> } } {
+          return {
+            success: false,
+            error: {
+              message: 'Internal server error during token refresh',
+              type: AuthErrorType.TOKEN_ERROR,
+              timestamp: new Date().toISOString(),
+            },
+          };
+        }
+      });
+    }
+  };
 }

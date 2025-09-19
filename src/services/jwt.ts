@@ -94,7 +94,6 @@ export class JWTService {
 
       return payload;
     }).catch((error: any) => {
-      console.error('Error verifying JWT token:', error);
       throw new Error(`Invalid token: ${error.message}`);
     });
   }

@@ -24,7 +24,6 @@ import { createAdminRoutes } from './routers/admin.routes';
 
 
 // --- 1. Service Initialization ---
-console.log('🚀 Initializing application...');
 const db = new Database('auth.db');
 //new schemes with merged.getAll() or [pointsSchema, processesSchema, notificationsSchema]
 const dbInitializer = new DatabaseInitializer({ database: db,externalSchemas: merged.getAll() });
@@ -83,9 +82,5 @@ app.route('/auth', publicRoutes);
 app.route('/api', protectedRoutes);
 app.route('/api/mod', moderatorRoutes);
 app.route('/api/admin', adminRoutes);
-
-console.log('✅ Routes configured.');
-
-
 // --- 5. Export for Bun ---
 export default app;
