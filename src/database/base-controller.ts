@@ -16,6 +16,18 @@ export interface QueryOptions<T = any> {
   where?: WhereConditions<T>;
 }
 
+export interface JoinOptions {
+  table: string;
+  on: string;
+  type?: 'INNER' | 'LEFT' | 'RIGHT' | 'FULL';
+  select?: string[];
+}
+
+export interface RelationOptions<T = any> extends QueryOptions<T> {
+  joins?: JoinOptions[];
+  select?: string[];
+}
+
 export interface SimpleSearchOptions {
   limit?: number;
   offset?: number;
@@ -692,18 +704,207 @@ export class BaseController<T = Record<string, any>> {
   }
 
   async random(
-    filters: Partial<T> = {},
-    options: SimpleSearchOptions = {}
+    filters: WhereConditions<T> = {},
+    limit: number = 1
   ): Promise<ControllerResponse<T[]>> {
-    const { limit = 1 } = options;
-    const { sql: whereClause, params } = this.buildWhereClause(filters as Record<string, any> || {});
+    try {
+      const { sql: whereClause, params } = this.buildWhereClause(filters as Record<string, any> || {});
+      const query = `SELECT * FROM "${this.tableName}"${whereClause} ORDER BY RANDOM() LIMIT ?`;
+      params.push(limit);
+
+      const records = await this.adapter.query(query).all(...params);
+
+      return {
+        success: true,
+        data: records as T[]
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Find records with related data using joins
+   */
+  async findWithRelations(options: RelationOptions<T> = {}): Promise<ControllerResponse<T[]>> {
+    try {
+      const { limit = 100, offset = 0, orderBy, orderDirection = 'ASC', where, joins = [], select = [] } = options;
+      const { sql: whereClause, params } = this.buildWhereClause(where || {});
+
+      // Build SELECT clause with qualified column names
+      let selectClause = `"${this.tableName}".*`;
+      
+      // Add join table columns if specified
+      for (const join of joins) {
+        if (join.select && join.select.length > 0) {
+          const joinColumns = join.select.map(col => {
+            // Handle aliased columns (e.g., "name AS category_name")
+            if (col.includes(' AS ')) {
+              const [originalCol, alias] = col.split(' AS ');
+              return `"${join.table}"."${originalCol.trim()}" AS ${alias.trim()}`;
+            }
+            return `"${join.table}"."${col}" AS "${join.table}_${col}"`;
+          }).join(', ');
+          selectClause += `, ${joinColumns}`;
+        }
+      }
+
+      // If custom select is provided, use it instead
+      if (select.length > 0) {
+        selectClause = select.map(col => {
+          if (col.includes('.')) {
+            return col; // Already qualified
+          }
+          return `"${this.tableName}"."${col}"`;
+        }).join(', ');
+      }
+
+      // Build JOIN clauses
+      let joinClause = '';
+      for (const join of joins) {
+        const joinType = join.type || 'LEFT';
+        joinClause += ` ${joinType} JOIN "${join.table}" ON ${join.on}`;
+      }
+
+      let query = `SELECT ${selectClause} FROM "${this.tableName}"${joinClause}${whereClause}`;
+
+      if (orderBy) {
+        const qualifiedOrderBy = orderBy.includes('.') ? orderBy : `"${this.tableName}"."${orderBy}"`;
+        query += ` ORDER BY ${qualifiedOrderBy} ${orderDirection}`;
+      }
+
+      query += ` LIMIT ? OFFSET ?`;
+      params.push(limit, offset);
+
+      const records = await this.adapter.query(query).all(...params);
+
+      // Count query for total
+      let countQuery = `SELECT COUNT(*) as total FROM "${this.tableName}"${joinClause}${whereClause}`;
+      const countParams = params.slice(0, -2);
+      const totalResult = await this.adapter.query(countQuery).get(...countParams) as { total: number };
+
+      return {
+        success: true,
+        data: records as T[],
+        total: totalResult.total
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Find a single record by ID with related data
+   */
+  async findByIdWithRelations(id: number | string, joins: JoinOptions[] = [], select: string[] = []): Promise<ControllerResponse<T>> {
+    try {
+      const primaryKey = await this.getPrimaryKey();
+      
+      // Build SELECT clause with qualified column names
+      let selectClause = `"${this.tableName}".*`;
+      
+      // Add join table columns if specified
+      for (const join of joins) {
+        if (join.select && join.select.length > 0) {
+          const joinColumns = join.select.map(col => {
+            // Handle aliased columns (e.g., "name AS category_name")
+            if (col.includes(' AS ')) {
+              const [originalCol, alias] = col.split(' AS ');
+              return `"${join.table}"."${originalCol.trim()}" AS ${alias.trim()}`;
+            }
+            return `"${join.table}"."${col}" AS "${join.table}_${col}"`;
+          }).join(', ');
+          selectClause += `, ${joinColumns}`;
+        }
+      }
+
+      // If custom select is provided, use it instead
+      if (select.length > 0) {
+        selectClause = select.map(col => {
+          if (col.includes('.')) {
+            return col; // Already qualified
+          }
+          return `"${this.tableName}"."${col}"`;
+        }).join(', ');
+      }
+
+      // Build JOIN clauses
+      let joinClause = '';
+      for (const join of joins) {
+        const joinType = join.type || 'LEFT';
+        joinClause += ` ${joinType} JOIN "${join.table}" ON ${join.on}`;
+      }
+
+      const query = `SELECT ${selectClause} FROM "${this.tableName}"${joinClause} WHERE "${this.tableName}"."${primaryKey}" = ?`;
+      const record = await this.adapter.query(query).get(id);
+
+      if (!record) {
+        return {
+          success: false,
+          error: 'Record not found'
+        };
+      }
+
+      return {
+        success: true,
+        data: record as T
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Helper method to create a simple join configuration
+   */
+  createJoin(table: string, localKey: string, foreignKey: string, type: 'INNER' | 'LEFT' | 'RIGHT' | 'FULL' = 'LEFT', select?: string[]): JoinOptions {
+    return {
+      table,
+      on: `"${this.tableName}"."${localKey}" = "${table}"."${foreignKey}"`,
+      type,
+      select
+    };
+  }
+
+  /**
+   * Helper method to create a reverse join configuration (for belongsTo relationships)
+   */
+  createReverseJoin(
+    targetTable: string,
+    targetColumn: string,
+    sourceColumn: string = 'id',
+    type: 'INNER' | 'LEFT' | 'RIGHT' = 'LEFT',
+    selectColumns: string[] = ['*']
+  ): JoinOptions {
+    let select: string[] | undefined = undefined;
     
-    // Using RANDOM() is specific to SQLite. For PostgreSQL, it's RANDOM().
-    const randomFunc = this.isSQLite ? 'RANDOM()' : 'RANDOM()';
+    if (!selectColumns.includes('*')) {
+      select = selectColumns;
+    } else {
+      // For common tables, provide default columns with aliases to avoid conflicts
+      if (targetTable === 'categories') {
+        select = ['name AS category_name', 'description AS category_description'];
+      } else if (targetTable === 'users') {
+        select = ['name AS user_name', 'email AS user_email'];
+      } else {
+        select = ['name AS ' + targetTable + '_name'];
+      }
+    }
     
-    const query = `SELECT * FROM "${this.tableName}"${whereClause} ORDER BY ${randomFunc} LIMIT ?`;
-    params.push(limit);
-    
-    return this.query(query, params);
+    return {
+      table: targetTable,
+      on: `"${targetTable}"."${targetColumn}" = "${this.tableName}"."${sourceColumn}"`,
+      type,
+      select
+    };
   }
 }

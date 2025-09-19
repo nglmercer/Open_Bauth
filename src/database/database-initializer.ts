@@ -209,6 +209,13 @@ export class DatabaseInitializer {
     this.schemas = [...DATABASE_SCHEMAS, ...(config.externalSchemas ?? [])];
   }
 
+  /**
+   * Get the database instance
+   */
+  get db(): Database {
+    return this.database;
+  }
+
   // Permite gestionar esquemas de manera dinámica
   getSchemas(): TableSchema[] {
     return [...this.schemas];

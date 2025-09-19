@@ -8,7 +8,8 @@ import type { Context, Next } from 'hono'; // <-- Importar tipos de Hono
 
 async function authenticateRequest(
   request: AuthRequest,
-  services: { jwtService: JWTService, authService: AuthService, permissionService: PermissionService }
+  services: { jwtService: JWTService, authService: AuthService, permissionService: PermissionService },
+  required: boolean = true
 ): Promise<{ success: boolean; context?: AuthContext; error?: string; statusCode?: number }> {
     // ... (lógica sin cambios)
     const tokenHeader = request.headers['authorization'];
@@ -54,7 +55,15 @@ export function createAuthMiddlewareForHono(
   // La función devuelta es el middleware real de Hono
   return async (c: Context, next: Next) => {
     const request: AuthRequest = { headers: c.req.header() };
-    const result = await authenticateRequest(request, services);
+    
+    // For optional auth, check if authorization header exists first
+    if (!required && !request.headers['authorization']) {
+      c.set('auth', { user: undefined, isAuthenticated: false, permissions: [] });
+      await next();
+      return;
+    }
+    
+    const result = await authenticateRequest(request, services, required);
     if (result.success && result.context) {
       c.set('auth', result.context); // Adjuntar el contexto a la petición de Hono
       await next(); // Éxito: continuar con el siguiente handler

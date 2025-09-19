@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { prettyJSON } from 'hono/pretty-json';
+import { serveStatic } from 'hono/bun';
 import { Database } from 'bun:sqlite';
 
 // Core Application Imports
@@ -21,6 +22,7 @@ import { createPublicRoutes } from './routers/public.routes';
 import { createProtectedRoutes } from './routers/protected.routes';
 import { createModeratorRoutes } from './routers/moderator.routes';
 import { createAdminRoutes } from './routers/admin.routes';
+import { createProductRoutes } from './routers/product.routes';
 
 
 // --- 1. Service Initialization ---
@@ -59,6 +61,8 @@ app.use('*', cors({
 // Use the factory to create the global optional auth middleware
 app.use('*', middlewares.optionalAuth());
 
+// Static file serving for images
+app.use('/images/*', serveStatic({ root: './public' }));
 
 // --- 4. Routers ---
 // Create routers by passing the single dependency container
@@ -76,11 +80,13 @@ const adminRoutes = createAdminRoutes(
     requireAdminRole: middlewares.requireRole(['admin'])
   }
 );
+const productRoutes = createProductRoutes({ dbInitializer });
 
 // Mount routers
 app.route('/auth', publicRoutes);
 app.route('/api', protectedRoutes);
 app.route('/api/mod', moderatorRoutes);
 app.route('/api/admin', adminRoutes);
+app.route('/products', productRoutes);
 // --- 5. Export for Bun ---
 export default app;
