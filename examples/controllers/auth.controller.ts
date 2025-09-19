@@ -126,10 +126,6 @@ export class AuthController {
       
       // Get user data with roles
       const user = await this.authService.findUserById(userId, { includeRoles: true });
-      console.log("data refreshToken",{
-        userId,
-        user
-      })
       if (!user || !user.is_active) {
         throw new ApiError(401, { 
           name: 'AuthError',

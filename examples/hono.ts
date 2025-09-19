@@ -91,6 +91,6 @@ app.route('/auth', publicRoutes);
 app.route('/api', protectedRoutes);
 app.route('/api/mod', moderatorRoutes);
 app.route('/api/admin', adminRoutes);
-app.route('/products', productRoutes);
+app.route('/api', productRoutes);
 // --- 5. Export for Bun ---
 export default app;
