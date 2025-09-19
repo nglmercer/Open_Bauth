@@ -78,4 +78,7 @@ export class AuthController {
       },
     });
   };
+  refreshToken = async (c: Context) => {
+    
+  }
 }

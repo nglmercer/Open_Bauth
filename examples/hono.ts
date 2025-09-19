@@ -31,7 +31,7 @@ const dbInitializer = new DatabaseInitializer({ database: db,externalSchemas: me
 await dbInitializer.initialize();
 await dbInitializer.seedDefaults();
 
-const jwtService = new JWTService(process.env.JWT_SECRET || 'a-very-secret-key-for-hono');
+const jwtService = new JWTService(process.env.JWT_SECRET || 'a-very-secret-key-for-hono',process.env.JWT_EXPIRATION || '7d');
 const authService = new AuthService(dbInitializer, jwtService);
 const permissionService = new PermissionService(dbInitializer);
 

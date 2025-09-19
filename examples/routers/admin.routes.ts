@@ -129,6 +129,11 @@ export function createAdminRoutes(
   })
     router.put('/users/:id/deactivate', async (c) => {
       const id = c.req.param('id');
+      // verify is account is admin/moderator to make a required confirmation
+      const data = await authService.getUserRoles(id);
+      if(data.find((role) => role.name === 'moderator') === undefined){
+        return c.json({ error: 'Only admin/moderator can deactivate users',success:false }, 403);
+      }
       const transaccion = await authService.deactivateUser(id);
       const {  error, success} = transaccion;
       return c.json({ id, data: id,success:success || false,error });

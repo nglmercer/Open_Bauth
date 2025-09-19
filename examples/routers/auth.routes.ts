@@ -15,6 +15,6 @@ export const createAuthRouter = (services: Services): Hono<AppContext> => {
   
   // Protected routes
   router.get('/profile', requireAuth, authController.getProfile);
-
+  
   return router;
 };
