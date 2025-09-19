@@ -149,7 +149,7 @@ describe('JWTService', () => {
       
       expect(refreshToken).toBeDefined();
       expect(typeof refreshToken).toBe('string');
-      expect(refreshToken.split('.')).toHaveLength(2);
+      expect(refreshToken.split('.')).toHaveLength(3); // Ahora usa estructura JWT estándar (header.payload.signature)
     });
 
     test('should generate refresh token with longer expiration', async () => {

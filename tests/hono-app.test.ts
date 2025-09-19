@@ -16,7 +16,9 @@ describe('Registration', () => {
     expect(res.status).toBe(201);
     const data = await res.json();
     expect(data.success).toBe(true);
-    expect(data.message).toBe('User registered successfully');
+    expect(data.data.user).toBeDefined();
+    expect(data.data.token).toBeDefined();
+    expect(data.data.refreshToken).toBeDefined();
   });
 
   test('allows registration with role', async () => {
@@ -33,10 +35,10 @@ describe('Registration', () => {
     await app.request('/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ first_name: 'Test', last_name: 'User', email: 'duplicate@example.com', password: 'password123' }) });
     // Second attempt
     const res = await app.request('/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ first_name: 'Test2', last_name: 'User2', email: 'duplicate@example.com', password: 'password456' }) });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(409);
     const data = await res.json();
     expect(data.success).toBe(false);
-    expect(data.error).toEqual({ type: 'USER_ALREADY_EXISTS', message: 'A user with this email already exists' });
+    expect(data.error).toMatchObject({ type: 'USER_ALREADY_EXISTS', message: 'A user with this email already exists' });
   });
 });
 describe('Login', () => {
@@ -48,8 +50,9 @@ describe('Login', () => {
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.success).toBe(true);
-    expect(data.message).toBe('Login successful');
-    expect(data.token).toBeDefined();
+    expect(data.data.token).toBeDefined();
+    expect(data.data.user).toBeDefined();
+    expect(data.data.refreshToken).toBeDefined();
   });
 
   test('rejects invalid credentials', async () => {
@@ -60,7 +63,7 @@ describe('Login', () => {
     expect(res.status).toBe(401);
     const data = await res.json();
     expect(data.success).toBe(false);
-    expect(data.error).toEqual({ type: 'INVALID_CREDENTIALS', message: 'Invalid credentials' });
+    expect(data.error).toMatchObject({ type: 'INVALID_CREDENTIALS', message: 'Invalid credentials' });
   });
 
   test('rejects login for inactive user', async () => {
@@ -71,7 +74,7 @@ describe('Login', () => {
     expect(res.status).toBe(401);
     const data = await res.json();
     expect(data.success).toBe(false);
-    expect(data.error).toEqual({ type: 'ACCOUNT_INACTIVE', message: 'User account is deactivated' });
+    expect(data.error).toMatchObject({ type: 'ACCOUNT_INACTIVE', message: 'User account is deactivated' });
   });
 });
 describe('Protected Routes', () => {

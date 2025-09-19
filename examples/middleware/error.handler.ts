@@ -4,15 +4,8 @@ import { ApiError } from '../api.types';
 import { ContentfulStatusCode } from 'hono/utils/http-status';
 export const globalErrorHandler: ErrorHandler = (err, c) => {
   if (err instanceof ApiError) {
-    return c.json(
-      {
-        success: false,
-        error: {
-          message: err.message,
-        },
-      },
-      err.statusCode as ContentfulStatusCode,
-    );
+    const response = err.toResponse();
+    return c.json(response, err.statusCode as ContentfulStatusCode);
   }
 
   // Handle unexpected errors

@@ -23,6 +23,7 @@ import { createProtectedRoutes } from './routers/protected.routes';
 import { createModeratorRoutes } from './routers/moderator.routes';
 import { createAdminRoutes } from './routers/admin.routes';
 import { createProductRoutes } from './routers/product.routes';
+import { globalErrorHandler } from './middleware/error.handler';
 
 
 // --- 1. Service Initialization ---
@@ -47,6 +48,9 @@ const middlewares = createMiddlewareFactory(services);
 
 // --- 3. Hono Application Setup ---
 const app = new Hono<AppContext>();
+
+// Error handler middleware (must be first)
+app.onError(globalErrorHandler);
 
 // Global middlewares
 app.use('*', logger());

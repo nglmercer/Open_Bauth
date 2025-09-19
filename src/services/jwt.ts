@@ -83,8 +83,14 @@ export class JWTService {
         throw new Error('Invalid token signature');
       }
 
-      // Decodificar el payload
-      const payload: JWTPayload = JSON.parse(this.base64UrlDecode(encodedPayload));
+      // Decodificar el payload con manejo de errores mejorado
+      let payload: JWTPayload;
+      try {
+        const decodedPayload = this.base64UrlDecode(encodedPayload);
+        payload = JSON.parse(decodedPayload);
+      } catch (parseError) {
+        throw new Error('Invalid token: malformed payload');
+      }
       
       // Verificar expiración
       const now = Math.floor(Date.now() / 1000);
@@ -128,11 +134,13 @@ export class JWTService {
         return true;
       }
 
-      const payload: JWTPayload = JSON.parse(this.base64UrlDecode(parts[1]));
+      const decodedPayload = this.base64UrlDecode(parts[1]);
+      const payload: JWTPayload = JSON.parse(decodedPayload);
       const now = Math.floor(Date.now() / 1000);
       
       return payload.exp ? payload.exp < now : false;
     } catch (error:any) {
+      // Si hay cualquier error de decodificación o parsing, consideramos el token como expirado
       return true;
     }
   }
@@ -282,17 +290,32 @@ export class JWTService {
    * @returns Token de refresh
    */
   async generateRefreshToken(userId: number): Promise<string> {
-    const payload = {
-      userId,
-      type: 'refresh',
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60) // 30 días
-    };
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      
+      const payload = {
+        userId,
+        type: 'refresh',
+        iat: now,
+        exp: now + (30 * 24 * 60 * 60) // 30 días
+      };
 
-    const encodedPayload = this.base64UrlEncode(JSON.stringify(payload));
-    const signature = await this.createSignature(encodedPayload);
-    
-    return `${encodedPayload}.${signature}`;
+      // Usar la misma estructura JWT estándar (header.payload.signature)
+      const header = {
+        alg: 'HS256',
+        typ: 'JWT'
+      };
+
+      const encodedHeader = this.base64UrlEncode(JSON.stringify(header));
+      const encodedPayload = this.base64UrlEncode(JSON.stringify(payload));
+      
+      const signature = await this.createSignature(`${encodedHeader}.${encodedPayload}`);
+      
+      return `${encodedHeader}.${encodedPayload}.${signature}`;
+    } catch (error: any) {
+      console.error('Error generating refresh token:', error);
+      throw new Error('Failed to generate refresh token');
+    }
   }
 
   /**
@@ -302,33 +325,50 @@ export class JWTService {
    */
   async verifyRefreshToken(refreshToken: string): Promise<number> {
     try {
+      if (!refreshToken) {
+        throw new Error('Refresh token is required');
+      }
+
       const parts = refreshToken.split('.');
-      if (parts.length !== 2) {
+      if (parts.length !== 3) {
         throw new Error('Invalid refresh token format');
       }
 
-      const [encodedPayload, signature] = parts;
+      const [encodedHeader, encodedPayload, signature] = parts;
       
-      // Verificar la firma
-      const expectedSignature = await this.createSignature(encodedPayload);
+      // Verificar la firma usando la misma lógica que el JWT normal
+      const expectedSignature = await this.createSignature(`${encodedHeader}.${encodedPayload}`);
       if (signature !== expectedSignature) {
         throw new Error('Invalid refresh token signature');
       }
 
-      const payload = JSON.parse(this.base64UrlDecode(encodedPayload));
+      // Decodificar y validar el payload con manejo de errores mejorado
+      let payload;
+      try {
+        const decodedPayload = this.base64UrlDecode(encodedPayload);
+        payload = JSON.parse(decodedPayload);
+      } catch (parseError) {
+        throw new Error('Invalid refresh token: malformed payload');
+      }
       
-      // Verificar tipo y expiración
+      // Verificar que sea un token de refresh
       if (payload.type !== 'refresh') {
         throw new Error('Invalid token type');
       }
 
+      // Verificar expiración
       const now = Math.floor(Date.now() / 1000);
       if (payload.exp && payload.exp < now) {
         throw new Error('Refresh token has expired');
       }
 
+      // Verificar que tenga userId
+      if (!payload.userId) {
+        throw new Error('Invalid refresh token: missing userId');
+      }
+
       return payload.userId;
-    } catch (error:any) {
+    } catch (error: any) {
       throw new Error(`Invalid refresh token: ${error.message}`);
     }
   }

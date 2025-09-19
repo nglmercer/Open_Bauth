@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { AuthContext } from "../../dist/index";
 import type { AuthService } from "../../dist/index";
+import { AuthController } from "../controllers/auth.controller";
 
 // Define local AppContext type for Hono variables
 export type AppContext = {
@@ -12,6 +13,9 @@ export type AppContext = {
 export function createPublicRoutes(deps: { authService: AuthService }) {
   const { authService } = deps;
   const router = new Hono<AppContext>();
+  
+  // Initialize AuthController
+  const authController = new AuthController(authService);
 
   // Public welcome route
   router.get("/", (c) => {
@@ -22,19 +26,11 @@ export function createPublicRoutes(deps: { authService: AuthService }) {
     return c.json({ message });
   });
 
-  // Register
-  router.post("/register", async (c) => {
-    const body = await c.req.json();
-    const result = await authService.register(body);
-    const user_id = result.user?.id;
-    if (user_id) {
-      await authService.assignRole(user_id, "user");
-    }
-    if (!result.success) {
-      return c.json(result, 400);
-    }
-    return c.json({ ...result, message: "User registered successfully" }, 201);
-  });
+  // Use AuthController for authentication routes
+  router.post("/register", authController.register);
+  router.post("/login", authController.login);
+  router.post('/refresh', authController.refreshToken);
+  // Admin registration (specific to public routes)
   router.post("/register/admin", async (c) => {
     const body = await c.req.json();
     const result = await authService.register(body);
@@ -46,10 +42,10 @@ export function createPublicRoutes(deps: { authService: AuthService }) {
     if (!result.success) {
       return c.json(result, 400);
     }
-    return c.json({ ...result, message: "User registered successfully" }, 201);
+    return c.json({ ...result, message: "Admin registered successfully" }, 201);
   });
 
-  // Register with role
+  // Register with role (specific to public routes)
   router.post("/register-with-role", async (c) => {
     const body = await c.req.json();
     const { role_name, permission_names, ...registrationData } = body as any;
@@ -81,22 +77,6 @@ export function createPublicRoutes(deps: { authService: AuthService }) {
       { ...registrationResult, message: "User registered successfully" },
       201
     );
-  });
-
-  // Login
-  router.post("/login", async (c) => {
-    const body = await c.req.json();
-    const result = await authService.login(body);
-    if (!result.success) {
-      return c.json(result, 401);
-    }
-    return c.json({
-      success: true,
-      message: "Login successful",
-      user: result.user,
-      data: { token: result.token },
-      token: result.token,
-    });
   });
 
   return router;

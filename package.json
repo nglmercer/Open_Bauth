@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "types": "dist/src/index.d.ts",
   "scripts": {
-    "dev": "bun run --hot scripts/hono-sample.ts",
+    "dev": "bun run --hot ./examples/hono.ts",
     "build": "tsc && bun build src/index.ts --outdir dist --target bun --format esm --sourcemap",
     "test": "bun test --preload ./tests/setup.ts",
     "test:watch": "bun test --watch --preload ./tests/setup.ts",

@@ -126,7 +126,10 @@ export class AuthController {
       
       // Get user data with roles
       const user = await this.authService.findUserById(userId, { includeRoles: true });
-      
+      console.log("data refreshToken",{
+        userId,
+        user
+      })
       if (!user || !user.is_active) {
         throw new ApiError(401, { 
           name: 'AuthError',
@@ -153,14 +156,7 @@ export class AuthController {
       return c.json({
         success: true,
         data: { 
-          user: {
-            id: user.id,
-            email: user.email,
-            first_name: user.first_name,
-            last_name: user.last_name,
-            is_active: user.is_active,
-            roles: user.roles
-          },
+          user,
           token: newAccessToken,
           refreshToken: newRefreshToken
         }
@@ -168,30 +164,11 @@ export class AuthController {
 
     } catch (error: any) {
       // Handle JWT-specific errors
-      if (error.message.includes('refresh token')) {
-        throw new ApiError(401, { 
-          name: 'AuthError',
-          message: 'Invalid or expired refresh token',
-          type: AuthErrorType.TOKEN_EXPIRED,
-          timestamp: new Date(),
-          toResponse(): { success: false; error: { type: AuthErrorType; message: string; timestamp: string; context?: Record<string, any> } } {
-            return {
-              success: false,
-              error: {
-                message: 'Invalid or expired refresh token',
-                type: AuthErrorType.TOKEN_EXPIRED,
-                timestamp: new Date().toISOString(),
-              },
-            };
-          }
-        });
-      }
-      
       // Re-throw ApiError instances
       if (error instanceof ApiError) {
         throw error;
       }
-      
+      console.log("error refreshToken",error)
       // Handle unexpected errors
       throw new ApiError(500, { 
         name: 'AuthError',
@@ -202,7 +179,7 @@ export class AuthController {
           return {
             success: false,
             error: {
-              message: 'Internal server error during token refresh',
+              message:  error.message || 'Internal server error during token refresh',
               type: AuthErrorType.TOKEN_ERROR,
               timestamp: new Date().toISOString(),
             },
