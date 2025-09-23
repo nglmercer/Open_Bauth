@@ -56,7 +56,7 @@ app.onError(globalErrorHandler);
 app.use('*', logger());
 app.use('*', prettyJSON());
 app.use('*', cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:4321'], // Add your frontend URL
+  origin: '*', // Add your frontend URL
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
