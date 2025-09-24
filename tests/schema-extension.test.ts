@@ -232,3 +232,264 @@ describe('Database schema extension integration', () => {
     expect(mixedSearch.success).toBe(true);
     expect(mixedSearch.data?.length).toBe(2);
   });
+
+  test('boolean searches are precise and avoid false positives', async () => {
+    const db = new Database(':memory:');
+    const initializer = new DatabaseInitializer({ database: db });
+    
+    initializer.registerSchemas(notificationsSchema);
+    const init = await initializer.initialize();
+    expect(init.success).toBe(true);
+
+    const user = await createTestUser(initializer);
+    const notifications = initializer.createController('notifications');
+
+    // Create notifications with different boolean representations
+    const falseDefault = await notifications.create({ 
+      user_id: user.id, 
+      title: 'False Default', 
+      body: 'Should be false by default' 
+    });
+    expect(falseDefault.success).toBe(true);
+
+    const falseExplicit = await notifications.create({ 
+      user_id: user.id, 
+      title: 'False Explicit', 
+      body: 'Explicitly false', 
+      read: false 
+    });
+    expect(falseExplicit.success).toBe(true);
+
+    const falseUint8 = await notifications.create({ 
+      user_id: user.id, 
+      title: 'False Uint8Array', 
+      body: 'False via Uint8Array', 
+      read: new Uint8Array([0]) 
+    });
+    expect(falseUint8.success).toBe(true);
+
+    const falseBuffer = await notifications.create({ 
+      user_id: user.id, 
+      title: 'False Buffer', 
+      body: 'False via Buffer', 
+      read: Buffer.from([0]) 
+    });
+    expect(falseBuffer.success).toBe(true);
+
+    const trueBoolean = await notifications.create({ 
+      user_id: user.id, 
+      title: 'True Boolean', 
+      body: 'True via boolean', 
+      read: true 
+    });
+    expect(trueBoolean.success).toBe(true);
+
+    const trueUint8 = await notifications.create({ 
+      user_id: user.id, 
+      title: 'True Uint8Array', 
+      body: 'True via Uint8Array', 
+      read: new Uint8Array([1]) 
+    });
+    expect(trueUint8.success).toBe(true);
+
+    const trueBuffer = await notifications.create({ 
+      user_id: user.id, 
+      title: 'True Buffer', 
+      body: 'True via Buffer', 
+      read: Buffer.from([1]) 
+    });
+    expect(trueBuffer.success).toBe(true);
+
+    // CRITICAL TEST: Search for TRUE should return ONLY true records (4 records)
+    const searchTrueBoolean = await notifications.search({ user_id: user.id, read: true });
+    expect(searchTrueBoolean.success).toBe(true);
+    expect(searchTrueBoolean.data?.length).toBe(3); // Only the 3 true records
+    
+    const searchTrueUint8 = await notifications.search({ user_id: user.id, read: new Uint8Array([1]) });
+    expect(searchTrueUint8.success).toBe(true);
+    expect(searchTrueUint8.data?.length).toBe(3); // Should match boolean search
+    
+    const searchTrueBuffer = await notifications.search({ user_id: user.id, read: Buffer.from([1]) });
+    expect(searchTrueBuffer.success).toBe(true);
+    expect(searchTrueBuffer.data?.length).toBe(3); // Should match boolean search
+
+    // CRITICAL TEST: Search for FALSE should return ONLY false records (4 records)
+    const searchFalseBoolean = await notifications.search({ user_id: user.id, read: false });
+    expect(searchFalseBoolean.success).toBe(true);
+    expect(searchFalseBoolean.data?.length).toBe(4); // All 4 false records
+    
+    const searchFalseUint8 = await notifications.search({ user_id: user.id, read: new Uint8Array([0]) });
+    expect(searchFalseUint8.success).toBe(true);
+    expect(searchFalseUint8.data?.length).toBe(4); // Should match boolean search
+    
+    const searchFalseBuffer = await notifications.search({ user_id: user.id, read: Buffer.from([0]) });
+    expect(searchFalseBuffer.success).toBe(true);
+    expect(searchFalseBuffer.data?.length).toBe(4); // Should match boolean search
+
+    // Verify no overlap: true + false should equal total
+    const totalRecords = await notifications.count({ user_id: user.id });
+    expect(totalRecords.success).toBe(true);
+    expect(totalRecords.data).toBe(7);
+    expect((searchTrueBoolean.data?.length ?? 0) + (searchFalseBoolean.data?.length ?? 0)).toBe(totalRecords.data ?? 0);
+
+    // Verify specific titles to ensure we're getting the right records
+    const trueRecordTitles = searchTrueBoolean.data?.map((r: any) => r.title).sort();
+    expect(trueRecordTitles).toEqual(['True Boolean', 'True Buffer', 'True Uint8Array']);
+    
+    const falseRecordTitles = searchFalseBoolean.data?.map((r: any) => r.title).sort();
+    expect(falseRecordTitles).toEqual(['False Buffer', 'False Default', 'False Explicit', 'False Uint8Array']);
+  });
+
+  test('edge cases and invalid boolean representations are handled correctly', async () => {
+    const db = new Database(':memory:');
+    const initializer = new DatabaseInitializer({ database: db });
+    
+    initializer.registerSchemas(notificationsSchema);
+    const init = await initializer.initialize();
+    expect(init.success).toBe(true);
+
+    const user = await createTestUser(initializer);
+    const notifications = initializer.createController('notifications');
+
+    // Test: Multi-byte arrays should NOT be treated as boolean
+    const multiByteFalse = await notifications.create({ 
+      user_id: user.id, 
+      title: 'Multi Byte False', 
+      body: 'Multi-byte should not be boolean', 
+      read: new Uint8Array([0, 0]) // This should be treated as BLOB, not boolean
+    });
+    expect(multiByteFalse.success).toBe(true);
+
+    const multiByteTrue = await notifications.create({ 
+      user_id: user.id, 
+      title: 'Multi Byte True', 
+      body: 'Multi-byte should not be boolean', 
+      read: new Uint8Array([1, 1]) // This should be treated as BLOB, not boolean
+    });
+    expect(multiByteTrue.success).toBe(true);
+
+    const regularFalse = await notifications.create({ 
+      user_id: user.id, 
+      title: 'Regular False', 
+      body: 'Regular false', 
+      read: false
+    });
+    expect(regularFalse.success).toBe(true);
+
+    const regularTrue = await notifications.create({ 
+      user_id: user.id, 
+      title: 'Regular True', 
+      body: 'Regular true', 
+      read: true
+    });
+    expect(regularTrue.success).toBe(true);
+
+    // Search for boolean false should NOT match multi-byte arrays
+    const searchFalse = await notifications.search({ user_id: user.id, read: false });
+    expect(searchFalse.success).toBe(true);
+    expect(searchFalse.data?.length).toBe(1); // Only the regular false
+    expect(searchFalse.data?.[0].title).toBe('Regular False');
+
+    // Search for boolean true should NOT match multi-byte arrays
+    const searchTrue = await notifications.search({ user_id: user.id, read: true });
+    expect(searchTrue.success).toBe(true);
+    expect(searchTrue.data?.length).toBe(1); // Only the regular true
+    expect(searchTrue.data?.[0].title).toBe('Regular True');
+
+    // Search with single-byte Uint8Array should NOT match multi-byte
+    const searchUint8False = await notifications.search({ user_id: user.id, read: new Uint8Array([0]) });
+    expect(searchUint8False.success).toBe(true);
+    expect(searchUint8False.data?.length).toBe(1); // Only the regular false
+    expect(searchUint8False.data?.[0].title).toBe('Regular False');
+
+    // Verify multi-byte records exist but are not matched by boolean searches
+    const allRecords = await notifications.findAll({ where: { user_id: user.id } });
+    expect(allRecords.success).toBe(true);
+    expect(allRecords.data?.length).toBe(4); // All 4 records exist
+
+    // Test searching with multi-byte arrays should use exact binary comparison
+    const searchMultiByteFalse = await notifications.search({ 
+      user_id: user.id, 
+      read: new Uint8Array([0, 0]) 
+    });
+    expect(searchMultiByteFalse.success).toBe(true);
+    expect(searchMultiByteFalse.data?.length).toBe(1);
+    expect(searchMultiByteFalse.data?.[0].title).toBe('Multi Byte False');
+
+    const searchMultiByteTrue = await notifications.search({ 
+      user_id: user.id, 
+      read: new Uint8Array([1, 1]) 
+    });
+    expect(searchMultiByteTrue.success).toBe(true);
+    expect(searchMultiByteTrue.data?.length).toBe(1);
+    expect(searchMultiByteTrue.data?.[0].title).toBe('Multi Byte True');
+  });
+
+  test('IN queries with mixed boolean representations work precisely', async () => {
+    const db = new Database(':memory:');
+    const initializer = new DatabaseInitializer({ database: db });
+    
+    initializer.registerSchemas(notificationsSchema);
+    const init = await initializer.initialize();
+    expect(init.success).toBe(true);
+
+    const user = await createTestUser(initializer);
+    const notifications = initializer.createController('notifications');
+
+    // Create records with different boolean representations
+    await notifications.create({ user_id: user.id, title: 'A', body: 'Default false' });
+    await notifications.create({ user_id: user.id, title: 'B', body: 'Explicit false', read: false });
+    await notifications.create({ user_id: user.id, title: 'C', body: 'Uint8 false', read: new Uint8Array([0]) });
+    await notifications.create({ user_id: user.id, title: 'D', body: 'Buffer false', read: Buffer.from([0]) });
+    await notifications.create({ user_id: user.id, title: 'E', body: 'Boolean true', read: true });
+    await notifications.create({ user_id: user.id, title: 'F', body: 'Uint8 true', read: new Uint8Array([1]) });
+    await notifications.create({ user_id: user.id, title: 'G', body: 'Buffer true', read: Buffer.from([1]) });
+    await notifications.create({ user_id: user.id, title: 'H', body: 'Multi-byte', read: new Uint8Array([0, 1]) });
+
+    // Test IN with boolean values
+    const searchBooleanIn = await notifications.search({ 
+      user_id: user.id, 
+      read: [true, false] 
+    } as any);
+    expect(searchBooleanIn.success).toBe(true);
+    expect(searchBooleanIn.data?.length).toBe(7); // All except multi-byte
+
+    // Test IN with mixed types - should handle each correctly
+    const searchMixedIn = await notifications.search({ 
+      user_id: user.id, 
+      read: [new Uint8Array([0]), Buffer.from([1]), false] 
+    } as any);
+    expect(searchMixedIn.success).toBe(true);
+    expect(searchMixedIn.data?.length).toBe(7); // All except multi-byte
+
+    // Test IN with only true values in different representations
+    const searchTrueIn = await notifications.search({ 
+      user_id: user.id, 
+      read: [true, new Uint8Array([1]), Buffer.from([1])] 
+    } as any);
+    expect(searchTrueIn.success).toBe(true);
+    expect(searchTrueIn.data?.length).toBe(3); // Only true records
+    
+    const trueTitles = searchTrueIn.data?.map((r: any) => r.title).sort();
+    expect(trueTitles).toEqual(['E', 'F', 'G']);
+
+    // Test IN with only false values in different representations
+    const searchFalseIn = await notifications.search({ 
+      user_id: user.id, 
+      read: [false, new Uint8Array([0]), Buffer.from([0])] 
+    } as any);
+    expect(searchFalseIn.success).toBe(true);
+    expect(searchFalseIn.data?.length).toBe(4); // Only false records
+    
+    const falseTitles = searchFalseIn.data?.map((r: any) => r.title).sort();
+    expect(falseTitles).toEqual(['A', 'B', 'C', 'D']);
+
+    // Test IN with multi-byte should only match exact multi-byte
+    const searchMultiByteIn = await notifications.search({ 
+      user_id: user.id, 
+      read: [new Uint8Array([0, 1]), new Uint8Array([1, 0])] 
+    } as any);
+    expect(searchMultiByteIn.success).toBe(true);
+    expect(searchMultiByteIn.data?.length).toBe(1); // Only the multi-byte record
+    expect(searchMultiByteIn.data?.[0].title).toBe('H');
+  });

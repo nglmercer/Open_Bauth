@@ -417,26 +417,20 @@ export class BaseController<T = Record<string, any>> {
         clauses.push(`"${key}" ${value.operator} ?`);
         params.push(this.convertValueForDatabase(value.value));
       } else if (this.isBooleanLike(value)) {
-        // NEW: Better boolean handling
+        // FIX: Mejorar el manejo de valores booleanos
         const normalizedValue = this.normalizeBooleanValue(value);
         const dbValue = this.convertValueForDatabase(normalizedValue);
-
-        if (normalizedValue) {
-          // For true values
-          if (this.isSQLite) {
-            clauses.push(`("${key}" = ? OR "${key}" = 1)`);
-          } else {
-            clauses.push(`("${key}" = ? OR "${key}" = true)`);
-          }
+        
+        // Para SQLite, comparar directamente con el valor convertido (0 o 1)
+        if (this.isSQLite) {
+          clauses.push(`"${key}" = ?`);
           params.push(dbValue);
         } else {
-          // For false values
-          if (this.isSQLite) {
-            clauses.push(`("${key}" = ? OR "${key}" = 0 OR "${key}" IS NULL)`);
+          // Para PostgreSQL, manejar tanto booleanos como enteros
+          if (normalizedValue) {
+            clauses.push(`("${key}" = ? OR "${key}" = true)`);
           } else {
-            clauses.push(
-              `("${key}" = ? OR "${key}" = false OR "${key}" IS NULL)`
-            );
+            clauses.push(`("${key}" = ? OR "${key}" = false OR "${key}" IS NULL)`);
           }
           params.push(dbValue);
         }
@@ -453,32 +447,43 @@ export class BaseController<T = Record<string, any>> {
   }
 
   /**
-   * NEW: Helper method to check if a value is boolean-like
+   * UPDATED: Mejorar la detección de valores booleanos
    */
   private isBooleanLike(value: any): boolean {
-    return (
-      typeof value === "boolean" ||
-      value instanceof Buffer ||
-      value instanceof Uint8Array ||
-      (ArrayBuffer.isView(value) && value.byteLength === 1)
-    );
+    if (typeof value === "boolean") {
+      return true;
+    }
+    
+    // Detectar Uint8Array, Buffer, y otros ArrayBuffer views de tamaño 1
+    if (value instanceof Uint8Array && value.length === 1) {
+      return true;
+    }
+    
+    if (value instanceof Buffer && value.length === 1) {
+      return true;
+    }
+    
+    if (ArrayBuffer.isView(value) && value.byteLength === 1) {
+      return true;
+    }
+    
+    return false;
   }
 
   /**
-   * NEW: Helper method to normalize boolean-like values to actual booleans
+   * UPDATED: Mejorar la normalización de valores booleanos
    */
   private normalizeBooleanValue(value: any): boolean {
     if (typeof value === "boolean") {
       return value;
     }
 
-    if (value instanceof Buffer || value instanceof Uint8Array) {
-      // Handle single-byte boolean representations
-      if (value.length === 1) {
-        return value[0] === 1;
-      }
-      // For multi-byte, consider non-empty as true
-      return value.length > 0;
+    if (value instanceof Uint8Array && value.length === 1) {
+      return value[0] === 1;
+    }
+
+    if (value instanceof Buffer && value.length === 1) {
+      return value[0] === 1;
     }
 
     if (ArrayBuffer.isView(value) && value.byteLength === 1) {
@@ -490,21 +495,22 @@ export class BaseController<T = Record<string, any>> {
   }
 
   /**
-   * UPDATED: Better convertValueForDatabase method
+   * UPDATED: Mejorar la conversión para base de datos
    */
   private convertValueForDatabase(value: any): any {
     if (typeof value === "boolean") {
       return this.isSQLite ? (value ? 1 : 0) : value;
     }
 
-    // Handle boolean-like binary data first
+    // Manejar valores booleanos tipo Uint8Array/Buffer primero
     if (this.isBooleanLike(value) && !(typeof value === "boolean")) {
       const boolValue = this.normalizeBooleanValue(value);
       return this.isSQLite ? (boolValue ? 1 : 0) : boolValue;
     }
 
-    // Handle other binary data (non-boolean BLOBs)
+    // Manejar otros datos binarios (BLOBs no-booleanos)
     if (value instanceof Uint8Array || value instanceof Buffer) {
+      // Si no es un boolean-like (tamaño > 1), tratarlo como BLOB
       return Buffer.from(value as Uint8Array | Buffer);
     }
 
@@ -512,7 +518,7 @@ export class BaseController<T = Record<string, any>> {
       return Buffer.from(value);
     }
 
-    // Handle other typed arrays
+    // Manejar otros typed arrays que no son boolean-like
     if (ArrayBuffer.isView(value) && !this.isBooleanLike(value)) {
       const u8 = new Uint8Array(
         value.buffer,
