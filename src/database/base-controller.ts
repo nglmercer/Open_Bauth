@@ -386,14 +386,16 @@ export class BaseController<T = Record<string, any>> {
           } else {
             clauses.push(`("${key}" = ? OR "${key}" = true)`);
           }
-          params.push(this.convertValueForDatabase(value));
+          // Push normalized boolean param (number for SQLite, boolean for PostgreSQL)
+          params.push(this.convertValueForDatabase(booleanValue));
         } else {
           if (this.isSQLite) {
             clauses.push(`("${key}" = ? OR "${key}" = 0 OR "${key}" IS NULL)`);
           } else {
             clauses.push(`("${key}" = ? OR "${key}" = false OR "${key}" IS NULL)`);
           }
-          params.push(this.convertValueForDatabase(value));
+          // Push normalized boolean param (number for SQLite, boolean for PostgreSQL)
+          params.push(this.convertValueForDatabase(booleanValue));
         }
       } else {
         clauses.push(`"${key}" = ?`);
@@ -412,12 +414,29 @@ export class BaseController<T = Record<string, any>> {
       return this.isSQLite ? (value ? 1 : 0) : value;
     }
 
+    // Normalize Buffers/Uint8Array used as boolean flags (0/1)
+    if (value instanceof Uint8Array || value instanceof Buffer) {
+      const length = (value as Uint8Array | Buffer).length;
+      if (length === 1) {
+        const b = (value as Uint8Array | Buffer)[0] === 1;
+        return this.isSQLite ? (b ? 1 : 0) : b;
+      }
+      // For non-boolean binary data, convert to Buffer (for BLOB columns)
+      return Buffer.from(value as Uint8Array | Buffer);
+    }
+
     if (value instanceof ArrayBuffer) {
       return Buffer.from(value);
     }
 
-    if (value && typeof value === 'object' && value.constructor && value.constructor.name.includes('Array')) {
-      return Buffer.from(value);
+    // Handle other typed arrays (Int8Array, Uint16Array, etc.)
+    if (ArrayBuffer.isView(value)) {
+      const u8 = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+      if (u8.length === 1) {
+        const b = u8[0] === 1;
+        return this.isSQLite ? (b ? 1 : 0) : b;
+      }
+      return Buffer.from(u8);
     }
 
     return value;
