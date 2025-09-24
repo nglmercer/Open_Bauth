@@ -7,8 +7,22 @@
 import { SQL } from "bun";
 import type { Database } from "bun:sqlite";
 
+export type TruthyFilter = { isTruthy: true };
+export type FalsyFilter = { isFalsy: true };
+export type SetFilter = { isSet: boolean };
+export type OperatorFilter<V> = {
+  operator: string;
+  value: V; 
+};
+
+export type AdvancedFilter<V> =
+  | TruthyFilter
+  | FalsyFilter
+  | SetFilter
+  | OperatorFilter<V>;
+
 export type WhereConditions<T> = {
-  [P in keyof T]?: T[P] | T[P][];
+  [P in keyof T]?: T[P] | T[P][] | null | AdvancedFilter<T[P]>;
 };
 
 export interface QueryOptions<T = any> {
@@ -165,6 +179,7 @@ export class DatabaseAdapter implements DatabaseConnection {
         } else {
           try {
             await (this.db as SQL).unsafe(sql, params);
+            // NOTE: This is a simplification. Getting actual changes/rowid from generic SQL is complex.
             return { changes: 1, lastInsertRowid: undefined };
           } catch (error: any) {
             console.error("DatabaseAdapter.query.run error:", error.message);
@@ -333,7 +348,7 @@ export class BaseController<T = Record<string, any>> {
           return upperType;
       }
     } else {
-      // PostgreSQL
+      // PostgreSQL (assumed default)
       switch (upperType) {
         case "BIT":
           return "BOOLEAN"; // Map BIT to BOOLEAN in PostgreSQL
@@ -411,6 +426,8 @@ export class BaseController<T = Record<string, any>> {
     }
   }
 
+// src/database/base-controller.ts
+
   private buildWhereClause(conditions: Record<string, any>): {
     sql: string;
     params: any[];
@@ -425,16 +442,40 @@ export class BaseController<T = Record<string, any>> {
     for (const [key, value] of Object.entries(conditions)) {
       if (value === null) {
         clauses.push(`"${key}" IS NULL`);
-      } else if (Array.isArray(value)) {
+        continue;
+      }
+
+      if (Array.isArray(value)) {
+        if (value.length === 0) {
+          clauses.push("1 = 0");
+          continue;
+        }
         clauses.push(`"${key}" IN (${value.map(() => "?").join(", ")})`);
         params.push(...value.map((v) => this.convertValueForDatabase(v)));
-      } else if (typeof value === "object" && value.operator) {
-        clauses.push(`"${key}" ${value.operator} ?`);
-        params.push(this.convertValueForDatabase(value.value));
-      } else {
-        clauses.push(`"${key}" = ?`);
-        params.push(this.convertValueForDatabase(value));
+        continue;
       }
+
+      if (typeof value === "object" && !ArrayBuffer.isView(value) && !(value instanceof Date)) {
+        if ('isTruthy' in value && value.isTruthy === true) {
+          clauses.push(`"${key}" = ?`);
+          params.push(1); // FIX: Use a parameter instead of a literal '1'
+          continue;
+        } else if ('isFalsy' in value && value.isFalsy === true) {
+          clauses.push(`("${key}" IS NULL OR "${key}" = ?)`);
+          params.push(0); // FIX: Use a parameter instead of a literal '0'
+          continue;
+        } else if ('isSet' in value) {
+          clauses.push(`"${key}" IS ${value.isSet ? 'NOT NULL' : 'NULL'}`);
+          continue;
+        } else if ('operator' in value) {
+          clauses.push(`"${key}" ${value.operator} ?`);
+          params.push(this.convertValueForDatabase(value.value));
+          continue;
+        }
+      }
+      
+      clauses.push(`"${key}" = ?`);
+      params.push(this.convertValueForDatabase(value));
     }
 
     return {
@@ -450,25 +491,15 @@ export class BaseController<T = Record<string, any>> {
     if (typeof value === "boolean") {
       return true;
     }
-    
-    // Detect single-byte binary data (typical for BIT fields from SQL Server)
-    if (value instanceof Uint8Array && value.length === 1) {
-      return true;
-    }
-    
-    if (value instanceof Buffer && value.length === 1) {
-      return true;
-    }
-    
-    if (ArrayBuffer.isView(value) && value.byteLength === 1) {
-      return true;
-    }
-
-    // Handle SQL Server BIT type which may come as 0/1 numbers
     if (typeof value === "number" && (value === 0 || value === 1)) {
       return true;
     }
-    
+    if ((value instanceof Uint8Array || value instanceof Buffer) && value.length === 1) {
+      return true;
+    }
+    if (ArrayBuffer.isView(value) && value.byteLength === 1) {
+        return true;
+    }
     return false;
   }
 
@@ -479,25 +510,16 @@ export class BaseController<T = Record<string, any>> {
     if (typeof value === "boolean") {
       return value;
     }
-
-    // Handle SQL Server BIT values (0 or 1)
     if (typeof value === "number") {
       return value === 1;
     }
-
-    if (value instanceof Uint8Array && value.length === 1) {
+    if (value instanceof Uint8Array || value instanceof Buffer) {
       return value[0] === 1;
     }
-
-    if (value instanceof Buffer && value.length === 1) {
-      return value[0] === 1;
-    }
-
-    if (ArrayBuffer.isView(value) && value.byteLength === 1) {
+     if (ArrayBuffer.isView(value)) {
       const uint8View = new Uint8Array(value.buffer, value.byteOffset, 1);
       return uint8View[0] === 1;
     }
-
     return Boolean(value);
   }
 
@@ -505,38 +527,26 @@ export class BaseController<T = Record<string, any>> {
    * Enhanced database value conversion with BIT type support
    */
   private convertValueForDatabase(value: any): any {
-    if (typeof value === "boolean") {
-      return (this.isSQLite || this.isSQLServer) ? (value ? 1 : 0) : value;
-    }
-
-    // Handle boolean-like values first
-    if (this.isBooleanLike(value) && !(typeof value === "boolean")) {
+    if (this.isBooleanLike(value)) {
       const boolValue = this.normalizeBooleanValue(value);
-      return (this.isSQLite || this.isSQLServer) ? (boolValue ? 1 : 0) : boolValue;
+      if (this.isSQLite || this.isSQLServer) {
+        return boolValue ? 1 : 0;
+      }
+      return boolValue;
     }
-
-    // Handle binary data (BLOBs that are not boolean-like)
     if (value instanceof Uint8Array || value instanceof Buffer) {
-      return Buffer.from(value as Uint8Array | Buffer);
+      return Buffer.from(value);
     }
-
     if (value instanceof ArrayBuffer) {
       return Buffer.from(value);
     }
-
-    // Handle other typed arrays that are not boolean-like
-    if (ArrayBuffer.isView(value) && !this.isBooleanLike(value)) {
-      const u8 = new Uint8Array(
-        value.buffer,
-        value.byteOffset,
-        value.byteLength
-      );
+    if (ArrayBuffer.isView(value)) {
+      const u8 = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
       return Buffer.from(u8);
     }
 
     return value;
   }
-
   private async getTableInfo(): Promise<Array<{ name: string; pk: number }>> {
     try {
       if (this.isSQLite) {
@@ -547,6 +557,7 @@ export class BaseController<T = Record<string, any>> {
           ? result.map((col: any) => ({ name: col.name, pk: col.pk }))
           : [];
       } else {
+        // Generic SQL for PostgreSQL
         const result = await this.adapter
           .query(
             `
@@ -559,7 +570,7 @@ export class BaseController<T = Record<string, any>> {
               WHERE i.indrelid = $1::regclass AND i.indisprimary
             ) THEN 1 ELSE 0 END as pk
           FROM information_schema.columns
-          WHERE table_name = $1
+          WHERE table_name = $1 AND table_schema = 'public'
           ORDER BY ordinal_position
         `
           )
@@ -567,6 +578,7 @@ export class BaseController<T = Record<string, any>> {
         return Array.isArray(result) ? result : [];
       }
     } catch (error) {
+      // Fallback for other systems or errors
       return [{ name: "id", pk: 1 }];
     }
   }
@@ -582,7 +594,7 @@ export class BaseController<T = Record<string, any>> {
       const validatedData = this.validateData(data, "create");
       const cleanData = Object.fromEntries(
         Object.entries(validatedData).filter(
-          ([_, value]) => value !== null && value !== undefined
+          ([_, value]) => value !== undefined // Allow null to be explicitly set
         )
       );
       if (Object.keys(cleanData).length === 0) {
@@ -597,6 +609,7 @@ export class BaseController<T = Record<string, any>> {
         this.convertValueForDatabase(value)
       );
 
+      // RETURNING * might not be supported everywhere, but works for SQLite & Postgres
       const insertQuery = `INSERT INTO "${this.tableName}" (${columns.join(
         ", "
       )}) VALUES (${placeholders}) RETURNING *`;
@@ -699,7 +712,7 @@ export class BaseController<T = Record<string, any>> {
       const validatedData = this.validateData(data, "update");
       const cleanData = Object.fromEntries(
         Object.entries(validatedData).filter(
-          ([_, value]) => value !== null && value !== undefined
+          ([_, value]) => value !== undefined
         )
       );
 
@@ -824,6 +837,8 @@ export class BaseController<T = Record<string, any>> {
         success: true,
         data: result.data[0] as T,
       };
+    } else if (!result.success) {
+      return result as ControllerResponse<T | null>;
     }
 
     return {
@@ -832,7 +847,7 @@ export class BaseController<T = Record<string, any>> {
     };
   }
 
-  async count(filters: Partial<T> = {}): Promise<ControllerResponse<number>> {
+  async count(filters: WhereConditions<T> = {}): Promise<ControllerResponse<number>> {
     try {
       const { sql: whereClause, params } = this.buildWhereClause(
         (filters as Record<string, any>) || {}
@@ -900,11 +915,11 @@ export class BaseController<T = Record<string, any>> {
         if (join.select && join.select.length > 0) {
           const joinColumns = join.select
             .map((col) => {
-              if (col.includes(" AS ")) {
-                const [originalCol, alias] = col.split(" AS ");
+              if (/\s+as\s+/i.test(col)) { // Case-insensitive "AS"
+                const [originalCol, alias] = col.split(/\s+as\s+/i);
                 return `"${
                   join.table
-                }"."${originalCol.trim()}" AS ${alias.trim()}`;
+                }"."${originalCol.trim()}" AS "${alias.trim()}"`;
               }
               return `"${join.table}"."${col}" AS "${join.table}_${col}"`;
             })
@@ -917,7 +932,8 @@ export class BaseController<T = Record<string, any>> {
         selectClause = select
           .map((col) => {
             if (col.includes(".")) {
-              return col;
+              const [tbl, cl] = col.split('.');
+              return `"${tbl}"."${cl}"`;
             }
             return `"${this.tableName}"."${col}"`;
           })
@@ -934,7 +950,7 @@ export class BaseController<T = Record<string, any>> {
 
       if (orderBy) {
         const qualifiedOrderBy = orderBy.includes(".")
-          ? orderBy
+          ? orderBy.replace(/(\w+)\.(\w+)/, `"$1"."$2"`)
           : `"${this.tableName}"."${orderBy}"`;
         query += ` ORDER BY ${qualifiedOrderBy} ${orderDirection}`;
       }
@@ -974,20 +990,17 @@ export class BaseController<T = Record<string, any>> {
     try {
       const primaryKey = await this.getPrimaryKey();
 
-      // Build SELECT clause with qualified column names
       let selectClause = `"${this.tableName}".*`;
 
-      // Add join table columns if specified
       for (const join of joins) {
         if (join.select && join.select.length > 0) {
           const joinColumns = join.select
             .map((col) => {
-              // Handle aliased columns (e.g., "name AS category_name")
-              if (col.includes(" AS ")) {
-                const [originalCol, alias] = col.split(" AS ");
+              if (/\s+as\s+/i.test(col)) {
+                const [originalCol, alias] = col.split(/\s+as\s+/i);
                 return `"${
                   join.table
-                }"."${originalCol.trim()}" AS ${alias.trim()}`;
+                }"."${originalCol.trim()}" AS "${alias.trim()}"`;
               }
               return `"${join.table}"."${col}" AS "${join.table}_${col}"`;
             })
@@ -996,19 +1009,18 @@ export class BaseController<T = Record<string, any>> {
         }
       }
 
-      // If custom select is provided, use it instead
       if (select.length > 0) {
         selectClause = select
           .map((col) => {
             if (col.includes(".")) {
-              return col; // Already qualified
+              const [tbl, cl] = col.split('.');
+              return `"${tbl}"."${cl}"`;
             }
             return `"${this.tableName}"."${col}"`;
           })
           .join(", ");
       }
 
-      // Build JOIN clauses
       let joinClause = "";
       for (const join of joins) {
         const joinType = join.type || "LEFT";
@@ -1060,8 +1072,8 @@ export class BaseController<T = Record<string, any>> {
    */
   createReverseJoin(
     targetTable: string,
-    targetColumn: string,
-    sourceColumn: string = "id",
+    sourceForeignKey: string,
+    targetPrimaryKey: string = "id",
     type: "INNER" | "LEFT" | "RIGHT" = "LEFT",
     selectColumns: string[] = ["*"]
   ): JoinOptions {
@@ -1070,7 +1082,6 @@ export class BaseController<T = Record<string, any>> {
     if (!selectColumns.includes("*")) {
       select = selectColumns;
     } else {
-      // For common tables, provide default columns with aliases to avoid conflicts
       if (targetTable === "categories") {
         select = [
           "name AS category_name",
@@ -1078,14 +1089,12 @@ export class BaseController<T = Record<string, any>> {
         ];
       } else if (targetTable === "users") {
         select = ["name AS user_name", "email AS user_email"];
-      } else {
-        select = ["name AS " + targetTable + "_name"];
       }
     }
 
     return {
       table: targetTable,
-      on: `"${targetTable}"."${targetColumn}" = "${this.tableName}"."${sourceColumn}"`,
+      on: `"${this.tableName}"."${sourceForeignKey}" = "${targetTable}"."${targetPrimaryKey}"`,
       type,
       select,
     };

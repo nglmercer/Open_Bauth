@@ -395,3 +395,74 @@ describe('Performance and Compatibility Tests', () => {
     expect(complexQuery.success).toBe(true);
   });
 });
+describe('Advanced BIT Field Filtering (isTruthy, isFalsy, isSet)', () => {
+    
+  test('correctly filters nullable BIT fields using advanced filters', async () => {
+    const db = new Database(':memory:');
+    // FIX: The initializer must be given the schema for the table being tested.
+    // It was [bitTestSchema], but it needs [userNotificationSchema].
+    const initializer = new DatabaseInitializer({ 
+      database: db, 
+      externalSchemas: [userNotificationSchema], 
+    });
+
+    await initializer.initialize();
+    const user = await createTestUser(initializer);
+    const notifications = initializer.createController('user_notifications');
+
+    // Crear un conjunto de datos de prueba para cubrir todos los casos del campo nullable 'priority'
+    // 1. priority = 1 (Truthy)
+    await notifications.create({ user_id: user.id, title: 'High Priority', priority: 1 });
+    // 2. priority = 0 (Falsy, but not NULL)
+    await notifications.create({ user_id: user.id, title: 'Low Priority', priority: 0 });
+    // 3. priority = NULL (Falsy, and NULL)
+    await notifications.create({ user_id: user.id, title: 'No Priority', priority: null });
+    // 4. Otro registro para asegurar que no se mezclen resultados
+    await notifications.create({ user_id: user.id, title: 'Another High Priority', priority: true });
+
+    // --- TEST 1: isTruthy ---
+    // Debería encontrar solo los registros donde priority es 1 (no 0, no NULL)
+    const truthyResult = await notifications.search({ priority: { isTruthy: true } });
+    expect(truthyResult.success).toBe(true);
+    expect(truthyResult.data?.length).toBe(2);
+    const truthyTitles = truthyResult.data?.map(n => n.title).sort();
+    expect(truthyTitles).toEqual(['Another High Priority', 'High Priority']);
+
+    // --- TEST 2: isFalsy ---
+    // Debería encontrar registros donde priority es 0 O es NULL
+    const falsyResult = await notifications.search({ priority: { isFalsy: true } });
+    expect(falsyResult.success).toBe(true);
+    expect(falsyResult.data?.length).toBe(2);
+    const falsyTitles = falsyResult.data?.map(n => n.title).sort();
+    expect(falsyTitles).toEqual(['Low Priority', 'No Priority']);
+    
+    // --- TEST 3: isSet: true ---
+    // Debería encontrar registros donde priority NO es NULL (o sea, 1 y 0)
+    const isSetResult = await notifications.search({ priority: { isSet: true } });
+    expect(isSetResult.success).toBe(true);
+    expect(isSetResult.data?.length).toBe(3);
+    const setTitles = isSetResult.data?.map(n => n.title).sort();
+    expect(setTitles).toEqual(['Another High Priority', 'High Priority', 'Low Priority']);
+
+    // --- TEST 4: isSet: false ---
+    // Debería encontrar solo el registro donde priority ES NULL
+    const isNotSetResult = await notifications.search({ priority: { isSet: false } });
+    expect(isNotSetResult.success).toBe(true);
+    expect(isNotSetResult.data?.length).toBe(1);
+    expect(isNotSetResult.data?.[0].title).toBe('No Priority');
+
+    // --- TEST 5: Combinación de filtros ---
+    // Asegurarse de que el filtro avanzado funciona junto con otros filtros simples
+    const anotherUser = await createTestUser(initializer);
+    await notifications.create({ user_id: anotherUser.id, title: 'Other User - High Priority', priority: 1 });
+
+    const combinedResult = await notifications.search({
+      user_id: user.id, // Filtro simple
+      priority: { isTruthy: true } // Filtro avanzado
+    });
+    expect(combinedResult.success).toBe(true);
+    // Solo debería encontrar los 2 del primer usuario, no el del segundo
+    expect(combinedResult.data?.length).toBe(2);
+    expect(combinedResult.data?.every(n => n.user_id === user.id)).toBe(true);
+  });
+});
