@@ -305,6 +305,40 @@ describe('BIT Type Integration Tests', () => {
     expect(premiumBitRecords2.data?.length).toBe(1);
     expect(premiumBitRecords3.data?.length).toBe(1);
   });
+  test('search correctly finds records using simple numeric values for BIT fields', async () => {
+    const db = new Database(':memory:');
+    const initializer = new DatabaseInitializer({ 
+      database: db, 
+      externalSchemas: [bitTestSchema],
+    });
+
+    await initializer.initialize();
+    const bitController = initializer.createController('bit_test');
+
+    // Crear dos registros, uno activo y otro inactivo
+    await bitController.create({ name: 'Active Item', is_premium: true, is_active: 1 });
+    await bitController.create({ name: 'Inactive Item', is_premium: false, is_active: 0 });
+    await bitController.create({ name: 'Active Premium Item', is_premium: true, is_active: true });
+
+    // CASO 1: Buscar por `is_active: 1` (como en tu ejemplo de `findRecommended`)
+    const searchActiveNumeric = await bitController.search({ is_active: 1 });
+    expect(searchActiveNumeric.success).toBe(true);
+    expect(searchActiveNumeric.data?.length).toBe(2);
+    // Verificamos que los nombres de los encontrados sean los correctos
+    const activeNames = searchActiveNumeric.data?.map(item => item.name).sort();
+    expect(activeNames).toEqual(['Active Item', 'Active Premium Item']);
+
+    // CASO 2: Buscar por `is_active: 0`
+    const searchInactiveNumeric = await bitController.search({ is_active: 0 });
+    expect(searchInactiveNumeric.success).toBe(true);
+    expect(searchInactiveNumeric.data?.length).toBe(1);
+    expect(searchInactiveNumeric.data?.[0].name).toBe('Inactive Item');
+    
+    // CASO 3: Búsqueda combinada con booleano y número
+    const searchCombined = await bitController.search({ is_active: true, is_premium: 1 });
+    expect(searchCombined.success).toBe(true);
+    expect(searchCombined.data?.length).toBe(2);
+  });
 });
 
 describe('Performance and Compatibility Tests', () => {

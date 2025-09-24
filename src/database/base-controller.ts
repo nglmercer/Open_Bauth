@@ -431,24 +431,6 @@ export class BaseController<T = Record<string, any>> {
       } else if (typeof value === "object" && value.operator) {
         clauses.push(`"${key}" ${value.operator} ?`);
         params.push(this.convertValueForDatabase(value.value));
-      } else if (this.isBooleanLike(value)) {
-        const normalizedValue = this.normalizeBooleanValue(value);
-        const dbValue = this.convertValueForDatabase(normalizedValue);
-        
-        // Enhanced logic for different database types
-        if (this.isSQLite || this.isSQLServer) {
-          // SQLite and SQL Server: direct comparison with 0/1
-          clauses.push(`"${key}" = ?`);
-          params.push(dbValue);
-        } else {
-          // PostgreSQL: handle both boolean and integer representations
-          if (normalizedValue) {
-            clauses.push(`("${key}" = ? OR "${key}" = true)`);
-          } else {
-            clauses.push(`("${key}" = ? OR "${key}" = false OR "${key}" IS NULL)`);
-          }
-          params.push(dbValue);
-        }
       } else {
         clauses.push(`"${key}" = ?`);
         params.push(this.convertValueForDatabase(value));
