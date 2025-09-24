@@ -1,13 +1,16 @@
 /**
  * Generic Base Controller for CRUD Operations
  * Database-agnostic controller that works with Bun's SQL interface
+ * Enhanced with BIT type support for SQL Server compatibility
  */
 
 import { SQL } from "bun";
 import type { Database } from "bun:sqlite";
+
 export type WhereConditions<T> = {
   [P in keyof T]?: T[P] | T[P][];
 };
+
 export interface QueryOptions<T = any> {
   limit?: number;
   offset?: number;
@@ -63,6 +66,7 @@ export interface ColumnDefinition {
     | "REAL"
     | "BLOB"
     | "BOOLEAN"
+    | "BIT"
     | "DATE"
     | "DATETIME"
     | "VARCHAR"
@@ -103,6 +107,7 @@ export interface BaseControllerOptions {
   database: SQL | Database;
   schemas?: SchemaCollection;
   isSQLite?: boolean;
+  isSQLServer?: boolean;
 }
 
 export class DatabaseAdapter implements DatabaseConnection {
@@ -183,18 +188,21 @@ export class BaseController<T = Record<string, any>> {
   protected tableName: string;
   protected schemas?: SchemaCollection;
   protected isSQLite: boolean;
+  protected isSQLServer: boolean;
 
   constructor(tableName: string, options: BaseControllerOptions) {
     this.tableName = tableName;
     this.schemas = options.schemas;
     this.isSQLite = options.isSQLite ?? false;
+    this.isSQLServer = options.isSQLServer ?? false;
     this.adapter = new DatabaseAdapter(options.database, this.isSQLite);
   }
 
   static async initializeDatabase(
     database: SQL | Database,
     schemas: TableSchema[],
-    isSQLite: boolean = false
+    isSQLite: boolean = false,
+    isSQLServer: boolean = false
   ): Promise<ControllerResponse> {
     const adapter = new DatabaseAdapter(database, isSQLite);
 
@@ -205,7 +213,8 @@ export class BaseController<T = Record<string, any>> {
       for (const schema of schemas) {
         const createTableSQL = BaseController.generateCreateTableSQL(
           schema,
-          isSQLite
+          isSQLite,
+          isSQLServer
         );
         await adapter.query(createTableSQL).run();
 
@@ -238,13 +247,15 @@ export class BaseController<T = Record<string, any>> {
 
   private static generateCreateTableSQL(
     schema: TableSchema,
-    isSQLite: boolean
+    isSQLite: boolean,
+    isSQLServer: boolean = false
   ): string {
     const columns = schema.columns
       .map((col) => {
         let columnDef = `"${col.name}" ${BaseController.mapDataType(
           col.type,
-          isSQLite
+          isSQLite,
+          isSQLServer
         )}`;
 
         if (col.primaryKey) {
@@ -276,7 +287,6 @@ export class BaseController<T = Record<string, any>> {
       })
       .join(", ");
 
-    // Using "" for table name for better compatibility
     return `CREATE TABLE IF NOT EXISTS "${schema.tableName}" (${columns})`;
   }
 
@@ -286,13 +296,13 @@ export class BaseController<T = Record<string, any>> {
     isSQLite: boolean
   ): string {
     const unique = index.unique ? "UNIQUE " : "";
-    // Using "" for identifiers
     const columns = index.columns.map((c) => `"${c}"`).join(", ");
     return `CREATE ${unique}INDEX IF NOT EXISTS "${index.name}" ON "${tableName}" (${columns})`;
   }
 
-  private static mapDataType(type: string, isSQLite: boolean): string {
+  private static mapDataType(type: string, isSQLite: boolean, isSQLServer: boolean = false): string {
     const upperType = type.toUpperCase();
+    
     if (isSQLite) {
       switch (upperType) {
         case "SERIAL":
@@ -300,7 +310,8 @@ export class BaseController<T = Record<string, any>> {
         case "VARCHAR":
           return "TEXT";
         case "BOOLEAN":
-          return "INTEGER"; // Store booleans as 0 or 1
+        case "BIT":
+          return "INTEGER"; // Store booleans and bits as 0 or 1
         case "DATE":
           return "TEXT";
         case "DATETIME":
@@ -308,9 +319,24 @@ export class BaseController<T = Record<string, any>> {
         default:
           return upperType;
       }
+    } else if (isSQLServer) {
+      switch (upperType) {
+        case "BOOLEAN":
+          return "BIT";
+        case "DATE":
+          return "DATE";
+        case "DATETIME":
+          return "DATETIME";
+        case "SERIAL":
+          return "INT IDENTITY(1,1)";
+        default:
+          return upperType;
+      }
     } else {
       // PostgreSQL
       switch (upperType) {
+        case "BIT":
+          return "BOOLEAN"; // Map BIT to BOOLEAN in PostgreSQL
         case "BOOLEAN":
           return "BOOLEAN";
         case "DATE":
@@ -323,22 +349,16 @@ export class BaseController<T = Record<string, any>> {
     }
   }
 
-  // --- FIX STARTS HERE ---
-  /**
-   * Formats a default value for use in a CREATE TABLE statement.
-   * This version correctly handles SQL functions and keywords.
-   */
   private static formatDefaultValue(value: any): string {
     if (value === null) {
       return "NULL";
     }
 
     if (typeof value === "boolean") {
-      return value ? "1" : "0"; // Use 1/0 for boolean in SQLite
+      return value ? "1" : "0"; // Use 1/0 for boolean in SQLite and SQL Server BIT
     }
 
     if (typeof value === "string") {
-      // Check for common SQL keywords/functions that should not be quoted
       const upperValue = value.toUpperCase();
       const isFunctionOrKeyword =
         /^\(.*\)$/.test(value.trim()) || // Matches anything in parentheses like (lower(...))
@@ -347,20 +367,15 @@ export class BaseController<T = Record<string, any>> {
         );
 
       if (isFunctionOrKeyword) {
-        // If it's a function or keyword, return it directly without quotes
         return value;
       } else {
-        // Otherwise, it's a literal string. Quote it and escape any internal quotes.
         return `'${value.replace(/'/g, "''")}'`;
       }
     }
 
-    // For numbers and other types, convert to string
     return String(value);
   }
-  // --- FIX ENDS HERE ---
 
-  // ... (El resto de la clase permanece igual)
   private validateData(
     data: any,
     operation: "create" | "update" | "read"
@@ -417,16 +432,16 @@ export class BaseController<T = Record<string, any>> {
         clauses.push(`"${key}" ${value.operator} ?`);
         params.push(this.convertValueForDatabase(value.value));
       } else if (this.isBooleanLike(value)) {
-        // FIX: Mejorar el manejo de valores booleanos
         const normalizedValue = this.normalizeBooleanValue(value);
         const dbValue = this.convertValueForDatabase(normalizedValue);
         
-        // Para SQLite, comparar directamente con el valor convertido (0 o 1)
-        if (this.isSQLite) {
+        // Enhanced logic for different database types
+        if (this.isSQLite || this.isSQLServer) {
+          // SQLite and SQL Server: direct comparison with 0/1
           clauses.push(`"${key}" = ?`);
           params.push(dbValue);
         } else {
-          // Para PostgreSQL, manejar tanto booleanos como enteros
+          // PostgreSQL: handle both boolean and integer representations
           if (normalizedValue) {
             clauses.push(`("${key}" = ? OR "${key}" = true)`);
           } else {
@@ -447,14 +462,14 @@ export class BaseController<T = Record<string, any>> {
   }
 
   /**
-   * UPDATED: Mejorar la detección de valores booleanos
+   * Enhanced boolean detection including BIT type support
    */
   private isBooleanLike(value: any): boolean {
     if (typeof value === "boolean") {
       return true;
     }
     
-    // Detectar Uint8Array, Buffer, y otros ArrayBuffer views de tamaño 1
+    // Detect single-byte binary data (typical for BIT fields from SQL Server)
     if (value instanceof Uint8Array && value.length === 1) {
       return true;
     }
@@ -466,16 +481,26 @@ export class BaseController<T = Record<string, any>> {
     if (ArrayBuffer.isView(value) && value.byteLength === 1) {
       return true;
     }
+
+    // Handle SQL Server BIT type which may come as 0/1 numbers
+    if (typeof value === "number" && (value === 0 || value === 1)) {
+      return true;
+    }
     
     return false;
   }
 
   /**
-   * UPDATED: Mejorar la normalización de valores booleanos
+   * Enhanced boolean normalization with BIT type support
    */
   private normalizeBooleanValue(value: any): boolean {
     if (typeof value === "boolean") {
       return value;
+    }
+
+    // Handle SQL Server BIT values (0 or 1)
+    if (typeof value === "number") {
+      return value === 1;
     }
 
     if (value instanceof Uint8Array && value.length === 1) {
@@ -495,22 +520,21 @@ export class BaseController<T = Record<string, any>> {
   }
 
   /**
-   * UPDATED: Mejorar la conversión para base de datos
+   * Enhanced database value conversion with BIT type support
    */
   private convertValueForDatabase(value: any): any {
     if (typeof value === "boolean") {
-      return this.isSQLite ? (value ? 1 : 0) : value;
+      return (this.isSQLite || this.isSQLServer) ? (value ? 1 : 0) : value;
     }
 
-    // Manejar valores booleanos tipo Uint8Array/Buffer primero
+    // Handle boolean-like values first
     if (this.isBooleanLike(value) && !(typeof value === "boolean")) {
       const boolValue = this.normalizeBooleanValue(value);
-      return this.isSQLite ? (boolValue ? 1 : 0) : boolValue;
+      return (this.isSQLite || this.isSQLServer) ? (boolValue ? 1 : 0) : boolValue;
     }
 
-    // Manejar otros datos binarios (BLOBs no-booleanos)
+    // Handle binary data (BLOBs that are not boolean-like)
     if (value instanceof Uint8Array || value instanceof Buffer) {
-      // Si no es un boolean-like (tamaño > 1), tratarlo como BLOB
       return Buffer.from(value as Uint8Array | Buffer);
     }
 
@@ -518,7 +542,7 @@ export class BaseController<T = Record<string, any>> {
       return Buffer.from(value);
     }
 
-    // Manejar otros typed arrays que no son boolean-like
+    // Handle other typed arrays that are not boolean-like
     if (ArrayBuffer.isView(value) && !this.isBooleanLike(value)) {
       const u8 = new Uint8Array(
         value.buffer,
@@ -574,7 +598,6 @@ export class BaseController<T = Record<string, any>> {
   async create(data: Record<string, any>): Promise<ControllerResponse<T>> {
     try {
       const validatedData = this.validateData(data, "create");
-      // Removed auto-generating an 'id' to let the database handle primary key generation (e.g., AUTOINCREMENT in SQLite)
       const cleanData = Object.fromEntries(
         Object.entries(validatedData).filter(
           ([_, value]) => value !== null && value !== undefined
@@ -592,13 +615,10 @@ export class BaseController<T = Record<string, any>> {
         this.convertValueForDatabase(value)
       );
 
-      // Usar `RETURNING *` es la forma moderna y correcta para obtener el registro recién insertado,
-      // independientemente del tipo de la clave primaria (autoincremento o UUID).
       const insertQuery = `INSERT INTO "${this.tableName}" (${columns.join(
         ", "
       )}) VALUES (${placeholders}) RETURNING *`;
 
-      // Usamos .get() porque `RETURNING *` en un único INSERT nos devolverá exactamente una fila.
       const result = await this.adapter.query(insertQuery).get(...values);
 
       if (!result) {
@@ -615,7 +635,6 @@ export class BaseController<T = Record<string, any>> {
         message: "Record created successfully",
       };
     } catch (error: any) {
-      // Bun puede lanzar un error si la sintaxis es incorrecta o hay una violación de constraint.
       return {
         success: false,
         error: error.message,
@@ -878,9 +897,6 @@ export class BaseController<T = Record<string, any>> {
     }
   }
 
-  /**
-   * Find records with related data using joins
-   */
   async findWithRelations(
     options: RelationOptions<T> = {}
   ): Promise<ControllerResponse<T[]>> {
@@ -896,15 +912,12 @@ export class BaseController<T = Record<string, any>> {
       } = options;
       const { sql: whereClause, params } = this.buildWhereClause(where || {});
 
-      // Build SELECT clause with qualified column names
       let selectClause = `"${this.tableName}".*`;
 
-      // Add join table columns if specified
       for (const join of joins) {
         if (join.select && join.select.length > 0) {
           const joinColumns = join.select
             .map((col) => {
-              // Handle aliased columns (e.g., "name AS category_name")
               if (col.includes(" AS ")) {
                 const [originalCol, alias] = col.split(" AS ");
                 return `"${
@@ -918,19 +931,17 @@ export class BaseController<T = Record<string, any>> {
         }
       }
 
-      // If custom select is provided, use it instead
       if (select.length > 0) {
         selectClause = select
           .map((col) => {
             if (col.includes(".")) {
-              return col; // Already qualified
+              return col;
             }
             return `"${this.tableName}"."${col}"`;
           })
           .join(", ");
       }
 
-      // Build JOIN clauses
       let joinClause = "";
       for (const join of joins) {
         const joinType = join.type || "LEFT";
@@ -951,7 +962,6 @@ export class BaseController<T = Record<string, any>> {
 
       const records = await this.adapter.query(query).all(...params);
 
-      // Count query for total
       let countQuery = `SELECT COUNT(*) as total FROM "${this.tableName}"${joinClause}${whereClause}`;
       const countParams = params.slice(0, -2);
       const totalResult = (await this.adapter
