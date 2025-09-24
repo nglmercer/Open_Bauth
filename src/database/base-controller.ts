@@ -469,7 +469,7 @@ export class BaseController<T = Record<string, any>> {
           continue;
         } else if ('operator' in value) {
           clauses.push(`"${key}" ${value.operator} ?`);
-          params.push(this.convertValueForDatabase(value.value));
+          params.push(value.value);
           continue;
         }
       }
@@ -533,16 +533,6 @@ export class BaseController<T = Record<string, any>> {
         return boolValue ? 1 : 0;
       }
       return boolValue;
-    }
-    if (value instanceof Uint8Array || value instanceof Buffer) {
-      return Buffer.from(value);
-    }
-    if (value instanceof ArrayBuffer) {
-      return Buffer.from(value);
-    }
-    if (ArrayBuffer.isView(value)) {
-      const u8 = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
-      return Buffer.from(u8);
     }
 
     return value;
