@@ -458,11 +458,11 @@ export class BaseController<T = Record<string, any>> {
       if (typeof value === "object" && !ArrayBuffer.isView(value) && !(value instanceof Date)) {
         if ('isTruthy' in value && value.isTruthy === true) {
           clauses.push(`"${key}" = ?`);
-          params.push(1); // FIX: Use a parameter instead of a literal '1'
+          params.push(1);
           continue;
         } else if ('isFalsy' in value && value.isFalsy === true) {
           clauses.push(`("${key}" IS NULL OR "${key}" = ?)`);
-          params.push(0); // FIX: Use a parameter instead of a literal '0'
+          params.push(0);
           continue;
         } else if ('isSet' in value) {
           clauses.push(`"${key}" IS ${value.isSet ? 'NOT NULL' : 'NULL'}`);
@@ -859,7 +859,7 @@ export class BaseController<T = Record<string, any>> {
     }
   }
 
-  async random(
+async random(
     filters: WhereConditions<T> = {},
     limit: number = 1
   ): Promise<ControllerResponse<T[]>> {
@@ -867,7 +867,10 @@ export class BaseController<T = Record<string, any>> {
       const { sql: whereClause, params } = this.buildWhereClause(
         (filters as Record<string, any>) || {}
       );
-      const query = `SELECT * FROM "${this.tableName}"${whereClause} ORDER BY RANDOM() LIMIT ?`;
+      
+      const randomOrderClause = this._getRandomOrderClause();
+
+      const query = `SELECT * FROM "${this.tableName}"${whereClause} ${randomOrderClause} LIMIT ?`;
       params.push(limit);
 
       const records = await this.adapter.query(query).all(...params);
@@ -883,7 +886,17 @@ export class BaseController<T = Record<string, any>> {
       };
     }
   }
+  private _getRandomOrderClause(): string {
+    if (this.isSQLServer) {
+      return "ORDER BY NEWID()";
+    }
+    
+    if (this.isSQLite) {
+      return "ORDER BY RANDOM()";
+    }
 
+    return "ORDER BY RANDOM()";
+  }
   async findWithRelations(
     options: RelationOptions<T> = {}
   ): Promise<ControllerResponse<T[]>> {
