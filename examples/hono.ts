@@ -16,7 +16,7 @@ import { AppContext, AppDependencies, Services } from './app';
 import { merged} from './integrations/newSchemas';
 //,pointsSchema, processesSchema, notificationsSchema
 import { createMiddlewareFactory } from './middleware/factory';
-
+import { setupGenericControllers,tableConfigs } from './routers/base.controller';
 // Router Imports
 import { createPublicRoutes } from './routers/public.routes';
 import { createProtectedRoutes } from './routers/protected.routes';
@@ -24,7 +24,7 @@ import { createModeratorRoutes } from './routers/moderator.routes';
 import { createAdminRoutes } from './routers/admin.routes';
 import { createProductRoutes } from './routers/product.routes';
 import { globalErrorHandler } from './middleware/error.handler';
-
+import { createSuperuserAuthMethodsRouter } from './routers/auth.routes';
 
 // --- 1. Service Initialization ---
 const db = new Database('auth.db');
@@ -71,6 +71,7 @@ app.use('/images/*', serveStatic({ root: './public' }));
 // --- 4. Routers ---
 // Create routers by passing the single dependency container
 const publicRoutes = createPublicRoutes({ authService: services.authService });
+const superuserAuthMethodsRoutes = createSuperuserAuthMethodsRouter(services);
 const protectedRoutes = createProtectedRoutes({ requireAuth: middlewares.requireAuth() });
 const moderatorRoutes = createModeratorRoutes({
   requireAuth: middlewares.requireAuth(),
@@ -85,12 +86,16 @@ const adminRoutes = createAdminRoutes(
   }
 );
 const productRoutes = createProductRoutes({ dbInitializer });
+const genericRouters = setupGenericControllers(dbInitializer);
 
-// Mount routers
+// Mount routers firts publics later protected
 app.route('/auth', publicRoutes);
+app.route('/api', genericRouters);
+//app.route('/api/collections/_superusers', superuserAuthMethodsRoutes);
 app.route('/api', protectedRoutes);
 app.route('/api/mod', moderatorRoutes);
 app.route('/api/admin', adminRoutes);
 app.route('/api', productRoutes);
+//app.route('/api/collections/')
 // --- 5. Export for Bun ---
 export default app;

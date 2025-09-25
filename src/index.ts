@@ -9,7 +9,7 @@ export * from './types/auth';
  */
 export const AUTH_LIBRARY_INFO = {
   name: 'Framework-Agnostic Authentication Library',
-  version: '1.2.9',
+  version: '1.3.0',
   description: 'A comprehensive framework-agnostic authentication and authorization library built with TypeScript, Bun, and SQLite',
   author: 'Auth Library Development Team',
   license: 'MIT',
