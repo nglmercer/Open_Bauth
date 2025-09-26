@@ -92,36 +92,36 @@ const initialUsers = [
   {
     email: 'admin@example.com',
     password: 'Admin123!@#',
-    firstName: 'Admin',
-    lastName: 'User',
+    first_name: 'Admin',
+    last_name: 'User',
     roles: ['admin']
   },
   {
     email: 'moderator@example.com',
     password: 'Moderator123!',
-    firstName: 'Moderator',
-    lastName: 'User',
+    first_name: 'Moderator',
+    last_name: 'User',
     roles: ['moderator']
   },
   {
     email: 'editor@example.com',
     password: 'Editor123!',
-    firstName: 'Editor',
-    lastName: 'User',
+    first_name: 'Editor',
+    last_name: 'User',
     roles: ['editor']
   },
   {
     email: 'author@example.com',
     password: 'Author123!',
-    firstName: 'Author',
-    lastName: 'User',
+    first_name: 'Author',
+    last_name: 'User',
     roles: ['author']
   },
   {
     email: 'user@example.com',
     password: 'User123!',
-    firstName: 'Regular',
-    lastName: 'User',
+    first_name: 'Regular',
+    last_name: 'User',
     roles: ['user']
   }
 ]
@@ -195,8 +195,8 @@ export async function seedDatabase(dbPath?: string): Promise<void> {
         const result = await authService.register({
           email: user.email,
           password: user.password,
-          first_name: user.firstName,
-          last_name: user.lastName,
+          first_name: user.first_name,
+          last_name: user.last_name,
         });
         
         if (result && result.success && result.user) {

@@ -27,7 +27,11 @@ export interface ValidationRule {
   validator?: (value: any) => boolean;
   message?: string;
 }
-
+export interface OneToOneRelationConfig {
+  name: string;        
+  tableName: string;  
+  sharedKey: string; 
+}
 export interface ControllerConfig {
   tableName: string;
   primaryKey?: string;
@@ -36,6 +40,7 @@ export interface ControllerConfig {
     update?: ValidationRule[];
   };
   relationships?: RelationshipConfig[];
+  oneToOneRelations?: OneToOneRelationConfig[];
   defaultFilters?: Record<string, any>;
   defaultOrder?: {
     field: string;
@@ -52,7 +57,21 @@ interface RelationshipConfig {
   select?: string[];
   reverse?: boolean; // true for belongsTo relationships
 }
+const toSnake = (s: string): string => {
+  return s.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+};
 
+const convertKeys = (obj: any, converter: (s: string) => string): any => {
+  if (Array.isArray(obj)) {
+    return obj.map(v => convertKeys(v, converter));
+  } else if (obj !== null && typeof obj === 'object' && obj.constructor === Object) {
+    return Object.keys(obj).reduce((result, key) => {
+      result[converter(key)] = convertKeys(obj[key], converter);
+      return result;
+    }, {} as any);
+  }
+  return obj;
+};
 export class GenericController<T extends Record<string, any> = Record<string, any>> {
   private controller: BaseController<T>;
   private config: ControllerConfig;
@@ -279,16 +298,16 @@ export class GenericController<T extends Record<string, any> = Record<string, an
     }
   }
 
-  private preprocessDataForDatabase(data: any, operation: 'create' | 'update'): any {
-    const processedData = { ...data };
+  protected preprocessDataForDatabase(data: any, operation: 'create' | 'update'): any {
+    let processedData = convertKeys(data, toSnake);
     
-    // Definir campos que deben ser convertidos a JSON
     const jsonFields = this.getJsonFields();
     
     for (const field of jsonFields) {
-      if (processedData[field] !== undefined && processedData[field] !== null) {
-        if (Array.isArray(processedData[field]) || typeof processedData[field] === 'object') {
-          processedData[field] = JSON.stringify(processedData[field]);
+      const snakeCaseField = toSnake(field);
+      if (processedData[snakeCaseField] !== undefined && processedData[snakeCaseField] !== null) {
+        if (Array.isArray(processedData[snakeCaseField]) || typeof processedData[snakeCaseField] === 'object') {
+          processedData[snakeCaseField] = JSON.stringify(processedData[snakeCaseField]);
         }
       }
     }
@@ -329,63 +348,49 @@ export class GenericController<T extends Record<string, any> = Record<string, an
     try {
       const body = await c.req.json();
       
-      // Validate data
       const validation = this.validateData(body, 'create');
       if (!validation.valid) {
-        return c.json({
-          success: false,
-          error: validation.errors.join(', ')
-        }, 400);
+        return c.json({ success: false, error: validation.errors.join(', ') }, 400);
+      }
+      
+      const primaryKey = this.config.primaryKey!;
+      if (!body[primaryKey]) {
+        body[primaryKey] = randomUUID();
       }
 
-      // Add ID if not present
-      if (!body[this.config.primaryKey!]) {
-        body[this.config.primaryKey!] = randomUUID();
-      }
-
-      // Add timestamps
       const now = new Date().toISOString();
       if (!body.created_at) body.created_at = now;
       if (!body.updated_at) body.updated_at = now;
 
-      // Preprocess data for database (convert arrays/objects to JSON)
       const processedData = this.preprocessDataForDatabase(body, 'create');
-
-      const createResult = await this.controller.create(processedData);
-
+      const mainTableData = await this.filterDataBySchema(processedData);
+      const createResult = await this.controller.create(mainTableData);
       if (!createResult.success || !createResult.data) {
+        return c.json({ success: false, error: createResult.error || 'Failed to create main record' }, 500);
+      }
+
+      const newId = createResult.data[primaryKey];
+      const relationResult = await this.handleOneToOneRelations(newId, body, 'create');
+
+      if (!relationResult.success) {
         return c.json({
           success: false,
-          error: createResult.error || 'Failed to create record'
+          error: `Main record created, but failed to process related data: ${relationResult.errors.join(', ')}`
         }, 500);
       }
 
-      // Postprocess data from database (parse JSON back to arrays/objects)
       let finalData = this.postprocessDataFromDatabase(createResult.data);
       
-      // Optionally fetch with relations
-      if (this.config.relationships) {
-        const joins = this.buildJoins();
-        const withRelations = await this.controller.findByIdWithRelations(
-          createResult.data[this.config.primaryKey!], 
-          joins
-        );
-        if (withRelations.success && withRelations.data) {
-          finalData = this.postprocessDataFromDatabase(withRelations.data);
-        }
+      const joins = this.buildJoins();
+      const withRelations = await this.controller.findByIdWithRelations(newId, joins);
+      if (withRelations.success && withRelations.data) {
+        finalData = this.postprocessDataFromDatabase(withRelations.data);
       }
 
-      return c.json({
-        success: true,
-        data: finalData,
-        message: 'Record created successfully'
-      }, 201);
+      return c.json({ success: true, data: finalData, message: 'Record created successfully' }, 201);
     } catch (error) {
       console.error(`Error creating ${this.config.tableName}:`, error);
-      return c.json({
-        success: false,
-        error: 'Failed to create record'
-      }, 500);
+      return c.json({ success: false, error: 'Failed to create record' }, 500);
     }
   }
 
@@ -394,62 +399,45 @@ export class GenericController<T extends Record<string, any> = Record<string, an
       const id = c.req.param('id');
       const body = await c.req.json();
 
-      // Check if record exists
       const existingRecord = await this.controller.findById(id);
       if (!existingRecord.success || !existingRecord.data) {
-        return c.json({
-          success: false,
-          error: 'Record not found'
-        }, 404);
+        return c.json({ success: false, error: 'Record not found' }, 404);
       }
 
-      // Validate data
       const validation = this.validateData(body, 'update');
       if (!validation.valid) {
-        return c.json({
-          success: false,
-          error: validation.errors.join(', ')
-        }, 400);
+        return c.json({ success: false, error: validation.errors.join(', ') }, 400);
       }
-
-      // Add updated timestamp
+      console.log("body", body)
       body.updated_at = new Date().toISOString();
-
-      // Preprocess data for database
       const processedData = this.preprocessDataForDatabase(body, 'update');
+      const mainTableData = await this.filterDataBySchema(processedData);
+      console.log("processedData", {processedData, mainTableData})
+      const updateResult = await this.controller.update(id, mainTableData);
 
-      const updateResult = await this.controller.update(id, processedData);
-
-      if (!updateResult.success || !updateResult.data) {
+      if (!updateResult.success) {
+        return c.json({ success: false, error: updateResult.error || 'Failed to update main record' }, 500);
+      }
+      const relationResult = await this.handleOneToOneRelations(id, body, 'update');
+      if (!relationResult.success) {
         return c.json({
           success: false,
-          error: updateResult.error || 'Failed to update record'
+          error: `Main record updated, but failed to process related data: ${relationResult.errors.join(', ')}`
         }, 500);
       }
-
-      // Postprocess data from database
+      
       let finalData = this.postprocessDataFromDatabase(updateResult.data);
       
-      // Optionally fetch with relations
-      if (this.config.relationships) {
-        const joins = this.buildJoins();
-        const withRelations = await this.controller.findByIdWithRelations(id, joins);
-        if (withRelations.success && withRelations.data) {
-          finalData = this.postprocessDataFromDatabase(withRelations.data);
-        }
+      const joins = this.buildJoins();
+      const withRelations = await this.controller.findByIdWithRelations(id, joins);
+      if (withRelations.success && withRelations.data) {
+        finalData = this.postprocessDataFromDatabase(withRelations.data);
       }
 
-      return c.json({
-        success: true,
-        data: finalData,
-        message: 'Record updated successfully'
-      });
+      return c.json({ success: true, data: finalData, message: 'Record updated successfully' });
     } catch (error) {
       console.error(`Error updating ${this.config.tableName}:`, error);
-      return c.json({
-        success: false,
-        error: 'Failed to update record'
-      }, 500);
+      return c.json({ success: false, error: 'Failed to update record' }, 500);
     }
   }
 
@@ -702,6 +690,74 @@ export class GenericController<T extends Record<string, any> = Record<string, an
         error: 'Failed to get schema'
       }, 500);
     }
+  }
+  private async handleOneToOneRelations(
+    mainRecordId: string,
+    data: Record<string, any>,
+    operation: 'create' | 'update'
+  ): Promise<{ success: boolean; errors: string[] }> {
+    if (!this.config.oneToOneRelations) {
+      return { success: true, errors: [] };
+    }
+
+    const errors: string[] = [];
+
+    for (const relation of this.config.oneToOneRelations) {
+      const relatedData = data[relation.name];
+
+      if (!relatedData || typeof relatedData !== 'object') {
+        continue;
+      }
+
+      try {
+        const relatedController = this.dbInitializer.createController(relation.tableName);
+        const existing = await relatedController.findById(mainRecordId);
+        const processedRelatedData = this.preprocessDataForDatabase(relatedData, operation);
+
+        if (existing.success && existing.data) {
+          processedRelatedData.updated_at = new Date().toISOString();
+          const updateResult = await relatedController.update(mainRecordId, processedRelatedData);
+          if (!updateResult.success) {
+            errors.push(`Failed to update related record in '${relation.tableName}': ${updateResult.error}`);
+          }
+        } else {
+          processedRelatedData[relation.sharedKey] = mainRecordId;
+          const now = new Date().toISOString();
+          if (!processedRelatedData.created_at) processedRelatedData.created_at = now;
+          if (!processedRelatedData.updated_at) processedRelatedData.updated_at = now;
+
+          const createResult = await relatedController.create(processedRelatedData);
+          if (!createResult.success) {
+            errors.push(`Failed to create related record in '${relation.tableName}': ${createResult.error}`);
+          }
+        }
+      } catch (error: any) {
+        errors.push(`An exception occurred while handling relation '${relation.name}': ${error.message}`);
+      }
+    }
+
+    return { success: errors.length === 0, errors };
+  }
+  private async filterDataBySchema(data: Record<string, any>): Promise<Record<string, any>> {
+    const schemaResult = await this.controller.getSchema();
+    
+    if (!schemaResult.success || !schemaResult.data?.columns) {
+      console.warn(`Could not retrieve schema for table ${this.config.tableName}. Skipping data filtering.`);
+      return data;
+    }
+
+    // Crear un Set con los nombres de las columnas para una búsqueda eficiente (O(1))
+    const validColumns = new Set(schemaResult.data.columns.map((col:any) => col.name));
+    
+    const filteredData: Record<string, any> = {};
+
+    for (const key in data) {
+      if (validColumns.has(key)) {
+        filteredData[key] = data[key];
+      }
+    }
+
+    return filteredData;
   }
 }
 const userConfig: ControllerConfig = {

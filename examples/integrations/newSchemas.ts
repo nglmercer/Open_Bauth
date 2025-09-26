@@ -94,6 +94,7 @@ const userProfileSchema: TableSchema = {
     { name: "id", type: "TEXT", primaryKey: true, defaultValue: "(lower(hex(randomblob(16))))" },
     { name: "username", type: "TEXT", unique: true },
     { name: "country", type: "TEXT" },
+    { name: "projects" , type: "TEXT" }, // JSON array of project IDs
     { name: "profile_photo_url", type: "TEXT" },
     { name: "last_transaction_id", type: "TEXT" },
     { name: "last_transaction_date", type: "DATETIME" },

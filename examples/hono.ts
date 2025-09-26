@@ -90,6 +90,7 @@ const genericRouters = setupGenericControllers(dbInitializer);
 
 // Mount routers firts publics later protected
 app.route('/auth', publicRoutes);
+app.route('/api/auth', publicRoutes);
 app.route('/api', genericRouters);
 //app.route('/api/collections/_superusers', superuserAuthMethodsRoutes);
 app.route('/api', protectedRoutes);
