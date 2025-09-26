@@ -705,21 +705,12 @@ export class GenericController<T extends Record<string, any> = Record<string, an
 
   private async filterDataBySchemaForTable(data: Record<string, any>, tableName: string): Promise<Record<string, any>> {
     const relatedController = this.dbInitializer.createController(tableName);
-    const schemaResult = await relatedController.getSchema();
     const getSchemaFn = async () => await relatedController.getSchema();
-    if (!schemaResult.success || !schemaResult.data?.columns) {
-      console.warn(`Could not retrieve schema for table ${tableName}. Skipping data filtering.`);
-      return data;
-    }
     return SchemaDataFilter.filterAndFillDefaults(data, getSchemaFn);
   }
+
   private async filterDataBySchema(data: Record<string, any>): Promise<Record<string, any>> {
-    const schemaResult = await this.controller.getSchema();
     const getSchemaFn = async () => await this.controller.getSchema();
-    if (!schemaResult.success || !schemaResult.data?.columns) {
-      console.warn(`Could not retrieve schema for table ${this.config.tableName}. Skipping data filtering.`);
-      return data;
-    }
     return SchemaDataFilter.filterAndFillDefaults(data, getSchemaFn);
   }
 }
