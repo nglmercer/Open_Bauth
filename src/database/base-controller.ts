@@ -941,11 +941,12 @@ async random(
         if (join.select && join.select.length > 0) {
           const joinColumns = join.select
             .map((col) => {
-              if (/\s+as\s+/i.test(col)) { // Case-insensitive "AS"
+              if (col === '*') {
+                return `"${join.table}".*`; 
+              }
+              if (/\s+as\s+/i.test(col)) {
                 const [originalCol, alias] = col.split(/\s+as\s+/i);
-                return `"${
-                  join.table
-                }"."${originalCol.trim()}" AS "${alias.trim()}"`;
+                return `"${join.table}"."${originalCol.trim()}" AS "${alias.trim()}"`;
               }
               return `"${join.table}"."${col}" AS "${join.table}_${col}"`;
             })
@@ -1022,11 +1023,12 @@ async random(
         if (join.select && join.select.length > 0) {
           const joinColumns = join.select
             .map((col) => {
+              if (col === '*') {
+                return `"${join.table}".* `;
+              }
               if (/\s+as\s+/i.test(col)) {
                 const [originalCol, alias] = col.split(/\s+as\s+/i);
-                return `"${
-                  join.table
-                }"."${originalCol.trim()}" AS "${alias.trim()}"`;
+                return `"${join.table}"."${originalCol.trim()}" AS "${alias.trim()}"`;
               }
               return `"${join.table}"."${col}" AS "${join.table}_${col}"`;
             })
@@ -1094,7 +1096,7 @@ async random(
   }
 
   /**
-   * Helper method to create a reverse join configuration (for belongsTo relationships)
+   * Helper method to create a reverse join configuration
    */
   createReverseJoin(
     targetTable: string,

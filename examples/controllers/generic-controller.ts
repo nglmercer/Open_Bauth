@@ -30,7 +30,8 @@ export interface ValidationRule {
 export interface OneToOneRelationConfig {
   name: string;        
   tableName: string;  
-  sharedKey: string; 
+  localKey: string;   
+  foreignKey: string; 
 }
 export interface ControllerConfig {
   tableName: string;
@@ -39,23 +40,12 @@ export interface ControllerConfig {
     create?: ValidationRule[];
     update?: ValidationRule[];
   };
-  relationships?: RelationshipConfig[];
   oneToOneRelations?: OneToOneRelationConfig[];
   defaultFilters?: Record<string, any>;
   defaultOrder?: {
     field: string;
     direction: 'ASC' | 'DESC';
   };
-}
-
-interface RelationshipConfig {
-  name: string;
-  table: string;
-  localKey: string;
-  foreignKey: string;
-  type?: 'INNER' | 'LEFT' | 'RIGHT' | 'FULL';
-  select?: string[];
-  reverse?: boolean; // true for belongsTo relationships
 }
 const toSnake = (s: string): string => {
   return s.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
@@ -145,64 +135,48 @@ export class GenericController<T extends Record<string, any> = Record<string, an
     return { valid: errors.length === 0, errors };
   }
 
-  // Build relationships/joins
-  private buildJoins(): JoinOptions[] {
-    if (!this.config.relationships) return [];
-
-    return this.config.relationships.map(rel => {
-      if (rel.reverse) {
-        // For belongsTo relationships (e.g., product belongs to category)
-        return this.controller.createReverseJoin(
-          rel.table,
-          rel.localKey,   // foreign key in current table
-          rel.foreignKey, // primary key in target table
-          rel.type as "INNER" | "LEFT" | "RIGHT" | undefined,
-          rel.select
-        );
-      } else {
-        // For hasMany relationships
+  private buildAllJoins(): JoinOptions[] {
+    const joins: JoinOptions[] = [];
+    
+    if (this.config.oneToOneRelations) {
+      const oneToOneJoins = this.config.oneToOneRelations.map(rel => {
         return this.controller.createJoin(
-          rel.table,
-          rel.localKey,   // primary key in current table
-          rel.foreignKey, // foreign key in target table
-          rel.type,
-          rel.select
+          rel.tableName,
+          rel.localKey,   
+          rel.foreignKey,  
+          'LEFT',
+          ['*']
         );
-      }
-    });
+      });
+      joins.push(...oneToOneJoins);
+    }
+    
+    return joins;
   }
 
-  // Get all records
   async getAll(c: Context): Promise<Response> {
     try {
-      // Parse query parameters
       const limit = parseInt(c.req.query('limit') || '50');
       const offset = parseInt(c.req.query('offset') || '0');
       const orderBy = c.req.query('order_by') || this.config.defaultOrder?.field;
       const orderDirection = (c.req.query('order_direction') || this.config.defaultOrder?.direction || 'ASC') as 'ASC' | 'DESC';
       
-      // Build filters from query parameters
       const filters: Record<string, any> = { ...this.config.defaultFilters };
       
-      // Add query parameter filters
       for (const [key, value] of Object.entries(c.req.query())) {
         if (!['limit', 'offset', 'order_by', 'order_direction', 'include_relations'].includes(key) && value) {
-          // Handle array filters (e.g., ?status=active,inactive)
           if (value.includes(',')) {
             filters[key] = value.split(',');
           } else {
             filters[key] = value;
           }
         }
-      }
-
-      const includeRelations = c.req.query('include_relations') === 'true';
-      
+      }      
       let result;
       
-      if (includeRelations && this.config.relationships) {
-        // Use relations
-        const joins = this.buildJoins();
+      if ( this.config.oneToOneRelations) {
+        // Usar joins que incluyen tanto relationships como oneToOneRelations
+        const joins = this.buildAllJoins();
         const options: RelationOptions<T> = {
           where: filters as WhereConditions<T>,
           joins,
@@ -214,7 +188,6 @@ export class GenericController<T extends Record<string, any> = Record<string, an
         
         result = await this.controller.findWithRelations(options);
       } else {
-        // Simple query without relations
         const options: QueryOptions<T> = {
           where: filters as WhereConditions<T>,
           limit,
@@ -233,7 +206,6 @@ export class GenericController<T extends Record<string, any> = Record<string, an
         }, 500);
       }
 
-      // Postprocess all records
       const processedData = result.data?.map((record: any) => 
         this.postprocessDataFromDatabase(record)
       ) || [];
@@ -261,8 +233,8 @@ export class GenericController<T extends Record<string, any> = Record<string, an
       
       let result;
       
-      if (includeRelations && this.config.relationships) {
-        const joins = this.buildJoins();
+      if (includeRelations && this.config.oneToOneRelations) {
+        const joins = this.buildAllJoins();
         result = await this.controller.findByIdWithRelations(id, joins);
       } else {
         result = await this.controller.findById(id);
@@ -381,7 +353,7 @@ export class GenericController<T extends Record<string, any> = Record<string, an
 
       let finalData = this.postprocessDataFromDatabase(createResult.data);
       
-      const joins = this.buildJoins();
+      const joins = this.buildAllJoins();
       const withRelations = await this.controller.findByIdWithRelations(newId, joins);
       if (withRelations.success && withRelations.data) {
         finalData = this.postprocessDataFromDatabase(withRelations.data);
@@ -427,7 +399,7 @@ export class GenericController<T extends Record<string, any> = Record<string, an
       
       let finalData = this.postprocessDataFromDatabase(updateResult.data);
       
-      const joins = this.buildJoins();
+      const joins = this.buildAllJoins();
       const withRelations = await this.controller.findByIdWithRelations(id, joins);
       console.log("withRelations", {withRelations,finalData})
       if (withRelations.success && withRelations.data) {
@@ -489,8 +461,8 @@ export class GenericController<T extends Record<string, any> = Record<string, an
 
       let result;
 
-      if (includeRelations && this.config.relationships) {
-        const joins = this.buildJoins();
+      if (includeRelations && this.config.oneToOneRelations) {
+        const joins = this.buildAllJoins();
         const options: RelationOptions<T> = {
           where: combinedFilters as WhereConditions<T>,
           joins,
@@ -697,20 +669,16 @@ export class GenericController<T extends Record<string, any> = Record<string, an
     operation: 'create' | 'update'
   ): Promise<{ success: boolean; errors: string[] }> {
     if (!this.config.oneToOneRelations) {
-      console.log("No one-to-one relations defined for", this.config)
       return { success: true, errors: [] };
     }
 
     const errors: string[] = [];
     for (const relation of this.config.oneToOneRelations) {
       const relatedData = await this.filterDataBySchemaForTable(data, relation.tableName);
-      console.log("relatedData", relatedData,relation)
-
 
       try {
         const relatedController = this.dbInitializer.createController(relation.tableName);
         const existing = await relatedController.findById(mainRecordId);
-        console.log("existing", existing)
         // Filter related data using schema before processing
         const processedRelatedData = this.preprocessDataForDatabase(relatedData, operation);
         const filteredRelatedData = await this.filterDataBySchemaForTable(processedRelatedData, relation.tableName);
@@ -721,11 +689,9 @@ export class GenericController<T extends Record<string, any> = Record<string, an
             errors.push(`Failed to update related record in '${relation.tableName}': ${updateResult.error}`);
           }
         } else {
-          filteredRelatedData[relation.sharedKey] = mainRecordId;
-          console.log("filteredRelatedData", filteredRelatedData)
+          filteredRelatedData[relation.foreignKey] = mainRecordId;
           const createResult = await relatedController.create(filteredRelatedData);
           if (!createResult.success) {
-            console.log("createResult", createResult)
             errors.push(`Failed to create related record in '${relation.tableName}': ${createResult.error}`);
           }
         }

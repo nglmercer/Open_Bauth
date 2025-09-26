@@ -20,15 +20,12 @@ const productConfig: ControllerConfig = {
       { field: 'category_id', type: 'string' }
     ]
   },
-  relationships: [
+  oneToOneRelations: [
     {
       name: 'category',
-      table: 'categories',
+      tableName: 'categories',
       localKey: 'category_id',    // clave foránea en products
       foreignKey: 'id',           // clave primaria en categories
-      type: 'LEFT',
-      reverse: true, // Esto indica que es una relación belongsTo
-      select: ['name AS category_name', 'icon AS category_icon', 'description AS category_description']
     }
   ],
   defaultFilters: {
@@ -56,15 +53,12 @@ const categoryConfig: ControllerConfig = {
       { field: 'description', type: 'string', max: 500 }
     ]
   },
-  relationships: [
+  oneToOneRelations: [
     {
       name: 'products',
-      table: 'products',
+      tableName: 'products',
       localKey: 'id',           // clave primaria en categories
       foreignKey: 'category_id', // clave foránea en products
-      type: 'LEFT',
-      reverse: false, // Esto indica que es una relación hasMany
-      select: ['id', 'name', 'price', 'is_available']
     }
   ],
   defaultFilters: {
@@ -129,19 +123,10 @@ const userConfig: ControllerConfig = {
   {
     name: 'user_profiles', // Name of the relation (singular)
     tableName: 'user_profiles',
-    sharedKey: 'id' // user_profiles.id = users.id (shared primary key)
+    localKey: 'id', // user_profiles.id = users.id (shared primary key)
+    foreignKey: 'id' // users.id
   }
-  ],
-  relationships: [
-    {
-      name: 'users',
-      table: 'users',
-      localKey: 'id',        // users.id
-      foreignKey: 'id', // user_profiles.id
-      type: 'INNER',
-      select: ['id']
-    }
-  ],
+  ]
 };
 const projectsConfig: ControllerConfig = {
   tableName: 'projects',
