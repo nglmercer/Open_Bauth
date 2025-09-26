@@ -935,25 +935,7 @@ async random(
       } = options;
       const { sql: whereClause, params } = this.buildWhereClause(where || {});
 
-      let selectClause = `"${this.tableName}".*`;
-
-      for (const join of joins) {
-        if (join.select && join.select.length > 0) {
-          const joinColumns = join.select
-            .map((col) => {
-              if (col === '*') {
-                return `"${join.table}".*`; 
-              }
-              if (/\s+as\s+/i.test(col)) {
-                const [originalCol, alias] = col.split(/\s+as\s+/i);
-                return `"${join.table}"."${originalCol.trim()}" AS "${alias.trim()}"`;
-              }
-              return `"${join.table}"."${col}" AS "${join.table}_${col}"`;
-            })
-            .join(", ");
-          selectClause += `, ${joinColumns}`;
-        }
-      }
+      let selectClause: string;
 
       if (select.length > 0) {
         selectClause = select
@@ -965,8 +947,33 @@ async random(
             return `"${this.tableName}"."${col}"`;
           })
           .join(", ");
-      }
+      } else {
+        const selectParts: string[] = [];
 
+        for (const join of joins) {
+          if (join.select && join.select.length > 0) {
+            const joinColumns = join.select
+              .map((col) => {
+                if (col === '*') {
+                  return `"${join.table}".*`; 
+                }
+                if (/\s+as\s+/i.test(col)) {
+                  const [originalCol, alias] = col.split(/\s+as\s+/i);
+                  return `"${join.table}"."${originalCol.trim()}" AS "${alias.trim()}"`;
+                }
+                return `"${join.table}"."${col}" AS "${join.table}_${col}"`;
+              })
+              .join(", ");
+            if (joinColumns) {
+              selectParts.push(joinColumns);
+            }
+          }
+        }
+
+        selectParts.push(`"${this.tableName}".*`);
+        selectClause = selectParts.filter(p => p.trim()).join(', ');
+      }
+      
       let joinClause = "";
       for (const join of joins) {
         const joinType = join.type || "LEFT";
@@ -987,15 +994,21 @@ async random(
 
       const records = await this.adapter.query(query).all(...params);
 
-      let countQuery = `SELECT COUNT(*) as total FROM "${this.tableName}"${joinClause}${whereClause}`;
+      const primaryKey = await this.getPrimaryKey();
+      let countQuery = `SELECT COUNT(DISTINCT "${this.tableName}"."${primaryKey}") as total FROM "${this.tableName}"${joinClause}${whereClause}`;
       const countParams = params.slice(0, -2);
       const totalResult = (await this.adapter
         .query(countQuery)
         .get(...countParams)) as { total: number };
+      const processedData = records.map((record: any) => {
+        return Object.fromEntries(
+          Object.entries(record).filter(([_, value]) => value !== null && value !== undefined)
+        ) as T;
+      });
 
       return {
         success: true,
-        data: records as T[],
+        data: processedData,
         total: totalResult.total,
       };
     } catch (error: any) {
@@ -1006,9 +1019,6 @@ async random(
     }
   }
 
-  /**
-   * Find a single record by ID with related data
-   */
   async findByIdWithRelations(
     id: number | string,
     joins: JoinOptions[] = [],
@@ -1017,25 +1027,7 @@ async random(
     try {
       const primaryKey = await this.getPrimaryKey();
 
-      let selectClause = `"${this.tableName}".*`;
-
-      for (const join of joins) {
-        if (join.select && join.select.length > 0) {
-          const joinColumns = join.select
-            .map((col) => {
-              if (col === '*') {
-                return `"${join.table}".* `;
-              }
-              if (/\s+as\s+/i.test(col)) {
-                const [originalCol, alias] = col.split(/\s+as\s+/i);
-                return `"${join.table}"."${originalCol.trim()}" AS "${alias.trim()}"`;
-              }
-              return `"${join.table}"."${col}" AS "${join.table}_${col}"`;
-            })
-            .join(", ");
-          selectClause += `, ${joinColumns}`;
-        }
-      }
+      let selectClause: string;
 
       if (select.length > 0) {
         selectClause = select
@@ -1047,8 +1039,33 @@ async random(
             return `"${this.tableName}"."${col}"`;
           })
           .join(", ");
-      }
+      } else {
+        const selectParts: string[] = [];
 
+        for (const join of joins) {
+          if (join.select && join.select.length > 0) {
+            const joinColumns = join.select
+              .map((col) => {
+                if (col === '*') {
+                  return `"${join.table}".*`;
+                }
+                if (/\s+as\s+/i.test(col)) {
+                  const [originalCol, alias] = col.split(/\s+as\s+/i);
+                  return `"${join.table}"."${originalCol.trim()}" AS "${alias.trim()}"`;
+                }
+                return `"${join.table}"."${col}" AS "${join.table}_${col}"`;
+              })
+              .join(", ");
+            if (joinColumns) {
+              selectParts.push(joinColumns);
+            }
+          }
+        }
+        
+        selectParts.push(`"${this.tableName}".*`);
+        selectClause = selectParts.filter(p => p.trim()).join(', ');
+      }
+      
       let joinClause = "";
       for (const join of joins) {
         const joinType = join.type || "LEFT";
@@ -1064,10 +1081,13 @@ async random(
           error: "Record not found",
         };
       }
+      const processedRecord = Object.fromEntries(
+        Object.entries(record).filter(([_, value]) => value !== null && value !== undefined)
+      );
 
       return {
         success: true,
-        data: record as T,
+        data: processedRecord as T,
       };
     } catch (error: any) {
       return {
