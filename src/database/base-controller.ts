@@ -32,7 +32,13 @@ export interface QueryOptions<T = any> {
   orderDirection?: "ASC" | "DESC";
   where?: WhereConditions<T>;
 }
-
+export interface ColumnInfo {
+  name: string;
+  type: string;
+  notNull: boolean;
+  defaultValue: any;
+  primaryKey: boolean;
+}
 export interface JoinOptions {
   table: string;
   on: string;
@@ -584,7 +590,7 @@ export class BaseController<T = Record<string, any>> {
       const validatedData = this.validateData(data, "create");
       const cleanData = Object.fromEntries(
         Object.entries(validatedData).filter(
-          ([_, value]) => value !== undefined // Allow null to be explicitly set
+          ([_, value]) => value !== undefined
         )
       );
       if (Object.keys(cleanData).length === 0) {
@@ -592,25 +598,34 @@ export class BaseController<T = Record<string, any>> {
       }
 
       const columns = Object.keys(cleanData).map((c) => `"${c}"`);
-      const placeholders = Object.keys(cleanData)
-        .map(() => "?")
-        .join(", ");
-      const values = Object.values(cleanData).map((value) =>
-        this.convertValueForDatabase(value)
-      );
+      const placeholders = Object.keys(cleanData).map(() => "?").join(", ");
+      
+      const values = Object.entries(cleanData).map(([key, value]) => {
+        if (value === null || 
+            typeof value === 'string' || 
+            typeof value === 'number' || 
+            typeof value === 'boolean' || 
+            typeof value === 'bigint' ||
+            ArrayBuffer.isView(value)) {
+          return this.convertValueForDatabase(value);
+        }
+        if (value instanceof Date) {
+          return value.toISOString();
+        }
+        if (typeof value === 'object') {
+          return JSON.stringify(value);
+        }
+        
+        throw new Error(`Invalid data type for column '${key}': ${typeof value}. Expected string, number, boolean, null, Date, or TypedArray`);
+      });
 
-      // RETURNING * might not be supported everywhere, but works for SQLite & Postgres
-      const insertQuery = `INSERT INTO "${this.tableName}" (${columns.join(
-        ", "
-      )}) VALUES (${placeholders}) RETURNING *`;
-
+      const insertQuery = `INSERT INTO "${this.tableName}" (${columns.join(", ")}) VALUES (${placeholders}) RETURNING *`;
       const result = await this.adapter.query(insertQuery).get(...values);
 
       if (!result) {
         return {
           success: false,
-          error:
-            "Failed to create record or retrieve the created data from database",
+          error: "Failed to create record or retrieve the created data from database",
         };
       }
 
@@ -622,7 +637,7 @@ export class BaseController<T = Record<string, any>> {
     } catch (error: any) {
       return {
         success: false,
-        error: error.message,
+        error: `Create failed: ${error.message}`,
       };
     }
   }
@@ -788,21 +803,29 @@ export class BaseController<T = Record<string, any>> {
     }
   }
 
-  async getSchema(): Promise<ControllerResponse> {
+  async getSchema(): Promise<{ success: boolean; data?: { columns: ColumnInfo[],tableName?: string; }, error?: string }> {
     try {
-      const tableInfo = await this.getTableInfo();
-      return {
-        success: true,
-        data: {
-          tableName: this.tableName,
-          columns: tableInfo,
-        },
-      };
+      const pragmaQuery = this.adapter.query(`PRAGMA table_info(${this.tableName})`);
+      const rawColumns = await pragmaQuery.all() as any[];
+
+      if (!rawColumns || rawColumns.length === 0) {
+        return { success: false, error: `Table '${this.tableName}' not found or has no columns.` };
+      }
+
+      const columns: ColumnInfo[] = rawColumns.map(col => ({
+        name: col.name,
+        type: col.type,
+        notNull: col.notnull === 1, // 'notnull' 0  1
+        defaultValue: col.dflt_value, 
+        primaryKey: col.pk > 0,
+        ...col
+      }));
+
+      return { success: true, data: { columns, tableName: this.tableName }};
+
     } catch (error: any) {
-      return {
-        success: false,
-        error: error.message,
-      };
+      // this.logger.error(...);
+      return { success: false, error: `Failed to get schema for table ${this.tableName}: ${error.message}` };
     }
   }
 

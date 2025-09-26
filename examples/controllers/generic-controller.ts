@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { DatabaseInitializer, BaseController, QueryOptions, RelationOptions, JoinOptions, WhereConditions } from '../../dist/index';
 import { randomUUID } from 'crypto';
-
+import { SchemaDataFilter } from '../integrations/SchemaDataFilter';
 // Generic interfaces for API responses
 interface ApiResponse<T = any> {
   success: boolean;
@@ -408,17 +408,16 @@ export class GenericController<T extends Record<string, any> = Record<string, an
       if (!validation.valid) {
         return c.json({ success: false, error: validation.errors.join(', ') }, 400);
       }
-      console.log("body", body)
       body.updated_at = new Date().toISOString();
       const processedData = this.preprocessDataForDatabase(body, 'update');
       const mainTableData = await this.filterDataBySchema(processedData);
-      console.log("processedData", {processedData, mainTableData})
       const updateResult = await this.controller.update(id, mainTableData);
 
       if (!updateResult.success) {
         return c.json({ success: false, error: updateResult.error || 'Failed to update main record' }, 500);
       }
       const relationResult = await this.handleOneToOneRelations(id, body, 'update');
+      console.log("relationResult", relationResult)
       if (!relationResult.success) {
         return c.json({
           success: false,
@@ -430,6 +429,7 @@ export class GenericController<T extends Record<string, any> = Record<string, an
       
       const joins = this.buildJoins();
       const withRelations = await this.controller.findByIdWithRelations(id, joins);
+      console.log("withRelations", {withRelations,finalData})
       if (withRelations.success && withRelations.data) {
         finalData = this.postprocessDataFromDatabase(withRelations.data);
       }
@@ -697,37 +697,35 @@ export class GenericController<T extends Record<string, any> = Record<string, an
     operation: 'create' | 'update'
   ): Promise<{ success: boolean; errors: string[] }> {
     if (!this.config.oneToOneRelations) {
+      console.log("No one-to-one relations defined for", this.config)
       return { success: true, errors: [] };
     }
 
     const errors: string[] = [];
-
     for (const relation of this.config.oneToOneRelations) {
-      const relatedData = data[relation.name];
+      const relatedData = await this.filterDataBySchemaForTable(data, relation.tableName);
+      console.log("relatedData", relatedData,relation)
 
-      if (!relatedData || typeof relatedData !== 'object') {
-        continue;
-      }
 
       try {
         const relatedController = this.dbInitializer.createController(relation.tableName);
         const existing = await relatedController.findById(mainRecordId);
+        console.log("existing", existing)
+        // Filter related data using schema before processing
         const processedRelatedData = this.preprocessDataForDatabase(relatedData, operation);
+        const filteredRelatedData = await this.filterDataBySchemaForTable(processedRelatedData, relation.tableName);
 
         if (existing.success && existing.data) {
-          processedRelatedData.updated_at = new Date().toISOString();
-          const updateResult = await relatedController.update(mainRecordId, processedRelatedData);
+          const updateResult = await relatedController.update(mainRecordId, filteredRelatedData);
           if (!updateResult.success) {
             errors.push(`Failed to update related record in '${relation.tableName}': ${updateResult.error}`);
           }
         } else {
-          processedRelatedData[relation.sharedKey] = mainRecordId;
-          const now = new Date().toISOString();
-          if (!processedRelatedData.created_at) processedRelatedData.created_at = now;
-          if (!processedRelatedData.updated_at) processedRelatedData.updated_at = now;
-
-          const createResult = await relatedController.create(processedRelatedData);
+          filteredRelatedData[relation.sharedKey] = mainRecordId;
+          console.log("filteredRelatedData", filteredRelatedData)
+          const createResult = await relatedController.create(filteredRelatedData);
           if (!createResult.success) {
+            console.log("createResult", createResult)
             errors.push(`Failed to create related record in '${relation.tableName}': ${createResult.error}`);
           }
         }
@@ -738,26 +736,25 @@ export class GenericController<T extends Record<string, any> = Record<string, an
 
     return { success: errors.length === 0, errors };
   }
+
+  private async filterDataBySchemaForTable(data: Record<string, any>, tableName: string): Promise<Record<string, any>> {
+    const relatedController = this.dbInitializer.createController(tableName);
+    const schemaResult = await relatedController.getSchema();
+    const getSchemaFn = async () => await relatedController.getSchema();
+    if (!schemaResult.success || !schemaResult.data?.columns) {
+      console.warn(`Could not retrieve schema for table ${tableName}. Skipping data filtering.`);
+      return data;
+    }
+    return SchemaDataFilter.filterAndFillDefaults(data, getSchemaFn);
+  }
   private async filterDataBySchema(data: Record<string, any>): Promise<Record<string, any>> {
     const schemaResult = await this.controller.getSchema();
-    
+    const getSchemaFn = async () => await this.controller.getSchema();
     if (!schemaResult.success || !schemaResult.data?.columns) {
       console.warn(`Could not retrieve schema for table ${this.config.tableName}. Skipping data filtering.`);
       return data;
     }
-
-    // Crear un Set con los nombres de las columnas para una búsqueda eficiente (O(1))
-    const validColumns = new Set(schemaResult.data.columns.map((col:any) => col.name));
-    
-    const filteredData: Record<string, any> = {};
-
-    for (const key in data) {
-      if (validColumns.has(key)) {
-        filteredData[key] = data[key];
-      }
-    }
-
-    return filteredData;
+    return SchemaDataFilter.filterAndFillDefaults(data, getSchemaFn);
   }
 }
 const userConfig: ControllerConfig = {

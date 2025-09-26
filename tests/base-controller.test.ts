@@ -240,10 +240,10 @@ describe("BaseController", () => {
 
   test("should get schema information", async () => {
     const schemaResult = await controller.getSchema();
-
+    console.log("schemaResult", schemaResult.data);
     expect(schemaResult.success).toBe(true);
-    expect(schemaResult.data?.tableName).toBe("users");
-    expect(schemaResult.data?.columns).toBeArray();
+    expect(schemaResult?.data?.tableName).toBe("users");
+    expect(schemaResult?.data?.columns).toBeArray();
   });
 
   test("should handle validation errors gracefully", async () => {

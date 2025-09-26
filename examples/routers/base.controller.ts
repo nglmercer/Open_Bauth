@@ -124,7 +124,24 @@ const userConfig: ControllerConfig = {
   defaultOrder: {
     field: 'created_at',
     direction: 'DESC'
+  },
+  oneToOneRelations: [
+  {
+    name: 'user_profiles', // Name of the relation (singular)
+    tableName: 'user_profiles',
+    sharedKey: 'id' // user_profiles.id = users.id (shared primary key)
   }
+  ],
+  relationships: [
+    {
+      name: 'users',
+      table: 'users',
+      localKey: 'id',        // users.id
+      foreignKey: 'id', // user_profiles.id
+      type: 'INNER',
+      select: ['id']
+    }
+  ],
 };
 const projectsConfig: ControllerConfig = {
   tableName: 'projects',
