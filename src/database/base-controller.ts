@@ -12,7 +12,7 @@ export type FalsyFilter = { isFalsy: true };
 export type SetFilter = { isSet: boolean };
 export type OperatorFilter<V> = {
   operator: string;
-  value: V; 
+  value: V;
 };
 
 export type AdvancedFilter<V> =
@@ -223,7 +223,7 @@ export class BaseController<T = Record<string, any>> {
     database: SQL | Database,
     schemas: TableSchema[],
     isSQLite: boolean = false,
-    isSQLServer: boolean = false
+    isSQLServer: boolean = false,
   ): Promise<ControllerResponse> {
     const adapter = new DatabaseAdapter(database, isSQLite);
 
@@ -235,7 +235,7 @@ export class BaseController<T = Record<string, any>> {
         const createTableSQL = BaseController.generateCreateTableSQL(
           schema,
           isSQLite,
-          isSQLServer
+          isSQLServer,
         );
         await adapter.query(createTableSQL).run();
 
@@ -244,7 +244,7 @@ export class BaseController<T = Record<string, any>> {
             const createIndexSQL = BaseController.generateCreateIndexSQL(
               schema.tableName,
               index,
-              isSQLite
+              isSQLite,
             );
             await adapter.query(createIndexSQL).run();
           }
@@ -269,14 +269,14 @@ export class BaseController<T = Record<string, any>> {
   private static generateCreateTableSQL(
     schema: TableSchema,
     isSQLite: boolean,
-    isSQLServer: boolean = false
+    isSQLServer: boolean = false,
   ): string {
     const columns = schema.columns
       .map((col) => {
         let columnDef = `"${col.name}" ${BaseController.mapDataType(
           col.type,
           isSQLite,
-          isSQLServer
+          isSQLServer,
         )}`;
 
         if (col.primaryKey) {
@@ -296,7 +296,7 @@ export class BaseController<T = Record<string, any>> {
 
         if (col.defaultValue !== undefined) {
           columnDef += ` DEFAULT ${BaseController.formatDefaultValue(
-            col.defaultValue
+            col.defaultValue,
           )}`;
         }
 
@@ -314,16 +314,20 @@ export class BaseController<T = Record<string, any>> {
   private static generateCreateIndexSQL(
     tableName: string,
     index: { name: string; columns: string[]; unique?: boolean },
-    isSQLite: boolean
+    isSQLite: boolean,
   ): string {
     const unique = index.unique ? "UNIQUE " : "";
     const columns = index.columns.map((c) => `"${c}"`).join(", ");
     return `CREATE ${unique}INDEX IF NOT EXISTS "${index.name}" ON "${tableName}" (${columns})`;
   }
 
-  private static mapDataType(type: string, isSQLite: boolean, isSQLServer: boolean = false): string {
+  private static mapDataType(
+    type: string,
+    isSQLite: boolean,
+    isSQLServer: boolean = false,
+  ): string {
     const upperType = type.toUpperCase();
-    
+
     if (isSQLite) {
       switch (upperType) {
         case "SERIAL":
@@ -384,7 +388,7 @@ export class BaseController<T = Record<string, any>> {
       const isFunctionOrKeyword =
         /^\(.*\)$/.test(value.trim()) || // Matches anything in parentheses like (lower(...))
         ["CURRENT_TIMESTAMP", "CURRENT_DATE", "CURRENT_TIME"].includes(
-          upperValue
+          upperValue,
         );
 
       if (isFunctionOrKeyword) {
@@ -399,7 +403,7 @@ export class BaseController<T = Record<string, any>> {
 
   private validateData(
     data: any,
-    operation: "create" | "update" | "read"
+    operation: "create" | "update" | "read",
   ): any {
     if (!this.schemas || !this.schemas[this.tableName]) {
       return data;
@@ -432,7 +436,7 @@ export class BaseController<T = Record<string, any>> {
     }
   }
 
-// src/database/base-controller.ts
+  // src/database/base-controller.ts
 
   private buildWhereClause(conditions: Record<string, any>): {
     sql: string;
@@ -461,25 +465,30 @@ export class BaseController<T = Record<string, any>> {
         continue;
       }
 
-      if (typeof value === "object" && !ArrayBuffer.isView(value) && !(value instanceof Date)) {
-        if ('isTruthy' in value && value.isTruthy === true) {
+      if (
+        typeof value === "object" &&
+        !ArrayBuffer.isView(value) &&
+        !(value instanceof Date)
+      ) {
+        if ("isTruthy" in value && value.isTruthy === true) {
           clauses.push(`"${key}" = ?`);
           params.push(1);
           continue;
-        } else if ('isFalsy' in value && value.isFalsy === true) {
+        } else if ("isFalsy" in value && value.isFalsy === true) {
           clauses.push(`("${key}" IS NULL OR "${key}" = ?)`);
           params.push(0);
           continue;
-        } else if ('isSet' in value) {
-          clauses.push(`"${key}" IS ${value.isSet ? 'NOT NULL' : 'NULL'}`);
+        } else if ("isSet" in value) {
+          // IS NULL/IS NOT NULL should work consistently across versions
+          clauses.push(`"${key}" IS ${value.isSet ? "NOT NULL" : "NULL"}`);
           continue;
-        } else if ('operator' in value) {
+        } else if ("operator" in value) {
           clauses.push(`"${key}" ${value.operator} ?`);
           params.push(value.value);
           continue;
         }
       }
-      
+
       clauses.push(`"${key}" = ?`);
       params.push(this.convertValueForDatabase(value));
     }
@@ -500,11 +509,14 @@ export class BaseController<T = Record<string, any>> {
     if (typeof value === "number" && (value === 0 || value === 1)) {
       return true;
     }
-    if ((value instanceof Uint8Array || value instanceof Buffer) && value.length === 1) {
+    if (
+      (value instanceof Uint8Array || value instanceof Buffer) &&
+      value.length === 1
+    ) {
       return true;
     }
     if (ArrayBuffer.isView(value) && value.byteLength === 1) {
-        return true;
+      return true;
     }
     return false;
   }
@@ -522,7 +534,7 @@ export class BaseController<T = Record<string, any>> {
     if (value instanceof Uint8Array || value instanceof Buffer) {
       return value[0] === 1;
     }
-     if (ArrayBuffer.isView(value)) {
+    if (ArrayBuffer.isView(value)) {
       const uint8View = new Uint8Array(value.buffer, value.byteOffset, 1);
       return uint8View[0] === 1;
     }
@@ -568,7 +580,7 @@ export class BaseController<T = Record<string, any>> {
           FROM information_schema.columns
           WHERE table_name = $1 AND table_schema = 'public'
           ORDER BY ordinal_position
-        `
+        `,
           )
           .all(this.tableName);
         return Array.isArray(result) ? result : [];
@@ -590,33 +602,39 @@ export class BaseController<T = Record<string, any>> {
       const validatedData = this.validateData(data, "create");
       const cleanData = Object.fromEntries(
         Object.entries(validatedData).filter(
-          ([_, value]) => value !== undefined
-        )
+          ([_, value]) => value !== undefined,
+        ),
       );
       if (Object.keys(cleanData).length === 0) {
         return { success: false, error: "No valid data provided" };
       }
 
       const columns = Object.keys(cleanData).map((c) => `"${c}"`);
-      const placeholders = Object.keys(cleanData).map(() => "?").join(", ");
-      
+      const placeholders = Object.keys(cleanData)
+        .map(() => "?")
+        .join(", ");
+
       const values = Object.entries(cleanData).map(([key, value]) => {
-        if (value === null || 
-            typeof value === 'string' || 
-            typeof value === 'number' || 
-            typeof value === 'boolean' || 
-            typeof value === 'bigint' ||
-            ArrayBuffer.isView(value)) {
+        if (
+          value === null ||
+          typeof value === "string" ||
+          typeof value === "number" ||
+          typeof value === "boolean" ||
+          typeof value === "bigint" ||
+          ArrayBuffer.isView(value)
+        ) {
           return this.convertValueForDatabase(value);
         }
         if (value instanceof Date) {
           return value.toISOString();
         }
-        if (typeof value === 'object') {
+        if (typeof value === "object") {
           return JSON.stringify(value);
         }
-        
-        throw new Error(`Invalid data type for column '${key}': ${typeof value}. Expected string, number, boolean, null, Date, or TypedArray`);
+
+        throw new Error(
+          `Invalid data type for column '${key}': ${typeof value}. Expected string, number, boolean, null, Date, or TypedArray`,
+        );
       });
 
       const insertQuery = `INSERT INTO "${this.tableName}" (${columns.join(", ")}) VALUES (${placeholders}) RETURNING *`;
@@ -625,7 +643,8 @@ export class BaseController<T = Record<string, any>> {
       if (!result) {
         return {
           success: false,
-          error: "Failed to create record or retrieve the created data from database",
+          error:
+            "Failed to create record or retrieve the created data from database",
         };
       }
 
@@ -711,14 +730,14 @@ export class BaseController<T = Record<string, any>> {
 
   async update(
     id: number | string,
-    data: Record<string, any>
+    data: Record<string, any>,
   ): Promise<ControllerResponse<T>> {
     try {
       const validatedData = this.validateData(data, "update");
       const cleanData = Object.fromEntries(
         Object.entries(validatedData).filter(
-          ([_, value]) => value !== undefined
-        )
+          ([_, value]) => value !== undefined,
+        ),
       );
 
       if (Object.keys(cleanData).length === 0) {
@@ -733,7 +752,7 @@ export class BaseController<T = Record<string, any>> {
       const setClause = columns.map((col) => `"${col}" = ?`).join(", ");
       const values = [
         ...Object.values(cleanData).map((value) =>
-          this.convertValueForDatabase(value)
+          this.convertValueForDatabase(value),
         ),
         id,
       ];
@@ -803,41 +822,52 @@ export class BaseController<T = Record<string, any>> {
     }
   }
 
-  async getSchema(): Promise<{ success: boolean; data?: { columns: ColumnInfo[],tableName?: string; }, error?: string }> {
+  async getSchema(): Promise<{
+    success: boolean;
+    data?: { columns: ColumnInfo[]; tableName?: string };
+    error?: string;
+  }> {
     try {
-      const pragmaQuery = this.adapter.query(`PRAGMA table_info(${this.tableName})`);
-      const rawColumns = await pragmaQuery.all() as any[];
+      const pragmaQuery = this.adapter.query(
+        `PRAGMA table_info(${this.tableName})`,
+      );
+      const rawColumns = (await pragmaQuery.all()) as any[];
 
       if (!rawColumns || rawColumns.length === 0) {
-        return { success: false, error: `Table '${this.tableName}' not found or has no columns.` };
+        return {
+          success: false,
+          error: `Table '${this.tableName}' not found or has no columns.`,
+        };
       }
 
-      const columns: ColumnInfo[] = rawColumns.map(col => ({
+      const columns: ColumnInfo[] = rawColumns.map((col) => ({
         name: col.name,
         type: col.type,
         notNull: col.notnull === 1, // 'notnull' 0  1
-        defaultValue: col.dflt_value, 
+        defaultValue: col.dflt_value,
         primaryKey: col.pk > 0,
-        ...col
+        ...col,
       }));
 
-      return { success: true, data: { columns, tableName: this.tableName }};
-
+      return { success: true, data: { columns, tableName: this.tableName } };
     } catch (error: any) {
       // this.logger.error(...);
-      return { success: false, error: `Failed to get schema for table ${this.tableName}: ${error.message}` };
+      return {
+        success: false,
+        error: `Failed to get schema for table ${this.tableName}: ${error.message}`,
+      };
     }
   }
 
   async search(
     filters: WhereConditions<T> = {},
-    options: SimpleSearchOptions = {}
+    options: SimpleSearchOptions = {},
   ): Promise<ControllerResponse<T[]>> {
     return this.findAll({ where: filters as WhereConditions<T>, ...options });
   }
 
   async findFirst(
-    filters: WhereConditions<T> = {}
+    filters: WhereConditions<T> = {},
   ): Promise<ControllerResponse<T | null>> {
     const result = await this.search(filters, { limit: 1 });
 
@@ -860,10 +890,12 @@ export class BaseController<T = Record<string, any>> {
     };
   }
 
-  async count(filters: WhereConditions<T> = {}): Promise<ControllerResponse<number>> {
+  async count(
+    filters: WhereConditions<T> = {},
+  ): Promise<ControllerResponse<number>> {
     try {
       const { sql: whereClause, params } = this.buildWhereClause(
-        (filters as Record<string, any>) || {}
+        (filters as Record<string, any>) || {},
       );
       const query = `SELECT COUNT(*) as total FROM "${this.tableName}"${whereClause}`;
       const result = (await this.adapter.query(query).get(...params)) as {
@@ -882,15 +914,15 @@ export class BaseController<T = Record<string, any>> {
     }
   }
 
-async random(
+  async random(
     filters: WhereConditions<T> = {},
-    limit: number = 1
+    limit: number = 1,
   ): Promise<ControllerResponse<T[]>> {
     try {
       const { sql: whereClause, params } = this.buildWhereClause(
-        (filters as Record<string, any>) || {}
+        (filters as Record<string, any>) || {},
       );
-      
+
       const randomOrderClause = this._getRandomOrderClause();
 
       const query = `SELECT * FROM "${this.tableName}"${whereClause} ${randomOrderClause} LIMIT ?`;
@@ -913,7 +945,7 @@ async random(
     if (this.isSQLServer) {
       return "ORDER BY NEWID()";
     }
-    
+
     if (this.isSQLite) {
       return "ORDER BY RANDOM()";
     }
@@ -921,7 +953,7 @@ async random(
     return "ORDER BY RANDOM()";
   }
   async findWithRelations(
-    options: RelationOptions<T> = {}
+    options: RelationOptions<T> = {},
   ): Promise<ControllerResponse<T[]>> {
     try {
       const {
@@ -941,7 +973,7 @@ async random(
         selectClause = select
           .map((col) => {
             if (col.includes(".")) {
-              const [tbl, cl] = col.split('.');
+              const [tbl, cl] = col.split(".");
               return `"${tbl}"."${cl}"`;
             }
             return `"${this.tableName}"."${col}"`;
@@ -954,8 +986,8 @@ async random(
           if (join.select && join.select.length > 0) {
             const joinColumns = join.select
               .map((col) => {
-                if (col === '*') {
-                  return `"${join.table}".*`; 
+                if (col === "*") {
+                  return `"${join.table}".*`;
                 }
                 if (/\s+as\s+/i.test(col)) {
                   const [originalCol, alias] = col.split(/\s+as\s+/i);
@@ -971,9 +1003,9 @@ async random(
         }
 
         selectParts.push(`"${this.tableName}".*`);
-        selectClause = selectParts.filter(p => p.trim()).join(', ');
+        selectClause = selectParts.filter((p) => p.trim()).join(", ");
       }
-      
+
       let joinClause = "";
       for (const join of joins) {
         const joinType = join.type || "LEFT";
@@ -1002,7 +1034,9 @@ async random(
         .get(...countParams)) as { total: number };
       const processedData = records.map((record: any) => {
         return Object.fromEntries(
-          Object.entries(record).filter(([_, value]) => value !== null && value !== undefined)
+          Object.entries(record).filter(
+            ([_, value]) => value !== null && value !== undefined,
+          ),
         ) as T;
       });
 
@@ -1022,7 +1056,7 @@ async random(
   async findByIdWithRelations(
     id: number | string,
     joins: JoinOptions[] = [],
-    select: string[] = []
+    select: string[] = [],
   ): Promise<ControllerResponse<T>> {
     try {
       const primaryKey = await this.getPrimaryKey();
@@ -1033,7 +1067,7 @@ async random(
         selectClause = select
           .map((col) => {
             if (col.includes(".")) {
-              const [tbl, cl] = col.split('.');
+              const [tbl, cl] = col.split(".");
               return `"${tbl}"."${cl}"`;
             }
             return `"${this.tableName}"."${col}"`;
@@ -1046,7 +1080,7 @@ async random(
           if (join.select && join.select.length > 0) {
             const joinColumns = join.select
               .map((col) => {
-                if (col === '*') {
+                if (col === "*") {
                   return `"${join.table}".*`;
                 }
                 if (/\s+as\s+/i.test(col)) {
@@ -1061,11 +1095,11 @@ async random(
             }
           }
         }
-        
+
         selectParts.push(`"${this.tableName}".*`);
-        selectClause = selectParts.filter(p => p.trim()).join(', ');
+        selectClause = selectParts.filter((p) => p.trim()).join(", ");
       }
-      
+
       let joinClause = "";
       for (const join of joins) {
         const joinType = join.type || "LEFT";
@@ -1082,7 +1116,9 @@ async random(
         };
       }
       const processedRecord = Object.fromEntries(
-        Object.entries(record).filter(([_, value]) => value !== null && value !== undefined)
+        Object.entries(record).filter(
+          ([_, value]) => value !== null && value !== undefined,
+        ),
       );
 
       return {
@@ -1105,7 +1141,7 @@ async random(
     localKey: string,
     foreignKey: string,
     type: "INNER" | "LEFT" | "RIGHT" | "FULL" = "LEFT",
-    select?: string[]
+    select?: string[],
   ): JoinOptions {
     return {
       table,
@@ -1123,7 +1159,7 @@ async random(
     sourceForeignKey: string,
     targetPrimaryKey: string = "id",
     type: "INNER" | "LEFT" | "RIGHT" = "LEFT",
-    selectColumns: string[] = ["*"]
+    selectColumns: string[] = ["*"],
   ): JoinOptions {
     let select: string[] | undefined = undefined;
 
