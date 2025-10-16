@@ -1,4 +1,4 @@
-import type { TableSchema, ColumnDefinition } from './base-controller';
+import type { TableSchema, ColumnDefinition } from "./base-controller";
 
 /**
  * Configuration interface for custom table names and schema extensions
@@ -66,12 +66,12 @@ export interface DatabaseConfig {
  * Default table names
  */
 export const DEFAULT_TABLE_NAMES: Required<DatabaseTableConfig> = {
-  users: 'users',
-  roles: 'roles',
-  permissions: 'permissions',
-  userRoles: 'user_roles',
-  rolePermissions: 'role_permissions',
-  sessions: 'sessions'
+  users: "users",
+  roles: "roles",
+  permissions: "permissions",
+  userRoles: "user_roles",
+  rolePermissions: "role_permissions",
+  sessions: "sessions",
 };
 
 /**
@@ -81,7 +81,7 @@ export const DEFAULT_DATABASE_CONFIG: DatabaseConfig = {
   tableNames: DEFAULT_TABLE_NAMES,
   schemaExtensions: {},
   enableMigrations: true,
-  enableForeignKeys: true
+  enableForeignKeys: true,
 };
 
 /**
@@ -100,11 +100,11 @@ export function setDatabaseConfig(config: DatabaseConfig): void {
     ...config,
     tableNames: {
       ...DEFAULT_TABLE_NAMES,
-      ...config.tableNames
+      ...config.tableNames,
     },
     schemaExtensions: {
-      ...config.schemaExtensions
-    }
+      ...config.schemaExtensions,
+    },
   };
 }
 
@@ -131,7 +131,7 @@ export function getAllTableNames(): Required<DatabaseTableConfig> {
   const config = getDatabaseConfig();
   return {
     ...DEFAULT_TABLE_NAMES,
-    ...config.tableNames
+    ...config.tableNames,
   };
 }
 
@@ -141,12 +141,12 @@ export function getAllTableNames(): Required<DatabaseTableConfig> {
 export function createSchemaExtension(
   additionalColumns?: ColumnDefinition[],
   modifiedColumns?: ColumnDefinition[],
-  removedColumns?: string[]
+  removedColumns?: string[],
 ): SchemaExtension {
   return {
     additionalColumns,
     modifiedColumns,
-    removedColumns
+    removedColumns,
   };
 }
 
@@ -155,27 +155,81 @@ export function createSchemaExtension(
  */
 export const COMMON_COLUMNS = {
   // Timestamp columns
-  createdAt: { name: 'created_at', type: 'DATETIME', defaultValue: 'CURRENT_TIMESTAMP' },
-  updatedAt: { name: 'updated_at', type: 'DATETIME', defaultValue: 'CURRENT_TIMESTAMP' },
-  deletedAt: { name: 'deleted_at', type: 'DATETIME' },
+  createdAt: {
+    name: "created_at",
+    type: "DATETIME",
+    defaultValue: "CURRENT_TIMESTAMP",
+  },
+  updatedAt: {
+    name: "updated_at",
+    type: "DATETIME",
+    defaultValue: "CURRENT_TIMESTAMP",
+  },
+  deletedAt: { name: "deleted_at", type: "DATETIME" },
 
   // Soft delete columns
-  isDeleted: { name: 'is_deleted', type: 'BOOLEAN', defaultValue: false },
+  isDeleted: { name: "is_deleted", type: "BOOLEAN", defaultValue: false },
 
   // Common user fields
-  phoneNumber: { name: 'phone_number', type: 'TEXT' },
-  avatarUrl: { name: 'avatar_url', type: 'TEXT' },
-  timezone: { name: 'timezone', type: 'TEXT', defaultValue: 'UTC' },
-  language: { name: 'language', type: 'TEXT', defaultValue: 'en' },
+  phoneNumber: { name: "phone_number", type: "TEXT" },
+  avatarUrl: { name: "avatar_url", type: "TEXT" },
+  timezone: { name: "timezone", type: "TEXT", defaultValue: "UTC" },
+  language: { name: "language", type: "TEXT", defaultValue: "en" },
 
   // Status fields
-  status: { name: 'status', type: 'TEXT', defaultValue: 'active' },
-  isActive: { name: 'is_active', type: 'BOOLEAN', defaultValue: true },
+  status: { name: "status", type: "TEXT", defaultValue: "active" },
+  isActive: { name: "is_active", type: "BOOLEAN", defaultValue: true },
 
   // Audit fields
-  createdBy: { name: 'created_by', type: 'TEXT' },
-  updatedBy: { name: 'updated_by', type: 'TEXT' },
+  createdBy: { name: "created_by", type: "TEXT" },
+  updatedBy: { name: "updated_by", type: "TEXT" },
 
   // Metadata
-  metadata: { name: 'metadata', type: 'TEXT' } // JSON string
+  metadata: { name: "metadata", type: "TEXT" }, // JSON string
 } as const;
+
+/**
+ * Predefined schema extensions for common use cases
+ */
+export const SchemaExtensions = {
+  /**
+   * Add soft delete functionality to any table
+   */
+  addSoftDelete: (): SchemaExtension => ({
+    additionalColumns: [COMMON_COLUMNS.deletedAt, COMMON_COLUMNS.isDeleted],
+  }),
+
+  /**
+   * Add audit fields (created_by, updated_by) to any table
+   */
+  addAuditFields: (): SchemaExtension => ({
+    additionalColumns: [COMMON_COLUMNS.createdBy, COMMON_COLUMNS.updatedBy],
+  }),
+
+  /**
+   * Add common user profile fields to users table
+   */
+  addUserProfileFields: (): SchemaExtension => ({
+    additionalColumns: [
+      COMMON_COLUMNS.phoneNumber,
+      COMMON_COLUMNS.avatarUrl,
+      COMMON_COLUMNS.timezone,
+      COMMON_COLUMNS.language,
+    ],
+  }),
+
+  /**
+   * Add status field instead of is_active
+   */
+  useStatusField: (): SchemaExtension => ({
+    additionalColumns: [COMMON_COLUMNS.status],
+    removedColumns: ["is_active"],
+  }),
+
+  /**
+   * Add metadata field for storing JSON data
+   */
+  addMetadata: (): SchemaExtension => ({
+    additionalColumns: [COMMON_COLUMNS.metadata],
+  }),
+};

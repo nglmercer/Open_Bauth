@@ -1,20 +1,20 @@
 // src/types/auth.ts
 
-import type { 
-  BaseEntity, 
-  Optional, 
-  Email, 
-  HashedPassword, 
-  JWT, 
-  RefreshToken, 
-  EntityId, 
-  UserId, 
-  RoleId, 
+import type {
+  BaseEntity,
+  Optional,
+  Email,
+  HashedPassword,
+  JWT,
+  RefreshToken,
+  EntityId,
+  UserId,
+  RoleId,
   PermissionId,
   QueryOptions,
   PaginatedResponse,
-  ValidationResult
-} from './common';
+  ValidationResult,
+} from "./common";
 
 /**
  * User metadata interface
@@ -64,7 +64,6 @@ export interface User {
   roles?: Role[];
 }
 
-
 /**
  * User creation data interface
  */
@@ -85,6 +84,16 @@ export interface UpdateUserData {
   first_name?: string;
   last_name?: string;
   is_active?: boolean;
+  phone_number?: string;
+  avatar_url?: string;
+  timezone?: string;
+  language?: string;
+  metadata?: string;
+  date_of_birth?: string;
+  gender?: string;
+  bio?: string;
+  website?: string;
+  is_verified?: boolean;
 }
 
 /**
@@ -184,8 +193,14 @@ export interface RoleRepositoryInterface {
   update(id: RoleId, data: UpdateRoleData): Promise<Role>;
   delete(id: RoleId): Promise<boolean>;
   getDefaultRole(): Promise<Role | null>;
-  assignPermission(roleId: RoleId, permissionId: PermissionId): Promise<boolean>;
-  removePermission(roleId: RoleId, permissionId: PermissionId): Promise<boolean>;
+  assignPermission(
+    roleId: RoleId,
+    permissionId: PermissionId,
+  ): Promise<boolean>;
+  removePermission(
+    roleId: RoleId,
+    permissionId: PermissionId,
+  ): Promise<boolean>;
   userHasRole(userId: UserId, roleId: RoleId): Promise<boolean>;
 }
 
@@ -246,9 +261,17 @@ export interface PermissionQueryOptions extends QueryOptions {
  * Permission repository interface
  */
 export interface PermissionRepositoryInterface {
-  findById(id: PermissionId, options?: PermissionQueryOptions): Promise<Permission | null>;
-  findByName(name: string, options?: PermissionQueryOptions): Promise<Permission | null>;
-  findMany(options?: PermissionQueryOptions): Promise<PaginatedResponse<Permission>>;
+  findById(
+    id: PermissionId,
+    options?: PermissionQueryOptions,
+  ): Promise<Permission | null>;
+  findByName(
+    name: string,
+    options?: PermissionQueryOptions,
+  ): Promise<Permission | null>;
+  findMany(
+    options?: PermissionQueryOptions,
+  ): Promise<PaginatedResponse<Permission>>;
   create(data: CreatePermissionData): Promise<Permission>;
   update(id: PermissionId, data: UpdatePermissionData): Promise<Permission>;
   delete(id: PermissionId): Promise<boolean>;
@@ -319,7 +342,7 @@ export interface AuthConfig {
     skipFailedRequests: boolean;
   };
   logging: {
-    level: 'debug' | 'info' | 'warn' | 'error';
+    level: "debug" | "info" | "warn" | "error";
     enableConsole: boolean;
     enableFile: boolean;
     filePath: string;
@@ -447,7 +470,7 @@ export interface RoleResult<T = any> {
 export interface AdapterConfig extends AuthConfig {
   corsEnabled?: boolean;
   rateLimitEnabled?: boolean;
-  logLevel?: 'debug' | 'info' | 'warn' | 'error';
+  logLevel?: "debug" | "info" | "warn" | "error";
 }
 
 /**
@@ -475,16 +498,16 @@ export interface AuthStats {
 /**
  * Authentication system events
  */
-export type AuthEvent = 
-  | 'user.registered'
-  | 'user.login'
-  | 'user.logout'
-  | 'user.updated'
-  | 'user.deactivated'
-  | 'role.created'
-  | 'role.updated'
-  | 'permission.created'
-  | 'permission.updated';
+export type AuthEvent =
+  | "user.registered"
+  | "user.login"
+  | "user.logout"
+  | "user.updated"
+  | "user.deactivated"
+  | "role.created"
+  | "role.updated"
+  | "permission.created"
+  | "permission.updated";
 
 /**
  * Authentication event data
@@ -504,15 +527,15 @@ export interface SecurityConfig {
   securityHeaders: {
     [key: string]: string;
   };
-  
+
   // Cookie configuration
   cookies: {
     httpOnly: boolean;
     secure: boolean;
-    sameSite: 'strict' | 'lax' | 'none';
+    sameSite: "strict" | "lax" | "none";
     maxAge: number;
   };
-  
+
   // Input validation configuration
   validation: {
     maxEmailLength: number;
@@ -521,7 +544,7 @@ export interface SecurityConfig {
     allowedEmailDomains?: string[];
     blockedEmailDomains: string[];
   };
-  
+
   // IP and geolocation configuration
   ipSecurity: {
     enableGeoBlocking: boolean;
@@ -551,26 +574,26 @@ export interface SessionInfo {
  * Authentication system error types
  */
 export enum AuthErrorType {
-  INVALID_CREDENTIALS = 'INVALID_CREDENTIALS',
-  USER_NOT_FOUND = 'USER_NOT_FOUND',
-  USER_ALREADY_EXISTS = 'USER_ALREADY_EXISTS',
-  INVALID_TOKEN = 'INVALID_TOKEN',
-  TOKEN_EXPIRED = 'TOKEN_EXPIRED',
-  INSUFFICIENT_PERMISSIONS = 'INSUFFICIENT_PERMISSIONS',
-  ACCOUNT_LOCKED = 'ACCOUNT_LOCKED',
-  ACCOUNT_INACTIVE = 'ACCOUNT_INACTIVE',
-  WEAK_PASSWORD = 'WEAK_PASSWORD',
-  DATABASE_ERROR = 'DATABASE_ERROR',
-  VALIDATION_ERROR = 'VALIDATION_ERROR',
-  AUTHENTICATION_ERROR = 'AUTHENTICATION_ERROR',
-  AUTHORIZATION_ERROR = 'AUTHORIZATION_ERROR',
-  NOT_FOUND_ERROR = 'NOT_FOUND_ERROR',
-  RATE_LIMIT_ERROR = 'RATE_LIMIT_ERROR',
-  TOKEN_ERROR = 'TOKEN_ERROR',
-  ACCOUNT_ERROR = 'ACCOUNT_ERROR',
-  SERVER_ERROR = 'SERVER_ERROR',
-  PERMISSION_ERROR = 'PERMISSION_ERROR',
-  ROLE_ERROR = 'ROLE_ERROR',
+  INVALID_CREDENTIALS = "INVALID_CREDENTIALS",
+  USER_NOT_FOUND = "USER_NOT_FOUND",
+  USER_ALREADY_EXISTS = "USER_ALREADY_EXISTS",
+  INVALID_TOKEN = "INVALID_TOKEN",
+  TOKEN_EXPIRED = "TOKEN_EXPIRED",
+  INSUFFICIENT_PERMISSIONS = "INSUFFICIENT_PERMISSIONS",
+  ACCOUNT_LOCKED = "ACCOUNT_LOCKED",
+  ACCOUNT_INACTIVE = "ACCOUNT_INACTIVE",
+  WEAK_PASSWORD = "WEAK_PASSWORD",
+  DATABASE_ERROR = "DATABASE_ERROR",
+  VALIDATION_ERROR = "VALIDATION_ERROR",
+  AUTHENTICATION_ERROR = "AUTHENTICATION_ERROR",
+  AUTHORIZATION_ERROR = "AUTHORIZATION_ERROR",
+  NOT_FOUND_ERROR = "NOT_FOUND_ERROR",
+  RATE_LIMIT_ERROR = "RATE_LIMIT_ERROR",
+  TOKEN_ERROR = "TOKEN_ERROR",
+  ACCOUNT_ERROR = "ACCOUNT_ERROR",
+  SERVER_ERROR = "SERVER_ERROR",
+  PERMISSION_ERROR = "PERMISSION_ERROR",
+  ROLE_ERROR = "ROLE_ERROR",
 }
 
 // Note: The main AuthError class is defined in src/errors/auth.ts
@@ -584,10 +607,10 @@ export class LegacyAuthError extends Error {
     type: AuthErrorType,
     message: string,
     statusCode: number = 400,
-    metadata?: Record<string, any>
+    metadata?: Record<string, any>,
   ) {
     super(message);
-    this.name = 'LegacyAuthError';
+    this.name = "LegacyAuthError";
     this.type = type;
     this.statusCode = statusCode;
     this.metadata = metadata;
@@ -597,17 +620,17 @@ export abstract class AuthError extends Error {
   public abstract readonly type: AuthErrorType;
   public readonly timestamp: Date;
   public readonly context?: Record<string, any>;
-  
+
   constructor(message: string, context?: Record<string, any>) {
     super(message);
     this.name = this.constructor.name;
     this.timestamp = new Date();
     this.context = context;
-    
+
     // Ensure proper prototype chain for instanceof checks
     Object.setPrototypeOf(this, new.target.prototype);
   }
-  
+
   /**
    * Convert error to API response format
    */
@@ -626,8 +649,8 @@ export abstract class AuthError extends Error {
         type: this.type,
         message: this.message,
         timestamp: this.timestamp.toISOString(),
-        ...(this.context && { context: this.context })
-      }
+        ...(this.context && { context: this.context }),
+      },
     };
   }
 }

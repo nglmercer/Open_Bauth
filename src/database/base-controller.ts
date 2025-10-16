@@ -96,6 +96,7 @@ export interface ColumnDefinition {
   unique?: boolean;
   defaultValue?: any;
   autoIncrement?: boolean;
+  check?: string;
   references?: {
     table: string;
     column: string;
@@ -1184,3 +1185,7 @@ export class BaseController<T = Record<string, any>> {
     };
   }
 }
+
+// Export configuration system for external use
+export * from "./config";
+export * from "./schema-builder";

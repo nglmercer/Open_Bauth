@@ -3,9 +3,14 @@
  * Provides type-safe database initialization, migrations, and integrity checks
  */
 
-import type { Database } from 'bun:sqlite';
-import { BaseController, type TableSchema, type ControllerResponse } from './base-controller';
-import type { User, Role,Permission } from '../types/auth';
+import type { Database } from "bun:sqlite";
+import {
+  BaseController,
+  type TableSchema,
+  type ControllerResponse,
+  type SchemaCollection,
+} from "./base-controller";
+import type { User, Role, Permission } from "../types/auth";
 // Type definitions for better type safety
 export interface DatabaseConfig {
   database: Database;
@@ -41,117 +46,37 @@ export interface IntegrityCheckResult {
 const defaultLogger: Logger = {
   info: (msg: string, ...args: any[]) => console.log(`[INFO] ${msg}`, ...args),
   warn: (msg: string, ...args: any[]) => console.warn(`[WARN] ${msg}`, ...args),
-  error: (msg: string, ...args: any[]) => console.error(`[ERROR] ${msg}`, ...args)
+  error: (msg: string, ...args: any[]) =>
+    console.error(`[ERROR] ${msg}`, ...args),
 };
 const silenceLogger: Logger = {
   info: (msg: string, ...args: any[]) => {},
   warn: (msg: string, ...args: any[]) => {},
-  error: (msg: string, ...args: any[]) => {}
+  error: (msg: string, ...args: any[]) => {},
 };
 // Database table schemas using your existing structure
-export const DATABASE_SCHEMAS: TableSchema[] = [
-  {
-    tableName: "users",
-    columns: [
-      { name: "id", type: "TEXT", primaryKey: true, defaultValue: "(lower(hex(randomblob(16))))" },
-      { name: "email", type: "TEXT", unique: true, notNull: true },
-      { name: "password_hash", type: "TEXT", notNull: true },
-      { name: "first_name", type: "TEXT" },
-      { name: "last_name", type: "TEXT" },
-      { name: "created_at", type: "DATETIME", defaultValue: "CURRENT_TIMESTAMP" },
-      { name: "updated_at", type: "DATETIME", defaultValue: "CURRENT_TIMESTAMP" },
-      { name: "last_login_at", type: "DATETIME" },
-      { name: "is_active", type: "BOOLEAN", defaultValue: true }
-    ],
-    indexes: [
-      { name: "idx_users_email", columns: ["email"], unique: true },
-      { name: "idx_users_active", columns: ["is_active"] }
-    ]
-  },
-  {
-    tableName: "roles",
-    columns: [
-      { name: "id", type: "TEXT", primaryKey: true, defaultValue: "(lower(hex(randomblob(16))))" },
-      { name: "name", type: "TEXT", unique: true, notNull: true },
-      { name: "description", type: "TEXT" },
-      { name: "created_at", type: "DATETIME", defaultValue: "CURRENT_TIMESTAMP" },
-      { name: "updated_at", type: "DATETIME", defaultValue: "CURRENT_TIMESTAMP" },
-      { name: "is_active", type: "BOOLEAN", defaultValue: true }
-    ],
-    indexes: [
-      { name: "idx_roles_name", columns: ["name"], unique: true }
-    ]
-  },
-  {
-    tableName: "permissions",
-    columns: [
-      { name: "id", type: "TEXT", primaryKey: true, defaultValue: "(lower(hex(randomblob(16))))" },
-      { name: "name", type: "TEXT", unique: true, notNull: true },
-      { name: "resource", type: "TEXT", notNull: true },
-      { name: "action", type: "TEXT", notNull: true },
-      { name: "description", type: "TEXT" },
-      { name: "created_at", type: "DATETIME", defaultValue: "CURRENT_TIMESTAMP" }
-    ],
-    indexes: [
-      { name: "idx_permissions_name", columns: ["name"], unique: true },
-      { name: "idx_permissions_resource", columns: ["resource"] },
-      { name: "idx_permissions_action", columns: ["action"] }
-    ]
-  },
-  {
-    tableName: "user_roles",
-    columns: [
-      { name: "id", type: "TEXT", primaryKey: true, defaultValue: "(lower(hex(randomblob(16))))" },
-      { name: "user_id", type: "TEXT", notNull: true, references: { table: "users", column: "id" } },
-      { name: "role_id", type: "TEXT", notNull: true, references: { table: "roles", column: "id" } },
-      { name: "created_at", type: "DATETIME", defaultValue: "CURRENT_TIMESTAMP" },
-      { name: "updated_at", type: "DATETIME", defaultValue: "CURRENT_TIMESTAMP" }
-    ],
-    indexes: [
-      { name: "idx_user_roles_user_id", columns: ["user_id"] },
-      { name: "idx_user_roles_role_id", columns: ["role_id"] },
-      { name: "idx_user_roles_unique", columns: ["user_id", "role_id"], unique: true }
-    ]
-  },
-  {
-    tableName: "role_permissions",
-    columns: [
-      { name: "id", type: "TEXT", primaryKey: true, defaultValue: "(lower(hex(randomblob(16))))" },
-      { name: "role_id", type: "TEXT", notNull: true, references: { table: "roles", column: "id" } },
-      { name: "permission_id", type: "TEXT", notNull: true, references: { table: "permissions", column: "id" } },
-      { name: "created_at", type: "DATETIME", defaultValue: "CURRENT_TIMESTAMP" },
-      { name: "updated_at", type: "DATETIME", defaultValue: "CURRENT_TIMESTAMP" }
-    ],
-    indexes: [
-      { name: "idx_role_permissions_role_id", columns: ["role_id"] },
-      { name: "idx_role_permissions_permission_id", columns: ["permission_id"] },
-      { name: "idx_role_permissions_unique", columns: ["role_id", "permission_id"], unique: true }
-    ]
-  },
-  {
-    tableName: "sessions",
-    columns: [
-      { name: "id", type: "TEXT", primaryKey: true, defaultValue: "(lower(hex(randomblob(16))))" },
-      { name: "user_id", type: "TEXT", notNull: true, references: { table: "users", column: "id" } },
-      { name: "token", type: "TEXT", unique: true, notNull: true },
-      { name: "created_at", type: "DATETIME", defaultValue: "CURRENT_TIMESTAMP" },
-      { name: "expires_at", type: "DATETIME", notNull: true },
-      { name: "last_activity", type: "DATETIME", defaultValue: "CURRENT_TIMESTAMP" },
-      { name: "ip_address", type: "TEXT" },
-      { name: "user_agent", type: "TEXT" },
-      { name: "is_active", type: "BOOLEAN", defaultValue: true }
-    ],
-    indexes: [
-      { name: "idx_sessions_user_id", columns: ["user_id"] },
-      { name: "idx_sessions_token", columns: ["token"], unique: true },
-      { name: "idx_sessions_expires_at", columns: ["expires_at"] },
-      { name: "idx_sessions_active", columns: ["is_active"] }
-    ]
+// Import dynamic schema builder
+import { buildDatabaseSchemas } from "./schema-builder";
+
+// Legacy export for backward compatibility - now uses dynamic schemas
+export const DATABASE_SCHEMAS: TableSchema[] = [];
+
+// Initialize schemas on first access
+function getSchemas(): TableSchema[] {
+  if (DATABASE_SCHEMAS.length === 0) {
+    DATABASE_SCHEMAS.push(...buildDatabaseSchemas());
   }
-];
+  return DATABASE_SCHEMAS;
+}
 
 // Alias público para el conjunto por defecto (retrocompatibilidad y claridad)
-export const DEFAULT_SCHEMAS = DATABASE_SCHEMAS;
+// Export function to get current schemas based on configuration
+export function getCurrentSchemas(): TableSchema[] {
+  return buildDatabaseSchemas();
+}
+
+// Legacy export for backward compatibility
+export const DEFAULT_SCHEMAS = getCurrentSchemas();
 
 // API ligera para registrar y combinar esquemas desde fuera de la librería
 export class SchemaRegistry {
@@ -185,6 +110,16 @@ export class SchemaRegistry {
     return Array.from(this.schemas.values());
   }
 
+  clear(): void {
+    this.schemas.clear();
+  }
+
+  *[Symbol.iterator](): Iterator<TableSchema> {
+    for (const schema of this.schemas.values()) {
+      yield schema;
+    }
+  }
+
   static merge(...registries: SchemaRegistry[]) {
     const merged = new SchemaRegistry();
     for (const r of registries) merged.registerMany(r.getAll());
@@ -198,7 +133,7 @@ export class DatabaseInitializer {
   private enableWAL: boolean;
   private enableForeignKeys: boolean;
   // Fuente efectiva de esquemas (base + externos)
-  private schemas: TableSchema[];
+  private schemas: SchemaRegistry;
 
   constructor(config: DatabaseConfig) {
     this.database = config.database;
@@ -206,7 +141,10 @@ export class DatabaseInitializer {
     this.enableWAL = config.enableWAL ?? true;
     this.enableForeignKeys = config.enableForeignKeys ?? true;
     // Combina los esquemas por defecto con los externos provistos por el consumidor
-    this.schemas = [...DATABASE_SCHEMAS, ...(config.externalSchemas ?? [])];
+    this.schemas = new SchemaRegistry([
+      ...DATABASE_SCHEMAS,
+      ...(config.externalSchemas ?? []),
+    ]);
   }
 
   /**
@@ -222,30 +160,32 @@ export class DatabaseInitializer {
   }
 
   setSchemas(schemas: TableSchema[]) {
-    this.schemas = [...schemas];
+    this.schemas = new SchemaRegistry(schemas);
   }
 
   registerSchemas(schemas: TableSchema[] | TableSchema) {
-    const list = Array.isArray(schemas) ? schemas : [schemas];
-    // Dedupe por tableName
-    const map = new Map(this.schemas.map(s => [s.tableName, s] as const));
-    for (const s of list) map.set(s.tableName, s);
-    this.schemas = Array.from(map.values());
+    if (Array.isArray(schemas)) {
+      this.schemas.registerMany(schemas);
+    } else {
+      this.schemas.register(schemas);
+    }
   }
 
   /**
    * Initialize database with all required tables and indexes
    */
   async seedDefaults() {
-    const roleController = this.createController<Role>('roles');
-    const permissionController = this.createController<Permission>('permissions');
-    const rolePermissionController = this.createController<RolePermission>('role_permissions');
+    const roleController = this.createController<Role>("roles");
+    const permissionController =
+      this.createController<Permission>("permissions");
+    const rolePermissionController =
+      this.createController<RolePermission>("role_permissions");
 
     // Seed default roles
     const roles = [
-      { name: 'admin', description: 'Administrator role' },
-      { name: 'moderator', description: 'Moderator role' },
-      { name: 'user', description: 'Standard user role' }
+      { name: "admin", description: "Administrator role" },
+      { name: "moderator", description: "Moderator role" },
+      { name: "user", description: "Standard user role" },
     ];
 
     for (const role of roles) {
@@ -257,32 +197,54 @@ export class DatabaseInitializer {
 
     // Seed default permissions
     const permissions = [
-      { name: 'manage:users', resource: 'users', action: 'manage', description: 'Manage users' },
-      { name: 'edit:content', resource: 'content', action: 'edit', description: 'Edit content' }
+      {
+        name: "manage:users",
+        resource: "users",
+        action: "manage",
+        description: "Manage users",
+      },
+      {
+        name: "edit:content",
+        resource: "content",
+        action: "edit",
+        description: "Edit content",
+      },
     ];
 
     for (const perm of permissions) {
-      const existing = await permissionController.findFirst({ name: perm.name });
+      const existing = await permissionController.findFirst({
+        name: perm.name,
+      });
       if (!existing.data) {
         await permissionController.create(perm);
       }
     }
 
     // Assign permissions to roles
-    const adminRole = await roleController.findFirst({ name: 'admin' });
-    const moderatorRole = await roleController.findFirst({ name: 'moderator' });
+    const adminRole = await roleController.findFirst({ name: "admin" });
+    const moderatorRole = await roleController.findFirst({ name: "moderator" });
 
     if (adminRole.data) {
-      const manageUsers = await permissionController.findFirst({ name: 'manage:users' });
+      const manageUsers = await permissionController.findFirst({
+        name: "manage:users",
+      });
       if (manageUsers.data) {
-        await rolePermissionController.create({ role_id: adminRole.data.id, permission_id: manageUsers.data.id });
+        await rolePermissionController.create({
+          role_id: adminRole.data.id,
+          permission_id: manageUsers.data.id,
+        });
       }
     }
 
     if (moderatorRole.data) {
-      const editContent = await permissionController.findFirst({ name: 'edit:content' });
+      const editContent = await permissionController.findFirst({
+        name: "edit:content",
+      });
       if (editContent.data) {
-        await rolePermissionController.create({ role_id: moderatorRole.data.id, permission_id: editContent.data.id });
+        await rolePermissionController.create({
+          role_id: moderatorRole.data.id,
+          permission_id: editContent.data.id,
+        });
       }
     }
   }
@@ -294,12 +256,23 @@ export class DatabaseInitializer {
       tablesCreated: [],
       indexesCreated: [],
       errors: [],
-      duration: 0
+      duration: 0,
     };
 
-    const effectiveSchemas = schemas ?? this.schemas ?? DATABASE_SCHEMAS;
+    const effectiveSchemas = schemas ?? this.schemas.getAll() ?? getSchemas();
 
-    this.logger.info('Starting database initialization...');
+    // If schemas is still empty, ensure we get the current schemas
+    if (effectiveSchemas.length === 0) {
+      const dynamicSchemas = getSchemas();
+      if (dynamicSchemas.length > 0) {
+        // Update the schema registry with the dynamic schemas
+        this.schemas.clear();
+        this.schemas.registerMany(dynamicSchemas);
+        return await this.initialize(dynamicSchemas);
+      }
+    }
+
+    this.logger.info("Starting database initialization...");
 
     try {
       // Configure database settings
@@ -309,29 +282,34 @@ export class DatabaseInitializer {
       const initResult = await BaseController.initializeDatabase(
         this.database,
         effectiveSchemas,
-        true // isSQLite
+        true, // isSQLite
       );
 
       if (!initResult.success) {
-        result.errors.push(initResult.error || 'Unknown initialization error');
+        result.errors.push(initResult.error || "Unknown initialization error");
         return result;
       }
 
       // Track what was created
-      result.tablesCreated = effectiveSchemas.map(schema => schema.tableName);
-      result.indexesCreated = effectiveSchemas.flatMap(schema => 
-        schema.indexes?.map(idx => idx.name) || []
+      result.tablesCreated = effectiveSchemas.map((schema) => schema.tableName);
+      result.indexesCreated = effectiveSchemas.flatMap(
+        (schema) => schema.indexes?.map((idx) => idx.name) || [],
       );
 
       result.success = true;
       result.duration = Date.now() - startTime;
 
-      this.logger.info(`Database initialized successfully in ${result.duration}ms`);
-      this.logger.info(`Created ${result.tablesCreated.length} tables and ${result.indexesCreated.length} indexes`);
-
+      this.logger.info(
+        `Database initialized successfully in ${result.duration}ms`,
+      );
+      this.logger.info(
+        `Created ${result.tablesCreated.length} tables and ${result.indexesCreated.length} indexes`,
+      );
     } catch (error: any) {
-      result.errors.push(error.message || 'Unknown error during initialization');
-      this.logger.error('Database initialization failed:', error);
+      result.errors.push(
+        error.message || "Unknown error during initialization",
+      );
+      this.logger.error("Database initialization failed:", error);
     }
 
     result.duration = Date.now() - startTime;
@@ -342,12 +320,13 @@ export class DatabaseInitializer {
    * Check database integrity
    */
   async checkIntegrity(schemas?: TableSchema[]): Promise<IntegrityCheckResult> {
-    const effectiveSchemas = schemas ?? this.schemas ?? DATABASE_SCHEMAS;
+    const effectiveSchemas =
+      schemas ?? this.schemas.getAll() ?? DATABASE_SCHEMAS;
     const result: IntegrityCheckResult = {
       isValid: true,
       missingTables: [],
       missingIndexes: [],
-      issues: []
+      issues: [],
     };
 
     try {
@@ -373,15 +352,16 @@ export class DatabaseInitializer {
 
       // Log results
       if (result.isValid) {
-        this.logger.info('Database integrity check passed');
+        this.logger.info("Database integrity check passed");
       } else {
-        this.logger.warn(`Database integrity issues found:\n          - Missing tables: ${result.missingTables.join(', ')}\n          - Missing indexes: ${result.missingIndexes.join(', ')}`);
+        this.logger.warn(
+          `Database integrity issues found:\n          - Missing tables: ${result.missingTables.join(", ")}\n          - Missing indexes: ${result.missingIndexes.join(", ")}`,
+        );
       }
-
     } catch (error: any) {
       result.issues.push(error.message);
       result.isValid = false;
-      this.logger.error('Error during integrity check:', error);
+      this.logger.error("Error during integrity check:", error);
     }
 
     return result;
@@ -391,20 +371,20 @@ export class DatabaseInitializer {
    * Run migrations safely
    */
   async migrate(): Promise<MigrationResult> {
-    this.logger.info('Starting database migration...');
+    this.logger.info("Starting database migration...");
 
     // First check current state
     const integrity = await this.checkIntegrity();
 
     // If database is intact, no migration needed
     if (integrity.isValid) {
-      this.logger.info('Database is up to date, no migration needed');
+      this.logger.info("Database is up to date, no migration needed");
       return {
         success: true,
         tablesCreated: [],
         indexesCreated: [],
         errors: [],
-        duration: 0
+        duration: 0,
       };
     }
 
@@ -416,18 +396,18 @@ export class DatabaseInitializer {
    * Repair database by creating missing components
    */
   async repair(): Promise<MigrationResult> {
-    this.logger.info('Starting database repair...');
+    this.logger.info("Starting database repair...");
 
     const integrity = await this.checkIntegrity();
-    
+
     if (integrity.isValid) {
-      this.logger.info('Database does not need repair');
+      this.logger.info("Database does not need repair");
       return {
         success: true,
         tablesCreated: [],
         indexesCreated: [],
         errors: [],
-        duration: 0
+        duration: 0,
       };
     }
 
@@ -439,20 +419,21 @@ export class DatabaseInitializer {
    * Reset database completely
    */
   async reset(schemas?: TableSchema[]): Promise<MigrationResult> {
-    const effectiveSchemas = schemas ?? this.schemas ?? DATABASE_SCHEMAS;
+    const effectiveSchemas =
+      schemas ?? this.schemas.getAll() ?? DATABASE_SCHEMAS;
     try {
       for (const schema of effectiveSchemas) {
         this.database.exec(`DROP TABLE IF EXISTS ${schema.tableName}`);
       }
       return await this.initialize(effectiveSchemas);
     } catch (error: any) {
-      this.logger.error('Error during reset:', error);
+      this.logger.error("Error during reset:", error);
       return {
         success: false,
         tablesCreated: [],
         indexesCreated: [],
         errors: [error.message],
-        duration: 0
+        duration: 0,
       };
     }
   }
@@ -464,10 +445,10 @@ export class DatabaseInitializer {
     const stats: Record<string, any> = {};
 
     try {
-      for (const schema of this.schemas) {
+      for (const schema of this.schemas.getAll()) {
         const controller = new BaseController(schema.tableName, {
           database: this.database,
-          isSQLite: true
+          isSQLite: true,
         });
 
         const count = await controller.count();
@@ -477,9 +458,8 @@ export class DatabaseInitializer {
       // Additional database info
       const dbInfo = this.database.query("PRAGMA database_list").all();
       stats._database_info = dbInfo;
-
     } catch (error: any) {
-      this.logger.error('Error getting database statistics:', error);
+      this.logger.error("Error getting database statistics:", error);
       stats._error = error.message;
     }
 
@@ -505,9 +485,8 @@ export class DatabaseInitializer {
       this.database.exec("PRAGMA synchronous = NORMAL");
       this.database.exec("PRAGMA cache_size = 1000");
       this.database.exec("PRAGMA temp_store = memory");
-
     } catch (error: any) {
-      this.logger.warn('Error configuring database settings:', error);
+      this.logger.warn("Error configuring database settings:", error);
     }
   }
 
@@ -516,10 +495,10 @@ export class DatabaseInitializer {
    */
   private async checkTableExists(tableName: string): Promise<boolean> {
     try {
-      const result = this.database.query(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name=?"
-      ).get(tableName);
-      
+      const result = this.database
+        .query("SELECT name FROM sqlite_master WHERE type='table' AND name=?")
+        .get(tableName);
+
       return !!result;
     } catch (error: any) {
       this.logger.error(`Error checking table ${tableName}:`, error);
@@ -532,10 +511,10 @@ export class DatabaseInitializer {
    */
   private async checkIndexExists(indexName: string): Promise<boolean> {
     try {
-      const result = this.database.query(
-        "SELECT name FROM sqlite_master WHERE type='index' AND name=?"
-      ).get(indexName);
-      
+      const result = this.database
+        .query("SELECT name FROM sqlite_master WHERE type='index' AND name=?")
+        .get(indexName);
+
       return !!result;
     } catch (error: any) {
       this.logger.error(`Error checking index ${indexName}:`, error);
@@ -546,11 +525,34 @@ export class DatabaseInitializer {
   /**
    * Create a controller instance for a specific table
    */
-  createController<T = Record<string, any>>(tableName: string): BaseController<T> {
+  createController<T = Record<string, any>>(
+    tableName: string,
+  ): BaseController<T> {
     return new BaseController<T>(tableName, {
       database: this.database,
-      isSQLite: true
+      isSQLite: true,
     });
+  }
+
+  /**
+   * Create controller with custom table name from configuration
+   */
+  createControllerByKey<T = Record<string, any>>(
+    tableKey: keyof import("./config").DatabaseTableConfig,
+  ): BaseController<T> {
+    // Import config dynamically to avoid circular dependencies
+    const config = require("./config");
+    const getTableName = config.getTableName;
+    const customTableName = getTableName(tableKey);
+    return this.createController<T>(customTableName);
+  }
+
+  /**
+   * Update schemas based on new configuration
+   */
+  updateSchemas(): void {
+    this.schemas.clear();
+    this.schemas.registerMany(getSchemas());
   }
 }
 

@@ -1,13 +1,13 @@
 // src/services/auth.service.test.ts (CORREGIDO CON AISLAMIENTO REAL)
 
-import { test, expect, describe, beforeEach } from 'bun:test';
-import { Database } from 'bun:sqlite';
-import { DatabaseInitializer, DATABASE_SCHEMAS } from '../../src/database/database-initializer';
-import { JWTService } from '../../src/services/jwt';
-import { AuthService } from '../../src/services/auth';
-import { AuthErrorType } from '../../src/types/auth';
+import { test, expect, describe, beforeEach } from "bun:test";
+import { Database } from "bun:sqlite";
+import { DatabaseInitializer } from "../../src/database/database-initializer";
+import { JWTService } from "../../src/services/jwt";
+import { AuthService } from "../../src/services/auth";
+import { AuthErrorType } from "../../src/types/auth";
 
-describe('AuthService', () => {
+describe("AuthService", () => {
   let authService: AuthService;
   // NO inicializamos la DB aquí, solo declaramos la variable.
 
@@ -15,44 +15,44 @@ describe('AuthService', () => {
   beforeEach(async () => {
     // 1. Crear una base de datos EN MEMORIA NUEVA para CADA test.
     // Esto garantiza un estado 100% limpio y aislado.
-    const db = new Database(':memory:');
-    
+    const db = new Database(":memory:");
+
     // 2. Inicializar el esquema en esta base de datos fresca.
     const dbInitializer = new DatabaseInitializer({ database: db });
-    await dbInitializer.initialize(DATABASE_SCHEMAS);
+    await dbInitializer.initialize();
 
     // 3. Crear nuevas instancias de los servicios para CADA test.
-    const jwtService = new JWTService('test-secret-for-testing', '1h');
+    const jwtService = new JWTService("test-secret-for-testing", "1h");
     authService = new AuthService(dbInitializer, jwtService);
   });
 
   // --- AHORA los tests son independientes ---
 
-  test('should register a new user successfully', async () => {
+  test("should register a new user successfully", async () => {
     const userData = {
-      email: 'test@example.com',
-      password: 'password123',
-      first_name: 'Test',
+      email: "test@example.com",
+      password: "password123",
+      first_name: "Test",
     };
     const result = await authService.register(userData);
 
     expect(result.success).toBe(true);
     expect(result.user).toBeDefined();
     expect(result.user?.email).toBe(userData.email);
-    expect(result.user?.first_name).toBe('Test');
+    expect(result.user?.first_name).toBe("Test");
     expect(result.token).toBeString();
     expect(result.error).toBeUndefined();
   });
 
-  test('should log in an existing user successfully', async () => {
+  test("should log in an existing user successfully", async () => {
     const userData = {
-      email: 'login@example.com',
-      password: 'securepassword',
+      email: "login@example.com",
+      password: "securepassword",
     };
-    
+
     // El beforeEach ya nos dio una DB limpia, así que podemos registrar sin miedo.
-    await authService.register(userData); 
-    
+    await authService.register(userData);
+
     const result = await authService.login({
       email: userData.email,
       password: userData.password,
@@ -65,15 +65,15 @@ describe('AuthService', () => {
     expect(result.error).toBeUndefined();
   });
 
-  test('should fail to log in with incorrect password', async () => {
+  test("should fail to log in with incorrect password", async () => {
     const userData = {
-      email: 'fail@example.com',
-      password: 'correctpassword',
+      email: "fail@example.com",
+      password: "correctpassword",
     };
     await authService.register(userData);
     const result = await authService.login({
       email: userData.email,
-      password: 'wrongpassword',
+      password: "wrongpassword",
     });
 
     expect(result.success).toBe(false);
@@ -82,16 +82,16 @@ describe('AuthService', () => {
     // Ajustado para esperar un objeto, como devuelve el servicio
     expect(result.error).toEqual({
       type: AuthErrorType.INVALID_CREDENTIALS,
-      message: 'Invalid credentials',
+      message: "Invalid credentials",
     });
   });
 
-  test('should fail to register a user with a duplicate email', async () => {
+  test("should fail to register a user with a duplicate email", async () => {
     const userData = {
-      email: 'duplicate@example.com',
-      password: 'password123',
+      email: "duplicate@example.com",
+      password: "password123",
     };
-    
+
     // Primer registro en una DB limpia. Debe funcionar.
     const firstAttempt = await authService.register(userData);
     expect(firstAttempt.success).toBe(true);
@@ -103,8 +103,8 @@ describe('AuthService', () => {
     expect(secondAttempt.user).toBeUndefined();
     expect(secondAttempt.token).toBeUndefined();
     expect(secondAttempt.error).toEqual({
-        type: AuthErrorType.USER_ALREADY_EXISTS,
-        message: 'A user with this email already exists'
+      type: AuthErrorType.USER_ALREADY_EXISTS,
+      message: "A user with this email already exists",
     });
   });
 });
