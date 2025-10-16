@@ -94,18 +94,38 @@ let globalDatabaseConfig: DatabaseConfig = { ...DEFAULT_DATABASE_CONFIG };
  * Set the global database configuration
  * Call this before initializing the database
  */
-export function setDatabaseConfig(config: DatabaseConfig): void {
-  globalDatabaseConfig = {
-    ...DEFAULT_DATABASE_CONFIG,
-    ...config,
-    tableNames: {
-      ...DEFAULT_TABLE_NAMES,
-      ...config.tableNames,
-    },
-    schemaExtensions: {
-      ...config.schemaExtensions,
-    },
-  };
+export function setDatabaseConfig(
+  config: DatabaseConfig,
+  reset: boolean = false,
+): void {
+  // If config is empty or reset is true, reset to defaults
+  if (
+    reset ||
+    (!config.tableNames &&
+      !config.schemaExtensions &&
+      !config.enableMigrations &&
+      !config.enableForeignKeys)
+  ) {
+    globalDatabaseConfig = { ...DEFAULT_DATABASE_CONFIG };
+  } else {
+    const baseConfig = reset ? DEFAULT_DATABASE_CONFIG : globalDatabaseConfig;
+
+    globalDatabaseConfig = {
+      ...baseConfig,
+      ...config,
+      tableNames: {
+        ...baseConfig.tableNames,
+        ...config.tableNames,
+      },
+      schemaExtensions: {
+        ...baseConfig.schemaExtensions,
+        ...config.schemaExtensions,
+      },
+    };
+  }
+
+  // Clear any cached schemas to force regeneration with new configuration
+  clearSchemaCache();
 }
 
 /**
@@ -113,6 +133,15 @@ export function setDatabaseConfig(config: DatabaseConfig): void {
  */
 export function getDatabaseConfig(): DatabaseConfig {
   return globalDatabaseConfig;
+}
+
+/**
+ * Clear any cached schemas to force regeneration with new configuration
+ */
+function clearSchemaCache(): void {
+  // This will be called from database-initializer to clear the static cache
+  // We'll use a module-level variable to track if cache needs clearing
+  (globalThis as any).__schemaCacheCleared = true;
 }
 
 /**

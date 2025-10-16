@@ -63,6 +63,12 @@ export const DATABASE_SCHEMAS: TableSchema[] = [];
 
 // Initialize schemas on first access
 function getSchemas(): TableSchema[] {
+  // Check if cache needs to be cleared
+  if ((globalThis as any).__schemaCacheCleared) {
+    DATABASE_SCHEMAS.length = 0;
+    (globalThis as any).__schemaCacheCleared = false;
+  }
+
   if (DATABASE_SCHEMAS.length === 0) {
     DATABASE_SCHEMAS.push(...buildDatabaseSchemas());
   }
@@ -142,7 +148,7 @@ export class DatabaseInitializer {
     this.enableForeignKeys = config.enableForeignKeys ?? true;
     // Combina los esquemas por defecto con los externos provistos por el consumidor
     this.schemas = new SchemaRegistry([
-      ...DATABASE_SCHEMAS,
+      ...getSchemas(),
       ...(config.externalSchemas ?? []),
     ]);
   }
@@ -419,8 +425,8 @@ export class DatabaseInitializer {
    * Reset database completely
    */
   async reset(schemas?: TableSchema[]): Promise<MigrationResult> {
-    const effectiveSchemas =
-      schemas ?? this.schemas.getAll() ?? DATABASE_SCHEMAS;
+    // Always use fresh schemas to respect configuration changes
+    const effectiveSchemas = schemas ?? buildDatabaseSchemas();
     try {
       for (const schema of effectiveSchemas) {
         this.database.exec(`DROP TABLE IF EXISTS ${schema.tableName}`);
