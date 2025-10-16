@@ -3,7 +3,11 @@
  * Copy this file and modify it for your specific needs
  */
 
-import { setDatabaseConfig, SchemaExtensions, COMMON_COLUMNS } from "./config";
+import {
+  setDatabaseConfig,
+  SchemaExtensions,
+  COMMON_COLUMNS,
+} from "../src/database/config";
 
 // Example 1: Custom table names with Spanish names
 const spanishTableNames = {

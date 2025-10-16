@@ -14,14 +14,14 @@ import type { User, Role, Permission } from "../types/auth";
 // Type definitions for better type safety
 export interface DatabaseConfig {
   database: Database;
-  logger?: Logger;
+  logger?: DatabaseLogger;
   enableWAL?: boolean;
   enableForeignKeys?: boolean;
   // Permite pasar esquemas externos desde fuera de la librería
   externalSchemas?: TableSchema[];
 }
 
-interface Logger {
+export interface DatabaseLogger {
   info(message: string, ...args: any[]): void;
   warn(message: string, ...args: any[]): void;
   error(message: string, ...args: any[]): void;
@@ -43,13 +43,13 @@ export interface IntegrityCheckResult {
 }
 
 // Default logger implementation
-const defaultLogger: Logger = {
+const defaultLogger: DatabaseLogger = {
   info: (msg: string, ...args: any[]) => console.log(`[INFO] ${msg}`, ...args),
   warn: (msg: string, ...args: any[]) => console.warn(`[WARN] ${msg}`, ...args),
   error: (msg: string, ...args: any[]) =>
     console.error(`[ERROR] ${msg}`, ...args),
 };
-const silenceLogger: Logger = {
+const silenceLogger: DatabaseLogger = {
   info: (msg: string, ...args: any[]) => {},
   warn: (msg: string, ...args: any[]) => {},
   error: (msg: string, ...args: any[]) => {},
@@ -129,7 +129,7 @@ export class SchemaRegistry {
 
 export class DatabaseInitializer {
   private database: Database;
-  private logger: Logger;
+  private logger: DatabaseLogger;
   private enableWAL: boolean;
   private enableForeignKeys: boolean;
   // Fuente efectiva de esquemas (base + externos)

@@ -4,7 +4,7 @@
  */
 
 import { Database } from "bun:sqlite";
-import { DatabaseInitializer } from "./database-initializer";
+import { DatabaseInitializer } from "../src/database/database-initializer";
 import {
   setDatabaseConfig,
   getDatabaseConfig,
@@ -12,8 +12,11 @@ import {
   COMMON_COLUMNS,
   SchemaExtensions,
   createSchemaExtension,
-} from "./config";
-import { initializeServices, getServices } from "../services/service-factory";
+} from "../src/database/config";
+import {
+  initializeServices,
+  getServices,
+} from "../src/services/service-factory";
 import { spanishTableNames, completeCustomConfig } from "./example-config";
 
 // ============================================================================
@@ -357,7 +360,7 @@ async function advancedSchemaExample() {
   if (schema.success && schema.data) {
     console.log("Advanced users table columns:");
     schema.data.columns.forEach((col) => {
-      const constraints = [];
+      const constraints: string[] = [];
       if (col.notNull) constraints.push("NOT NULL");
       if ("unique" in col && col.unique) constraints.push("UNIQUE");
       if (col.defaultValue) constraints.push(`DEFAULT ${col.defaultValue}`);
