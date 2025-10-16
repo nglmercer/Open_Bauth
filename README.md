@@ -5,6 +5,7 @@ A comprehensive, framework-agnostic authentication and authorization library bui
 - Runtime: Bun (Node.js compatible for most features)
 - Storage: SQLite by default (via Bun), extensible to other SQL engines
 - Language: TypeScript, with full type definitions
+- Features: Schema extensions, BIT type support, advanced filtering, RBAC, JWT auth
 
 ---
 
@@ -57,7 +58,31 @@ if (!login.success) throw new Error(login.error?.message);
 console.log('JWT:', login.token);
 ```
 
-4) Use framework-agnostic middleware (example with Hono):
+4) Use advanced schema extensions and BIT type support:
+```ts
+import { setDatabaseConfig, SchemaExtensions } from 'open-bauth';
+
+// Configure schema extensions
+setDatabaseConfig({
+  schemaExtensions: {
+    users: SchemaExtensions.addUserProfileFields(), // Add phone, avatar, etc.
+    roles: SchemaExtensions.addMetadata(), // Add metadata field
+    sessions: SchemaExtensions.addSoftDelete(), // Add soft delete
+  }
+});
+
+// Re-initialize with extensions
+await dbInitializer.initialize();
+
+// Use BIT type fields with advanced filtering
+const notifications = dbInitializer.createController('notifications');
+const activeNotifications = await notifications.search({
+  read: { isTruthy: false }, // Find unread notifications
+  priority: { isSet: true }, // Find notifications with priority set
+});
+```
+
+5) Use framework-agnostic middleware (example with Hono):
 
 ```ts
 import { Hono } from 'hono';
@@ -97,6 +122,12 @@ This library’s public API is re-exported from the entrypoint so you can import
 - Database
   - BaseController (generic CRUD + query helpers)
   - DatabaseInitializer (migrations, integrity checks, seeds, controllers)
+  - Schema Extensions (addUserProfileFields, addSoftDelete, addMetadata, etc.)
+
+- Configuration
+  - setDatabaseConfig(), getDatabaseConfig()
+  - SchemaExtensions helper functions
+  - Custom table names support
 
 - Logger
   - Logger class, getLogger(), defaultLogger, convenience log methods, configuration helpers
@@ -136,6 +167,188 @@ Queries and helpers for roles and permissions (e.g., getRolePermissions, user pe
 
 ---
 
+## Schema Extensions
+
+The library includes a powerful schema extension system that allows you to customize database tables without modifying the core library.
+
+### Basic Schema Extensions
+
+```ts
+import { setDatabaseConfig, SchemaExtensions } from 'open-bauth';
+
+// Add profile fields to users table
+setDatabaseConfig({
+  schemaExtensions: {
+    users: SchemaExtensions.addUserProfileFields(), // Adds phone, avatar, timezone, language
+    roles: SchemaExtensions.addMetadata(), // Adds metadata field for JSON data
+    sessions: SchemaExtensions.addSoftDelete(), // Adds soft delete functionality
+  }
+});
+```
+
+### Available Schema Extensions
+
+- **addUserProfileFields()**: Adds phone_number, avatar_url, timezone, language
+- **addSoftDelete()**: Adds deleted_at and is_deleted fields
+- **addAuditFields()**: Adds created_by and updated_by fields
+- **addMetadata()**: Adds metadata field for storing JSON data
+- **useStatusField()**: Replaces is_active with status field
+
+### Custom Schema Extensions
+
+```ts
+setDatabaseConfig({
+  schemaExtensions: {
+    users: {
+      additionalColumns: [
+        { name: "age", type: "INTEGER" },
+        { name: "bio", type: "TEXT" }
+      ],
+      removedColumns: ["is_active"], // Remove default column
+      modifiedColumns: [
+        { name: "email", type: "TEXT", notNull: true, unique: true }
+      ]
+    }
+  }
+});
+```
+
+### Custom Table Names
+
+```ts
+setDatabaseConfig({
+  tableNames: {
+    users: "app_users",
+    roles: "user_roles",
+    permissions: "app_permissions"
+  }
+});
+```
+
+---
+
+## BIT Type Support and Advanced Filtering
+
+The library supports BIT type fields for SQL Server compatibility and provides advanced filtering capabilities.
+
+### BIT Type Handling
+
+BIT fields automatically handle multiple boolean representations:
+
+```ts
+// All these are equivalent for BIT fields
+create({ priority: true })
+create({ priority: 1 })
+create({ priority: new Uint8Array([1]) })
+create({ priority: Buffer.from([1]) })
+```
+
+### Advanced Filters
+
+Use advanced filters for complex boolean logic:
+
+```ts
+// Find records where field is truthy (equals 1 or true)
+controller.search({ read: { isTruthy: true } })
+
+// Find records where field is falsy (equals 0, false, or null)
+controller.search({ priority: { isFalsy: true } })
+
+// Find records where field is set (not null)
+controller.search({ status: { isSet: true } })
+
+// Find records where field is not set (null)
+controller.search({ archived: { isSet: false } })
+```
+
+### Mixed Type Queries
+
+Search with mixed boolean representations in IN queries:
+
+```ts
+// All these representations work together
+controller.search({
+  read: [true, 1, new Uint8Array([1]), Buffer.from([1])]
+})
+```
+
+### External Schemas
+
+Add completely custom tables to your database:
+
+```ts
+const customSchema = {
+  tableName: "notifications",
+  columns: [
+    { name: "id", type: "TEXT", primaryKey: true },
+    { name: "user_id", type: "TEXT", notNull: true },
+    { name: "title", type: "TEXT", notNull: true },
+    { name: "read", type: "BIT", defaultValue: false },
+    { name: "priority", type: "BIT" }
+  ],
+  indexes: [{ name: "idx_notifications_user", columns: ["user_id"] }]
+};
+
+const dbInitializer = new DatabaseInitializer({ 
+  database: db, 
+  externalSchemas: [customSchema] 
+});
+```
+
+---
+
+## Configuration Helpers
+
+The library provides several helper functions for managing database configuration:
+
+### Global Configuration
+```ts
+import { setDatabaseConfig, getDatabaseConfig, getAllTableNames } from 'open-bauth';
+
+// Set global configuration
+setDatabaseConfig({
+  tableNames: { users: 'app_users' },
+  schemaExtensions: { users: SchemaExtensions.addUserProfileFields() }
+});
+
+// Get current configuration
+const config = getDatabaseConfig();
+
+// Get all table names (including custom ones)
+const tableNames = getAllTableNames();
+```
+
+### Common Columns
+```ts
+import { COMMON_COLUMNS } from 'open-bauth';
+
+// Access predefined column definitions
+const customExtension = {
+  additionalColumns: [
+    COMMON_COLUMNS.phoneNumber,
+    COMMON_COLUMNS.avatarUrl,
+    COMMON_COLUMNS.metadata
+  ]
+};
+```
+
+### Schema Registry
+```ts
+import { SchemaRegistry } from 'open-bauth';
+
+// Create and manage schema registries
+const registry1 = new SchemaRegistry([schema1, schema2]);
+const registry2 = new SchemaRegistry([schema3, schema4]);
+
+// Merge registries
+const merged = SchemaRegistry.merge(registry1, registry2);
+
+// Register additional schemas
+registry1.registerMany([schema5, schema6]);
+```
+
+---
+
 ## Middleware (Framework-Agnostic)
 
 - authenticateRequest(request, { jwtService, authService, permissionService })
@@ -163,9 +376,118 @@ The library ships with rich TypeScript types for requests, responses, entities, 
 
 ---
 
+## Complete Example
+
+Here's a complete example using schema extensions and BIT type support:
+
+```ts
+import { Database } from 'bun:sqlite';
+import { 
+  DatabaseInitializer, 
+  setDatabaseConfig, 
+  SchemaExtensions,
+  AuthService,
+  JWTService,
+  PermissionService 
+} from 'open-bauth';
+
+// 1. Configure schema extensions
+setDatabaseConfig({
+  schemaExtensions: {
+    users: SchemaExtensions.addUserProfileFields(),
+    roles: SchemaExtensions.addMetadata(),
+    sessions: SchemaExtensions.addSoftDelete()
+  }
+});
+
+// 2. Initialize database
+const db = new Database('auth.db');
+const dbInitializer = new DatabaseInitializer({ database: db });
+await dbInitializer.initialize();
+await dbInitializer.seedDefaults();
+
+// 3. Add custom table with BIT fields
+const notificationsSchema = {
+  tableName: "notifications",
+  columns: [
+    { name: "id", type: "TEXT", primaryKey: true },
+    { name: "user_id", type: "TEXT", notNull: true },
+    { name: "title", type: "TEXT", notNull: true },
+    { name: "read", type: "BIT", defaultValue: false },
+    { name: "priority", type: "BIT" }
+  ]
+};
+
+const customInitializer = new DatabaseInitializer({ 
+  database: db, 
+  externalSchemas: [notificationsSchema] 
+});
+await customInitializer.initialize();
+
+// 4. Initialize services
+const jwtService = new JWTService('your-secret', '24h');
+const authService = new AuthService(dbInitializer, jwtService);
+const permissionService = new PermissionService(dbInitializer);
+
+// 5. Use advanced filtering
+const notifications = customInitializer.createController('notifications');
+const unreadHighPriority = await notifications.search({
+  read: { isFalsy: true },
+  priority: { isTruthy: true }
+});
+
+console.log('Unread high priority notifications:', unreadHighPriority.data);
+```
+
 ## Library Info
 
 You can inspect metadata at runtime:
+
+---
+
+## Testing and Development
+
+The library includes comprehensive test coverage for all features including schema extensions and BIT type support.
+
+### Running Tests
+```bash
+# Run all tests
+bun test
+
+# Run tests with coverage
+bun test --coverage
+
+# Run specific test files
+bun test tests/bit-data.test.ts
+bun test tests/schema-extension.test.ts
+```
+
+### Test Features
+- **Schema Extensions**: Tests all predefined extensions and custom schema modifications
+- **BIT Type Support**: Tests boolean representations, IN queries, and advanced filtering
+- **Database Integration**: Tests foreign key constraints, table relationships, and migrations
+- **RBAC System**: Tests role-based access control, permissions, and user management
+- **JWT Authentication**: Tests token generation, verification, and middleware integration
+
+### Development Examples
+See the `examples/` and `docs/` directories for comprehensive usage examples:
+
+- `docs/usage-example.ts` - Complete usage examples with all features
+- `docs/example-config.ts` - Configuration examples for different scenarios
+- `examples/integrations/` - Framework integration examples
+
+### BIT Type Testing Examples
+```ts
+// Test mixed boolean representations
+const results = await controller.search({
+  read: [true, false, 1, 0, new Uint8Array([1]), Buffer.from([0])]
+});
+
+// Test advanced filters
+const truthy = await controller.search({ priority: { isTruthy: true } });
+const falsy = await controller.search({ priority: { isFalsy: true } });
+const isSet = await controller.search({ priority: { isSet: true } });
+```
 
 ---
 
