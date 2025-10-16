@@ -1,2 +1,2 @@
-export * from './base-controller';
-export * from './database-initializer'
+export * from "./base-controller";
+export * from "./database-initializer";

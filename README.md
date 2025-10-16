@@ -104,8 +104,6 @@ This library’s public API is re-exported from the entrypoint so you can import
 - Types (from src/types/auth)
   - User, Role, Permission, RegisterData, LoginData, UpdateUserData, AuthResult, AuthErrorType, AuthContext, AuthRequest, AuthResponse, PermissionOptions, AssignRoleData, JWTPayload, SessionInfo, and more
 
-- Constants
-  - AUTH_LIBRARY_INFO: basic library metadata
 
 ---
 
@@ -168,11 +166,6 @@ The library ships with rich TypeScript types for requests, responses, entities, 
 ## Library Info
 
 You can inspect metadata at runtime:
-
-```ts
-import { AUTH_LIBRARY_INFO } from 'open-bauth';
-console.log(AUTH_LIBRARY_INFO);
-```
 
 ---
 
